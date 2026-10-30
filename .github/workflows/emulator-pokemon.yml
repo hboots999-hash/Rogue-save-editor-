@@ -1,0 +1,180 @@
+name: Azahar candidate Pokemon IV EV buttons and exports
+on:
+  push:
+    branches: ["feature/phase3-rogue-inspect"]
+    paths:
+      - ".github/workflows/emulator-pokemon.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  cia-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve unverified CIA from pinned source build
+        uses: actions/download-artifact@v4
+        with:
+          name: DO-NOT-INSTALL-unverified-Rogue-PKSM-CIA
+          path: candidate
+          repository: hboots999-hash/Rogue-save-editor-
+          run-id: 41145018579
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify actual CIA bytes and expected build hash
+        run: |
+          set -euo pipefail
+          test -s candidate/PKSM_Rogue_Inspect.cia
+          echo '74ea68079318c6f6da95508643d0c91aaf2dbba43d81789c092d450df6505206  candidate/PKSM_Rogue_Inspect.cia' | sha256sum -c -
+      - name: Prepare ephemeral emulator and dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb scrot xdotool openbox libgl1-mesa-dri libopengl0 libegl1 libgles2 libpulse0 libxkbcommon-x11-0 libasound2t64
+          curl -fL --retry 3 --output azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          ./azahar.AppImage --appimage-extract >/dev/null
+      - name: Install CIA in empty emulator storage only
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/pksm-rogue-cia-config
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+          XDG_CACHE_HOME: /tmp/pksm-rogue-cia-cache
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 45s xvfb-run -a -s "-screen 0 1280x800x24" \
+            ./squashfs-root/AppRun --install "$PWD/candidate/PKSM_Rogue_Inspect.cia" \
+            2>&1 | tee cia-install.log
+          grep -F 'Installed CIA successfully.' cia-install.log
+          echo "CIA installed into temporary Azahar storage ONLY."
+      - name: Inject only a synthetic disposable Rogue candidate file
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          set -euo pipefail
+          fixture="$XDG_DATA_HOME/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          python3 tests/generate_synthetic_save.py --party "$fixture"
+          test "$(stat -c%s "$fixture")" -eq 131072
+          sha256sum "$fixture"
+      - name: Locate installed CIA executable rather than relaunching its installer
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share"
+          find "$XDG_DATA_HOME" "$HOME/.local/share" -type f -name '*.app' -print 2>/dev/null | sort -u > installed-apps.txt
+          cat installed-apps.txt
+          if test "$(wc -l < installed-apps.txt)" -ne 1; then
+            echo "Expected exactly one executable in the fresh emulator data directory." >&2
+            exit 1
+          fi
+          installed_app="$(head -n 1 installed-apps.txt)"
+          test -s "$installed_app"
+          echo "ROGUE_INSTALLED_APP=$installed_app" >> "$GITHUB_ENV"
+      - name: Drive real emulator controls on synthetic save only
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/pksm-rogue-cia-config
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+          XDG_CACHE_HOME: /tmp/pksm-rogue-cia-cache
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            set -e
+            openbox >openbox.log 2>&1 &
+            sleep 1
+            ./squashfs-root/AppRun "$1" >cia-launch.log 2>&1 &
+            pid=$!
+            sleep 16
+            win="$(xdotool search --onlyvisible --name "Azahar" | tail -n 1)"
+            if test -z "$win"; then echo "Azahar window missing"; cat cia-launch.log; exit 1; fi
+            xdotool windowactivate --sync "$win"
+            # Hold each input for several 60 Hz frames; brief XTEST taps can be missed.
+            press() { xdotool keydown "$1"; sleep 0.30; xdotool keyup "$1"; sleep 0.40; }
+            scrot -q 90 before-edit.png
+            # Azahar defaults: 3DS R=w, X=z, Y=x, START=m.
+            press w
+            sleep 0.5
+            press z
+            sleep 0.5
+            press m
+            sleep 0.5
+            scrot -q 90 preview-ivs.png
+            press m
+            sleep 1
+            scrot -q 90 exported-ivs.png
+            press x
+            sleep 0.5
+            press m
+            sleep 0.5
+            press m
+            sleep 1
+            scrot -q 90 exported-evs.png
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 1
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          ' bash "$ROGUE_INSTALLED_APP"
+      - name: Verify valid IV/EV candidate drafts and unchanged source
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          root=Path("/tmp/pksm-rogue-cia-data/azahar-emu/sdmc/3ds/PKSM-Rogue")
+          original=(root/"imports/00000001.sav").read_bytes()
+          assert len(original)==131072
+          originals=sorted((root/"originals").glob("*.sav"))
+          drafts=sorted((root/"drafts").glob("*.sav"))
+          print("Originals",len(originals),"Drafts",len(drafts))
+          assert len(originals)==2 and len(drafts)==2
+          assert all(p.read_bytes()==original for p in originals)
+          def decode(raw):
+              mon=0x1000+0x238
+              pid,ot=struct.unpack_from("<II",raw,mon)
+              key=pid^ot
+              plain=b"".join(struct.pack("<I",struct.unpack_from("<I",raw,mon+32+i)[0]^key)
+                  for i in range(0,48,4))
+              assert struct.unpack_from("<H",raw,mon+28)[0]==(
+                  sum(struct.unpack_from("<H",plain,i)[0] for i in range(0,48,2))&0xffff)
+              ivword=struct.unpack_from("<I",plain,40)[0]
+              return ([((ivword>>(5*i))&31) for i in range(6)],list(plain[24:30]))
+          old_ivs,old_evs=decode(original)
+          foundIV=False
+          foundEV=False
+          for p in drafts:
+              data=p.read_bytes()
+              assert len(data)==131072
+              iv,ev=decode(data)
+              print(p.name,"ivs",iv,"evs",ev,"changed",sum(a!=b for a,b in zip(original,data)))
+              assert 0 < sum(a!=b for a,b in zip(original,data)) < 60
+              assert data[0x1000+0x4a8:0x1000+0x4ac]==original[0x1000+0x4a8:0x1000+0x4ac]
+              if iv==[31]*6 and ev==old_evs:foundIV=True
+              if ev==[4,252,0,252,0,0] and iv==old_ivs:foundEV=True
+          assert foundIV and foundEV
+          assert (root/"imports/00000001.sav").read_bytes()==original
+          print("PASS: Emulator real X/Y/START IV31 and EV252/252/4 drafts; imported source untouched")
+          PY
+      - name: Keep emulator diagnostics private to the CI run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azahar-pokemon-iv-ev-real-input-results
+          path: |
+            cia-install.log
+            cia-launch.log
+            openbox.log
+            before-edit.png
+            preview-ivs.png
+            exported-ivs.png
+            exported-evs.png
+            installed-apps.txt
+          if-no-files-found: ignore
+          retention-days: 7
