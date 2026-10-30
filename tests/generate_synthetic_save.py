@@ -31,7 +31,7 @@ def checksum(buffer: bytes | bytearray, length: int) -> int:
     return ((total >> 16) + total) & 0xFFFF
 
 
-def generate() -> bytes:
+def generate(with_party: bool = False) -> bytes:
     flash = bytearray(RAW_SIZE)
     for logical_id in range(SECTORS):
         start = logical_id * SECTOR_BYTES
@@ -41,6 +41,23 @@ def generate() -> bytes:
         if logical_id == 1:
             struct.pack_into("<I", sector, 0x234, 0)  # no party data
             struct.pack_into("<I", sector, 0x4A8, MONEY ^ KEY)
+            if with_party:
+                # A disposable valid BoxPokemon, PID 24 -> order G,A,E,M.
+                struct.pack_into("<I", sector, 0x234, 1)
+                mon = 0x238
+                pid, ot = 24, 0x11225566
+                struct.pack_into("<II", sector, mon, pid, ot)
+                sector[mon + 0x13] = 2  # populated, not bad egg
+                plain = bytearray(48)
+                struct.pack_into("<H", plain, 0, 25)  # candidate species ID
+                plain[24:30] = bytes((1, 2, 3, 4, 5, 6))
+                struct.pack_into("<I", plain, 40, 1 | 2 << 5)
+                internal_sum = sum(struct.unpack_from("<H", plain, i)[0] for i in range(0, 48, 2))
+                struct.pack_into("<H", sector, mon + 28, internal_sum & 0xFFFF)
+                for i in range(0, 48, 4):
+                    val = struct.unpack_from("<I", plain, i)[0] ^ (pid ^ ot)
+                    struct.pack_into("<I", sector, mon + 32 + i, val)
+
             for i, (item_id, quantity) in enumerate(BAG_ITEMS):
                 struct.pack_into("<HH", sector, 0x578 + i * 4,
                                  item_id, quantity ^ (KEY & 0xFFFF))
@@ -56,13 +73,14 @@ def generate() -> bytes:
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
+    parser.add_argument("--party", action="store_true", help="include one synthetic party Pokemon")
     args = parser.parse_args()
-    data = generate()
+    data = generate(with_party=args.party)
     assert len(data) == RAW_SIZE
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(data)
     print(f"Synthetic non-game fixture: {args.output} ({len(data)} bytes)")
-    print("Expected: marker 6, money 123456, party 0, bag IDs 1x50 and 2x75")
+    print(f"Expected: marker 6, money 123456, party {1 if args.party else 0}, bag IDs 1x50 and 2x75")
 
 
 if __name__ == "__main__":
