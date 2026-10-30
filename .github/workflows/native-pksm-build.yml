@@ -1,0 +1,75 @@
+name: PKSM native 3DS compile (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phase3-rogue-inspect]
+    paths:
+      - "bridge/**"
+      - "roguesm_core/**"
+      - "pksm_overlay/**"
+      - "tools/apply_to_pksm.py"
+      - ".github/workflows/native-pksm-build.yml"
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: devkitpro/devkitarm:20260610
+    steps:
+      - name: Fetch Rogue code
+        uses: actions/checkout@v4
+        with:
+          path: rogue
+          persist-credentials: false
+      - name: Fetch pinned PKSM including submodules
+        uses: actions/checkout@v4
+        with:
+          repository: FlagBrew/PKSM
+          ref: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          submodules: recursive
+          path: upstream
+          persist-credentials: false
+      - name: Check native prerequisites
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "DEVKITPRO=$DEVKITPRO DEVKITARM=$DEVKITARM"
+          arm-none-eabi-g++ --version | head -1
+          python3 --version
+          for cmd in make rsync tex3ds 3dstool makerom bannertool; do
+            command -v "$cmd" || echo "MISSING OPTIONAL: $cmd"
+          done
+          python3 -c 'import git; print("GitPython installed")' || true
+      - name: Apply isolated read-only Rogue screen
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/apply_to_pksm.py upstream
+          git -C upstream diff --check
+          grep -q 'RogueInspectScreen' upstream/3ds/source/gui/screen/TitleLoadScreen.cpp
+      - name: Compile complete modified PKSM using devkitARM
+        shell: bash
+        run: |
+          set -o pipefail
+          cd upstream
+          make -j2 no-deps 2>&1 | tee ../native_build.log
+      - name: Summarize native compilation
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Experimental native build"
+            echo "Pinned upstream commit: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8"
+            echo "This is not an emulator or hardware test, nor proof of installed-save safety."
+            if test -f native_build.log; then echo '### Final compiler output'; tail -n 70 native_build.log; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve build logs for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-native-build-log
+          path: native_build.log
+          if-no-files-found: ignore
+          retention-days: 7
