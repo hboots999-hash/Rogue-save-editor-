@@ -1,8 +1,8 @@
 /*
- * PKSM Rogue Edition experimental read-only inspection screen.
+ * PKSM Rogue Edition experimental offline-save editor screen.
  * Copyright (C) 2026 contributors to PKSM Rogue Edition.
  * GPL-3.0-or-later; see upstream PKSM licence and notices.
- * NO GAME STORAGE OR SAVE WRITES IN THIS MODULE.
+ * Only separately imported and exported SD save copies; no installed-game writes.
  */
 #ifndef ROGUE_INSPECT_SCREEN_HPP
 #define ROGUE_INSPECT_SCREEN_HPP
@@ -10,6 +10,7 @@
 #include "rogue_bridge.h"
 #include "rogue_edit.h"
 #include "rogue_pokemon_edit.h"
+#include "rogue_ball_insert.h"
 #include <memory>
 #include <string>
 
@@ -31,6 +32,7 @@ private:
     rogue_draft_request edits{};
     rogue_pokemon_stats_request pokemonEdit{};
     bool pokemonEditActive = false;
+    bool masterBallInsertActive = false;
     size_t stagedChangedBytes = 0;
     bool awaitingExport = false;
     bool exportVerified();
