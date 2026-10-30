@@ -48,7 +48,7 @@ jobs:
           XDG_CACHE_HOME: /tmp/rogue-only-emulator-cache
         run: |
           set -euo pipefail
-          xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+          timeout --signal=TERM --kill-after=5s 55s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
             set -e
             ./squashfs-root/AppRun "$1" >azahar.log 2>&1 &
             pid=$!
@@ -60,6 +60,8 @@ jobs:
             fi
             scrot -q 90 azahar-screen.png
             kill -TERM "$pid" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$pid" 2>/dev/null || true
             wait "$pid" 2>/dev/null || true
             test -s azahar-screen.png
             echo "Emulator process stayed alive and screenshot exists; screenshot content needs manual inspection."
