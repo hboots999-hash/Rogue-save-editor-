@@ -86,7 +86,7 @@ def main():
     # An unfamiliar extdata handler must also fail before modifying app.cpp.
     with TemporaryDirectory() as d:
         root=Path(d)
-        app,archive=setup(root,ARCHIVE,ARCHIVE.replace('resetPKSMExtdataArchive','unexpectedReset'))
+        app,archive=setup(root,APP,ARCHIVE.replace('resetPKSMExtdataArchive','unexpectedReset'))
         before=(app.read_bytes(),archive.read_bytes())
         try: restrict(root)
         except ValueError: pass
