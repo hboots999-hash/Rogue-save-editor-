@@ -191,7 +191,7 @@ bool RogueInspectScreen::exportVerified()
 void RogueInspectScreen::drawTop() const
 {
     Gui::drawSolidRect(0, 0, 400, 240, PKSM_Color(15, 22, 89, 255));
-    Gui::text("PKSM ROGUE - READ ONLY", 200, 12, FONT_SIZE_14, COLOR_WHITE,
+    Gui::text("PKSM ROGUE - OFFLINE EDITOR", 200, 12, FONT_SIZE_14, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
     Gui::text(status, 200, 34, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP, TextWidthAction::SQUISH, 390);
@@ -238,6 +238,24 @@ void RogueInspectScreen::drawBottom() const
         TextPosX::CENTER, TextPosY::TOP);
     Gui::text(page == Page::Party ? "X: IVs31  Y: 252Atk/252Spd" : "X: item x999  A: money max", 160, 125, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
+    if (page == Page::Party && snapshot)
+    {
+        rogue_party_candidate p{};
+        if (rogue_snapshot_party(snapshot.get(), firstRow, &p))
+        {
+            const auto statLine = [](const uint8_t* a) -> std::string {
+                return std::to_string(a[0]) + "/" + std::to_string(a[1]) + "/" +
+                    std::to_string(a[2]) + "/" + std::to_string(a[3]) + "/" +
+                    std::to_string(a[4]) + "/" + std::to_string(a[5]);
+            };
+            Gui::text("IV HP/Atk/Def/Spd/SpA/SpD", 160, 155, FONT_SIZE_11, COLOR_WHITE,
+                TextPosX::CENTER, TextPosY::TOP, TextWidthAction::SQUISH, 310);
+            Gui::text(statLine(p.ivs), 160, 173, FONT_SIZE_11, COLOR_WHITE,
+                TextPosX::CENTER, TextPosY::TOP);
+            Gui::text("EV " + statLine(p.evs), 160, 191, FONT_SIZE_11, COLOR_WHITE,
+                TextPosX::CENTER, TextPosY::TOP);
+        }
+    }
 }
 
 void RogueInspectScreen::update(touchPosition*)
