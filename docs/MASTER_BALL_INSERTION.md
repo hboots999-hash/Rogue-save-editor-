@@ -34,6 +34,8 @@ Pokabbie/pokeemerald-rogue revision `518b7b4d8381ce865febb581c1e534d67d19d56d`:
 - Local host C++ test and ASan/UBSan tests passed on two private historical 128 KiB saves. The latest copy had 245 occupied slots and accepted a 999 Master Ball stack with 131 modified bytes; older backup had 246 occupied slots and accepted with 74 modified bytes. No originals were changed, and **no personal saves have been committed to this public repository**.
 - Synthetic CI regression tests also cover repeated insertion refusal, missing space, wrong sort mode, holes, corrupt checksum, unsupported marker, and unchanged output on refusal.
 - A host simulated UI test uses Bag Y + START + START to export separate original and draft files.
+- **Native ARM / 3DSX / experimental CIA compilation passed:** [build 41146520997](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41146520997). CIA 5,055,424 bytes, SHA-256 `88188526b5000c0d0019f6db7d9917bad6dbb0a5cd0b49e92131c57d982e5607`.
+- **Actual Azahar Y/START/START test passed:** [run 41146923377](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41146923377) booted the compiled CIA with a synthetic source save. It generated one original backup byte-for-byte identical to the import and one new 128 KiB draft. Independently parsed bag contents: item IDs `[1,2,4]`, quantities `[50,75,999]`. Verified sector checksum and strict changed-byte range. The screen displayed `Saved original + draft with readback`.
 - **An emulator-generated draft is not proof that the patched Emerald Rogue ROM can load the result.**
 - Physical 3DS side-by-side installation, valid ROM fingerprint, actual game-load-and-save acceptance, and verified rollback remain outstanding.
 
