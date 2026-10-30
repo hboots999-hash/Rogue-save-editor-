@@ -51,12 +51,13 @@ jobs:
           python3 rogue/tools/apply_to_pksm.py upstream
           git -C upstream diff --check
           grep -q 'RogueInspectScreen' upstream/3ds/source/gui/screen/TitleLoadScreen.cpp
-      - name: Compile complete modified PKSM using devkitARM
+      - name: Compile modified PKSM ELF using devkitARM (packaging tools absent)
         shell: bash
         run: |
           set -o pipefail
           cd upstream
-          make -j2 no-deps 2>&1 | tee ../native_build.log
+          make revision 2>&1 | tee ../native_build.log
+          make -C 3ds -j2 buildelf 2>&1 | tee -a ../native_build.log
       - name: Summarize native compilation
         if: always()
         shell: bash
