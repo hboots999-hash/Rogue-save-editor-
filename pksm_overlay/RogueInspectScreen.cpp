@@ -90,7 +90,7 @@ namespace {
 RogueInspectScreen::RogueInspectScreen()
     : Screen("L/R: page   Up/Down: scroll   B: exit")
 {
-    const auto bytes = readCopiedSave(kImportPath);
+    auto bytes = readCopiedSave(kImportPath);
     if (!bytes)
     {
         status = "Missing, unreadable or wrong-size SD copy";
@@ -286,8 +286,7 @@ void RogueInspectScreen::update(touchPosition*)
     {
         const unsigned count = page == Page::Party ? preview.party_count :
             (page == Page::Bag ? preview.occupied_bag_slots : 0);
-        if (count > kRowsPerPage && firstRow + kRowsPerPage < count &&
-            firstRow < kMaxBagPages) ++firstRow;
+        if (firstRow + 1 < count && firstRow < kMaxBagPages) ++firstRow;
     }
     else if (keys & KEY_UP && firstRow > 0) --firstRow;
 }
