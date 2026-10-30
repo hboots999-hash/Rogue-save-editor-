@@ -73,13 +73,15 @@ jobs:
           cd upstream
           make revision 2>&1 | tee ../native_build.log
           make -C 3ds -j2 buildelf PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
-      - name: Attempt separate experimental 3DSX packaging
+      - name: Package experimental 3DSX and verify actual file
         shell: bash
-        continue-on-error: true
         run: |
-          set -o pipefail
+          set -euo pipefail
           cd upstream
-          make -C 3ds -j2 "$PWD/3ds/out/PKSM_Rogue_Inspect.3dsx" _ROMFS_DEPS="../assets/romfs/i18n ../assets/romfs/personal" PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+          make -C 3ds -j2 "$PWD/3ds/out/PKSM_Rogue_Inspect.3dsx" _ROMFS_DEPS="../assets/romfs/i18n ../assets/romfs/personal" PYTHON=python3 PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+          test -s 3ds/out/PKSM_Rogue_Inspect.3dsx
+          python3 -c 'from pathlib import Path; p=Path("3ds/out/PKSM_Rogue_Inspect.3dsx"); assert p.read_bytes()[:4]==b"3DSX"; print(f"Verified 3DSX header and file size: {p.stat().st_size} bytes")'
+          sha256sum 3ds/out/PKSM_Rogue_Inspect.3dsx
       - name: Archive unverified development executables (DO NOT INSTALL)
         if: always()
         uses: actions/upload-artifact@v4
