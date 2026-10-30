@@ -31,11 +31,13 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y -qq xvfb scrot libgl1-mesa-dri libopengl0 libpulse0 libxkbcommon-x11-0 libasound2t64
+          sudo apt-get install -y -qq xvfb scrot libgl1-mesa-dri libopengl0 libegl1 libgles2 libpulse0 libxkbcommon-x11-0 libasound2t64
           curl -fL --retry 3 --output azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
           echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
           chmod +x azahar.AppImage
           ./azahar.AppImage --appimage-extract >/dev/null
+          ldd squashfs-root/AppRun.wrapped | tee azahar-dependencies.txt
+          if grep -q 'not found' azahar-dependencies.txt; then echo 'Azahar dependencies incomplete'; exit 1; fi
       - name: Attempt first launch and capture screenshot
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
