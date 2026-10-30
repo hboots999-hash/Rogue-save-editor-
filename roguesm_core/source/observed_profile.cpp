@@ -71,3 +71,4 @@ ObservedView inspectObserved(const uint8_t* p,std::size_t n){
  for(unsigned i=0;i<450;i++){const uint8_t* q=s1+0x578+4*i;uint16_t id=r16(q);if(id)out.items.push_back({uint16_t(i),id,uint16_t(r16(q+2)^uint16_t(key))});}
  out.status=ObservedStatus::Candidate;return out;
 }
+}
