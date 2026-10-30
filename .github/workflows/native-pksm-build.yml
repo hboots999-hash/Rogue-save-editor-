@@ -65,6 +65,23 @@ jobs:
           cd upstream
           make revision 2>&1 | tee ../native_build.log
           make -C 3ds -j2 buildelf PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+      - name: Attempt separate experimental 3DSX packaging
+        shell: bash
+        continue-on-error: true
+        run: |
+          set -o pipefail
+          cd upstream
+          make -C 3ds -j2 "$PWD/3ds/out/PKSM_Rogue_Inspect.3dsx" _ROMFS_DEPS="../assets/romfs/i18n ../assets/romfs/personal" PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+      - name: Archive unverified development executables (DO NOT INSTALL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-not-install-experimental-pksm-rogue
+          path: |
+            upstream/3ds/out/*.elf
+            upstream/3ds/out/*.3dsx
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Summarize native compilation
         if: always()
         shell: bash
