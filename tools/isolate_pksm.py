@@ -47,7 +47,7 @@ def isolate_tree(root: Path) -> dict[str, int]:
             original = path.read_text(encoding="utf-8")
             updated, n = OLD_PATH_RE.subn(NEW, original)
             if n:
-                if OLD in updated.replace(NEW, ""):
+                if OLD_PATH_RE.search(updated):
                     raise ValueError("Unclassified PKSM path remains: " + str(path))
                 edits[path] = updated
                 old_count += n
