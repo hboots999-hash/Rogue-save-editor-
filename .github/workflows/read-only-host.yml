@@ -73,6 +73,17 @@ jobs:
             roguesm_core/source/observed_profile.cpp \
             -o /tmp/rogue-screen-export-test
           /tmp/rogue-screen-export-test /tmp/rogue-synthetic.sav
+      - name: Simulate 3DS Pokemon X/Y stats drafts and exclusive exports
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
+            tests/test_screen_pokemon_export.cpp pksm_overlay/RogueInspectScreen.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp \
+            roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-screen-mon
+          /tmp/rogue-screen-mon /tmp/rogue-synthetic.sav
       - name: Test guarded PKSM overlay patch
         run: python3 tests/test_pksm_patch.py
       - name: Test Rogue-only startup guards
