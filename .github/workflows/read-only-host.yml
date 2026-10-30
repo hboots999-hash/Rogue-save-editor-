@@ -38,6 +38,7 @@ jobs:
         with:
           repository: FlagBrew/PKSM
           ref: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          submodules: recursive
           path: upstream_pksm
           persist-credentials: false
       - name: Apply Rogue overlay to actual PKSM source
