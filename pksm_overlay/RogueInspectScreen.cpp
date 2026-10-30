@@ -7,6 +7,8 @@
 #include "RogueInspectScreen.hpp"
 #include "ScreenStack.hpp"
 #include "gui.hpp"
+#include "candidate_profile.hpp"
+#include "observed_profile.hpp"
 #include <3ds.h>
 #include <array>
 #include <cerrno>
@@ -115,10 +117,14 @@ void RogueInspectScreen::stageDraft()
     if (!snapshot || !originalRaw) return;
     draftRaw = std::make_unique<uint8_t[]>(ROGUE_RAW_SAVE_SIZE);
     stagedChangedBytes = 0;
-    const rogue_edit_status result = rogue_make_offline_draft(
-        originalRaw.get(), ROGUE_RAW_SAVE_SIZE, &edits,
-        draftRaw.get(), ROGUE_RAW_SAVE_SIZE, &stagedChangedBytes);
-    if (result == ROGUE_EDIT_OK && stagedChangedBytes > 0)
+    const int result = pokemonEditActive
+        ? int(rogue_make_pokemon_stats_draft(
+            originalRaw.get(), ROGUE_RAW_SAVE_SIZE, &pokemonEdit,
+            draftRaw.get(), ROGUE_RAW_SAVE_SIZE, &stagedChangedBytes))
+        : int(rogue_make_offline_draft(
+            originalRaw.get(), ROGUE_RAW_SAVE_SIZE, &edits,
+            draftRaw.get(), ROGUE_RAW_SAVE_SIZE, &stagedChangedBytes));
+    if (result == 0 && stagedChangedBytes > 0)
     {
         awaitingExport = true;
         status = "Preview OK - START again exports COPY";
@@ -172,6 +178,8 @@ bool RogueInspectScreen::exportVerified()
         status = "Saved original + draft with readback";
         draftRaw.reset();
         edits = rogue_draft_request{};
+        pokemonEdit = rogue_pokemon_stats_request{};
+        pokemonEditActive = false;
         return true;
     }
     status = "No unused export filename";
@@ -206,7 +214,7 @@ void RogueInspectScreen::drawTop() const
             unsigned index = firstRow+i;
             rogue_party_candidate p{};
             if (!rogue_snapshot_party(snapshot.get(), index, &p)) break;
-            drawRow("#" + std::to_string(index+1) + " Species ID " +
+            drawRow((index == firstRow ? "> " : "  ") + std::string("#") + std::to_string(index+1) + " Species ID " +
                 std::to_string(p.species_id) + "  item ID " + std::to_string(p.held_item_id), i);
         }
     }
@@ -228,7 +236,7 @@ void RogueInspectScreen::drawBottom() const
     Gui::backgroundBottom(true);
     Gui::text("Candidate only - not ROM verified", 160, 90, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
-    Gui::text("L/R: page  X: item x999  A: money max", 160, 125, FONT_SIZE_11, COLOR_WHITE,
+    Gui::text(page == Page::Party ? "X: IVs31  Y: 252Atk/252Spd" : "X: item x999  A: money max", 160, 125, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
 }
 
@@ -252,6 +260,8 @@ void RogueInspectScreen::update(touchPosition*)
 
     if (keys & KEY_A)
     {
+        pokemonEditActive = false;
+        pokemonEdit = rogue_pokemon_stats_request{};
         edits.change_money = !edits.change_money;
         edits.money = 999999;
         awaitingExport = false;
@@ -261,6 +271,8 @@ void RogueInspectScreen::update(touchPosition*)
     }
     if ((keys & KEY_X) && page == Page::Bag)
     {
+        pokemonEditActive = false;
+        pokemonEdit = rogue_pokemon_stats_request{};
         rogue_item_candidate item{};
         if (rogue_snapshot_item(snapshot.get(), firstRow, &item))
         {
@@ -277,6 +289,53 @@ void RogueInspectScreen::update(touchPosition*)
             draftRaw.reset();
             status = edits.change_quantity ? "Existing item x999 staged" : "Item edit cancelled";
         }
+        return;
+    }
+    if ((keys & (KEY_X | KEY_Y)) && page == Page::Party)
+    {
+        rogue_party_candidate party{};
+        if (!rogue_snapshot_party(snapshot.get(), firstRow, &party))
+            return;
+        const auto candidate = rogue::inspectObserved(originalRaw.get(), ROGUE_RAW_SAVE_SIZE);
+        if (candidate.status != rogue::ObservedStatus::Candidate)
+        {
+            status = "Party candidate invalid - no draft";
+            return;
+        }
+        const auto base = std::size_t(candidate.selected) * 14 * rogue::SectorBytes;
+        const auto slot = rogue::validateSlot(originalRaw.get() + base,
+            14 * rogue::SectorBytes, rogue::kCandidateSectorSizes);
+        if (!slot.valid)
+        {
+            status = "Party sector invalid - no draft";
+            return;
+        }
+        const auto mon = originalRaw.get() + base +
+            slot.physical[1] * rogue::SectorBytes + 0x238 + firstRow * 0x68;
+        const uint32_t personality = uint32_t(mon[0]) | (uint32_t(mon[1]) << 8) |
+            (uint32_t(mon[2]) << 16) | (uint32_t(mon[3]) << 24);
+        edits = rogue_draft_request{};
+        pokemonEdit = rogue_pokemon_stats_request{};
+        pokemonEdit.party_index = static_cast<uint8_t>(firstRow);
+        pokemonEdit.expected_species = party.species_id;
+        pokemonEdit.expected_personality = personality;
+        if (keys & KEY_X)
+        {
+            pokemonEdit.change_ivs = 1;
+            for (auto& iv : pokemonEdit.ivs) iv = 31;
+            status = "All IVs 31 staged (offline only)";
+        }
+        else
+        {
+            pokemonEdit.change_evs = 1;
+            pokemonEdit.evs[0] = 4;
+            pokemonEdit.evs[1] = 252;
+            pokemonEdit.evs[3] = 252;
+            status = "Atk252 Speed252 HP4 staged";
+        }
+        pokemonEditActive = true;
+        awaitingExport = false;
+        draftRaw.reset();
         return;
     }
     const unsigned current = static_cast<unsigned>(page);
