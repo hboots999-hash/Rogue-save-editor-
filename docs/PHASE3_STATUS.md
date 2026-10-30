@@ -28,3 +28,10 @@
 PKSM upstream: GPL-3.0-or-later with applicable additional notices. RogueSM candidate parser: MIT. Preserve all original notices and attribution.
 
 No personal saves, ROM images, console keys, or SD dumps are committed to this public repository.
+
+## Verified synthetic on-screen inspection — 30 October 2026
+- [Azahar synthetic test run](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41141214229) passed. The screenshot was visually inspected after startup.
+- Fixture created from code only: 128 KiB, candidate save marker 6, money 123456, party 0, numeric item IDs 1x50 and 2x75. No user save, ROM, or private data used.
+- Host C++ snapshot test also passed, validating the exact money, zero party, and both item quantities.
+- **Screenshot visibly confirms** Rogue Inspect title, marker 6, money 123456, save counter 0, party size 0, occupied bag slots 2, and read-only warning. L/R and B input not tested yet.
+- Still unverified: real-save console display against exact ROM; item/party tab button navigation; clean exit; physical 3DS; any save modification/restore.
