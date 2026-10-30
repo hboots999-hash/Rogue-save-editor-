@@ -19,13 +19,13 @@ jobs:
           name: DO-NOT-INSTALL-unverified-Rogue-PKSM-CIA
           path: candidate
           repository: hboots999-hash/Rogue-save-editor-
-          run-id: 41139216441
+          run-id: 41140279085
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify actual CIA bytes and expected build hash
         run: |
           set -euo pipefail
           test -s candidate/PKSM_Rogue_Inspect.cia
-          echo 'fd2612dc7201557127edadedc0a5de5654cd1539ce012207e088b02917e28d74  candidate/PKSM_Rogue_Inspect.cia' | sha256sum -c -
+          echo '8335d9f1cb1c728a49f58d167d08ff50799a7c0f7511cd981323c9ebf1f2d376  candidate/PKSM_Rogue_Inspect.cia' | sha256sum -c -
       - name: Prepare ephemeral emulator and dependencies
         run: |
           set -euo pipefail
