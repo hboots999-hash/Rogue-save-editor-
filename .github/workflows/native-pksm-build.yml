@@ -36,6 +36,8 @@ jobs:
         run: |
           set -euxo pipefail
           echo "DEVKITPRO=$DEVKITPRO DEVKITARM=$DEVKITARM"
+          export PATH="$DEVKITARM/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
           arm-none-eabi-g++ --version | head -1
           python3 --version
           for cmd in make rsync tex3ds 3dstool makerom bannertool; do
