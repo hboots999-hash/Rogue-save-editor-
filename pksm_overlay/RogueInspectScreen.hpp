@@ -9,6 +9,7 @@
 #include "Screen.hpp"
 #include "rogue_bridge.h"
 #include "rogue_edit.h"
+#include "rogue_pokemon_edit.h"
 #include <memory>
 #include <string>
 
@@ -28,6 +29,8 @@ private:
     std::unique_ptr<uint8_t[]> originalRaw;
     std::unique_ptr<uint8_t[]> draftRaw;
     rogue_draft_request edits{};
+    rogue_pokemon_stats_request pokemonEdit{};
+    bool pokemonEditActive = false;
     size_t stagedChangedBytes = 0;
     bool awaitingExport = false;
     bool exportVerified();
