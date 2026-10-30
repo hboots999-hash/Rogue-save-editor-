@@ -14,7 +14,7 @@
 - Host compiler, malformed-save test, and guarded overlay tests pass.
 - A previous modified PKSM ARM ELF compiled and linked with the real devkitARM toolchain in [run 41136187630](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41136187630).
 - **Correction:** earlier run 41137034257 was reported successful by GitHub Actions even though 3DSX packaging failed with `Permission denied` on a Python script; its downloaded artifact ZIP contained only an ELF, no 3DSX.
-- The packaging workflow was corrected to pass `PYTHON=python3`, fail on packaging errors, and confirm the resulting 3DSX begins with the `3DSX` magic.
+- Corrected build [41137575458](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41137575458) **passed** packaging, and inspection of the downloaded ZIP confirmed a 5,673,224-byte `PKSM_Rogue_Inspect.3dsx` (valid `3DSX` signature) alongside a 71,641,036-byte ARM ELF. These files are untested on emulator or hardware.
 - An isolated Azahar emulator screenshot/log smoke test has been added, dependent on a *verified* 3DSX build. Do not assume it passed without reviewing its output.
 
 ## Release blockers
