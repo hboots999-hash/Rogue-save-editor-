@@ -9,6 +9,7 @@ on:
       - "pksm_overlay/**"
       - "tools/apply_to_pksm.py"
       - "tools/isolate_pksm.py"
+      - "tools/restrict_startup.py"
       - ".github/workflows/native-pksm-build.yml"
 permissions:
   contents: read
@@ -58,6 +59,13 @@ jobs:
           python3 rogue/tools/apply_to_pksm.py upstream
           git -C upstream diff --check
           grep -q 'RogueInspectScreen' upstream/3ds/source/gui/screen/TitleLoadScreen.cpp
+      - name: Restrict inherited PKSM save scans and updater
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/restrict_startup.py upstream
+          git -C upstream diff --check
+          grep -q 'const bool contentUp = rogueInspectOnly' upstream/3ds/source/app.cpp
       - name: Compile modified PKSM ELF using devkitARM (packaging tools absent)
         shell: bash
         run: |
