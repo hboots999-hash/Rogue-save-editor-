@@ -1,0 +1,30 @@
+name: Rogue read-only host checks
+on:
+  push:
+    branches: ["feature/phase3-rogue-inspect"]
+  pull_request:
+    branches: ["main"]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bridge parses conservatively
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            bridge/bridge_smoke_test.cpp bridge/rogue_bridge.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue_bridge_smoke
+          /tmp/rogue_bridge_smoke
+      - name: Compile UI source with host stubs
+        run: |
+          g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ibridge \
+            -c pksm_overlay/RogueInspectScreen.cpp -o /tmp/rogue_screen.o
+      - name: Syntax-check integration tool
+        run: python3 -m py_compile tools/apply_to_pksm.py
