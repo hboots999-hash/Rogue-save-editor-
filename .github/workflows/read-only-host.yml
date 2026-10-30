@@ -28,6 +28,8 @@ jobs:
             -c pksm_overlay/RogueInspectScreen.cpp -o /tmp/rogue_screen.o
       - name: Test guarded PKSM overlay patch
         run: python3 tests/test_pksm_patch.py
+      - name: Test Rogue-only startup guards
+        run: python3 tests/test_startup_restriction.py
       - name: Test PKSM SD path isolation
         run: python3 tests/test_isolation.py
       - name: Syntax-check integration tool
@@ -45,6 +47,8 @@ jobs:
         run: |
           python3 tools/isolate_pksm.py upstream_pksm
           python3 tools/apply_to_pksm.py upstream_pksm
+          python3 tools/restrict_startup.py upstream_pksm
+          grep -q 'const bool contentUp = rogueInspectOnly' upstream_pksm/3ds/source/app.cpp
           ! grep -R -n -F '/3ds/PKSM/' upstream_pksm/3ds/source upstream_pksm/3ds/include upstream_pksm/common/source upstream_pksm/common/include upstream_pksm/core/source upstream_pksm/core/include --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.c' --include='*.tcc' | grep -v '/3ds/PKSM-Rogue/'
           grep -q 'RogueInspectScreen' upstream_pksm/3ds/source/gui/screen/TitleLoadScreen.cpp
           grep -q 'source/rogue' upstream_pksm/3ds/Makefile
