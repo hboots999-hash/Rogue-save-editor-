@@ -44,6 +44,17 @@ jobs:
             roguesm_core/source/observed_profile.cpp \
             -o /tmp/rogue-offline-draft
           /tmp/rogue-offline-draft /tmp/rogue-synthetic.sav
+      - name: Validate candidate Pokemon IV/EV encrypted drafts on 24 permutations
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_pokemon_stats.cpp bridge/rogue_pokemon_edit.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-pokemon-stats
+          /tmp/rogue-pokemon-stats /tmp/rogue-synthetic.sav
       - name: Compile UI source with host stubs
         run: |
           g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
