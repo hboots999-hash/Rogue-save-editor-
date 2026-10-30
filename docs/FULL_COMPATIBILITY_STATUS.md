@@ -17,7 +17,7 @@ Last reviewed: 30 October 2026. **Experimental development only; not a physical-
 - The IV/EV backend passed 24 synthetic encrypted substructure permutations and two private historical save samples with unchanged originals; synthetic 3DS Party X/Y screen-level host test passed [CI run 41145172921](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41145172921).
 - UI: X on Party stages IVs all 31, Y stages 4 HP/252 Atk/252 Speed; START twice previews and exports separate new original and draft files.
 - Prior native CIA with money/existing-item editing passed isolated Azahar A/X/START and file-export tests [run 41143432549](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41143432549).
-- The *newer IV/EV CIA* must have a successful native compile and its own emulator key/export test before marking this UI hardware/emulator-verified.
+- **The IV/EV CIA successfully built and passed an actual Azahar button/export test**: [run 41145723321](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41145723321). 3DS R/X/START exported six perfect IVs; Y/START exported 4 HP, 252 Attack, 252 Speed EVs on a separate draft. The emulator generated **two new originals and two new drafts**; each backup matched the unchanged imported synthetic save. Encrypted Pokémon bytes, internal Pokémon checksums and candidate save structure were decoded and verified for both outputs. This does not verify compatibility with a real released ROM or physical 3DS.
 
 ## Items
 - Candidate constants from pinned EX 2.1.2 source: `ITEM_MASTER_BALL=4`, `ITEM_RARE_CANDY=113`.
