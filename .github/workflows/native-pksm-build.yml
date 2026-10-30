@@ -57,7 +57,7 @@ jobs:
           set -o pipefail
           cd upstream
           make revision 2>&1 | tee ../native_build.log
-          make -C 3ds -j2 buildelf 2>&1 | tee -a ../native_build.log
+          make -C 3ds -j2 buildelf PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
       - name: Summarize native compilation
         if: always()
         shell: bash
