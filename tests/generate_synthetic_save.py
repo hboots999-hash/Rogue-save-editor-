@@ -31,7 +31,7 @@ def checksum(buffer: bytes | bytearray, length: int) -> int:
     return ((total >> 16) + total) & 0xFFFF
 
 
-def generate(with_party: bool = False) -> bytes:
+def generate(with_party: bool = False, max_bag_capacity: bool = False) -> bytes:
     flash = bytearray(RAW_SIZE)
     for logical_id in range(SECTORS):
         start = logical_id * SECTOR_BYTES
@@ -41,6 +41,9 @@ def generate(with_party: bool = False) -> bytes:
         if logical_id == 1:
             struct.pack_into("<I", sector, 0x234, 0)  # no party data
             struct.pack_into("<I", sector, 0x4A8, MONEY ^ KEY)
+            if max_bag_capacity:
+                sector[0x4AC] = 0  # default type sort mode
+                sector[0x4AD] = 37  # pinned EX 2.1.2 maximum bag upgrade
             if with_party:
                 # A disposable valid BoxPokemon, PID 24 -> order G,A,E,M.
                 struct.pack_into("<I", sector, 0x234, 1)
@@ -74,8 +77,9 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("output", type=Path)
     parser.add_argument("--party", action="store_true", help="include one synthetic party Pokemon")
+    parser.add_argument("--max-bag-capacity", action="store_true", help="set candidate bag capacity upgrades to 37")
     args = parser.parse_args()
-    data = generate(with_party=args.party)
+    data = generate(with_party=args.party, max_bag_capacity=args.max_bag_capacity)
     assert len(data) == RAW_SIZE
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_bytes(data)
