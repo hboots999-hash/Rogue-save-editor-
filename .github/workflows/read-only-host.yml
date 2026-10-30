@@ -66,7 +66,7 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
             tests/test_screen_export.cpp pksm_overlay/RogueInspectScreen.cpp \
-            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp \
             roguesm_core/source/edit_draft.cpp \
             roguesm_core/source/sector.cpp \
             roguesm_core/source/candidate_profile.cpp \
