@@ -1,22 +1,30 @@
-# PKSM Rogue Edition - Phase 3 experimental inspection
+# PKSM Rogue Edition — experimental development checkpoint
 
-**Not an installable release. Do not install a PKSM-based test CIA on your 3DS yet.**
+**NOT AN INSTALLABLE RELEASE. Do not install the developer builds on your 3DS.**
 
-This development branch holds the read-only candidate parser, a PKSM screen (SELECT at the title loader), and a guarded script for applying the overlay to a clean FlagBrew/PKSM checkout.
+## What exists
+- Numeric, read-only Emerald Rogue candidate save parser and C API.
+- PKSM `RogueInspectScreen` reads only a manually copied 128 KiB save from `sdmc:/3ds/PKSM-Rogue/imports/00000001.sav`.
+- Scripts `isolate_pksm.py`, `apply_to_pksm.py`, and `restrict_startup.py` for a clean pinned PKSM source checkout. Run them **in that order**.
+- The startup-restricted build opens directly into RogueInspectScreen; it skips normal PKSM bank/title/save scanning and prevents PKSM auto-update installation. B exits the main loop.
+- Inherited absolute SD paths are mechanically rewritten to a separate `/3ds/PKSM-Rogue` directory; 76 occurrences in 16 core C/C++ files were observed in CI. This does not prove total runtime isolation.
+- Candidate format is *not* a verified exact ROM fingerprint; Pokémon/item names and editing remain unsupported.
 
-## Developer workflow
+## Verification so far
+- Host compiler, malformed-save test, and guarded overlay tests pass.
+- A previous modified PKSM ARM ELF compiled and linked with the real devkitARM toolchain in [run 41136187630](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41136187630).
+- **Correction:** earlier run 41137034257 was reported successful by GitHub Actions even though 3DSX packaging failed with `Permission denied` on a Python script; its downloaded artifact ZIP contained only an ELF, no 3DSX.
+- The packaging workflow was corrected to pass `PYTHON=python3`, fail on packaging errors, and confirm the resulting 3DSX begins with the `3DSX` magic.
+- An isolated Azahar emulator screenshot/log smoke test has been added, dependent on a *verified* 3DSX build. Do not assume it passed without reviewing its output.
 
-1. Clone FlagBrew/PKSM including submodules into a disposable branch or copy.
-2. Run: python3 tools/apply_to_pksm.py /path/to/PKSM
-3. Review the resulting PKSM diff and application identity.
-4. Compile PKSM using supported devkitPro tools. A successful host build does not prove hardware compatibility.
+## Release blockers
+- Re-check current startup-restricted native build and real 3DSX artifact.
+- Review any emulator screenshot and crash logs.
+- CIA packaging tools and CIA exheader validation (priority, title ID) are not yet completed.
+- A separate title ID and path rewrite do not guarantee no interaction with installed PKSM; inherited source still contains ordinary editing/write functionality outside the restricted UI.
+- No actual 3DS device test, exact patched ROM validation, safe edit or restore.
 
-The screen reads a COPIED 128 KiB raw save only from sdmc:/3ds/PKSM-Rogue/imports/00000001.sav, using read-only binary I/O. It displays numeric candidate data, not verified names. Its path does not invoke PKSM's standard Gen 3 save loader.
+## Source provenance
+PKSM upstream: GPL-3.0-or-later with applicable additional notices. RogueSM candidate parser: MIT. Preserve all original notices and attribution.
 
-The proposed app ID is derived from UNIQUE_ID=0xF73A2. It has not been checked against the user's installed titles. Upstream PKSM's other SD paths/settings could overlap with installed PKSM, so a separate title ID is not sufficient isolation.
-
-## Validation
-GitHub Actions compiles the bridge and UI source against mock host headers, runs invalid-save/preservation smoke checks and tests synthetic patch guards. No full PKSM compilation, CIA launch, installed-save read, restore or real-ROM compatibility has been demonstrated.
-
-## Licensing
-Candidate parser from RogueSM (MIT; roguesm_core/LICENSE). PKSM is GPL-3.0-or-later with additional attribution requirements. Preserve upstream copyrights, licensing and notices in any derived distribution.
+No personal saves, ROM images, console keys, or SD dumps are committed to this public repository.
