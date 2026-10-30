@@ -92,7 +92,7 @@ jobs:
             sleep 16
             win="$(xdotool search --onlyvisible --name "Azahar" | tail -n 1)"
             if test -z "$win"; then echo "Azahar window missing"; cat cia-launch.log; exit 1; fi
-            xdotool windowactivate --sync "$win"
+            xdotool windowfocus "$win"
             scrot -q 90 before-edit.png
             # Default Azahar keyboard mappings: 3DS A = a, START = m.
             xdotool key --clearmodifiers a
