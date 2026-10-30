@@ -1,8 +1,8 @@
 /*
- * PKSM Rogue Edition experimental read-only inspection screen.
+ * PKSM Rogue Edition experimental offline save editor screen.
  * Copyright (C) 2026 contributors to PKSM Rogue Edition.
  * GPL-3.0-or-later; see upstream PKSM licence and notices.
- * NO GAME STORAGE OR SAVE WRITES IN THIS MODULE.
+ * Only opt-in imported/copied saves are used; no installed-game save writes.
  */
 #include "RogueInspectScreen.hpp"
 #include "ScreenStack.hpp"
@@ -117,7 +117,11 @@ void RogueInspectScreen::stageDraft()
     if (!snapshot || !originalRaw) return;
     draftRaw = std::make_unique<uint8_t[]>(ROGUE_RAW_SAVE_SIZE);
     stagedChangedBytes = 0;
-    const int result = pokemonEditActive
+    const int result = masterBallInsertActive
+        ? int(rogue_make_master_ball_draft(
+            originalRaw.get(), ROGUE_RAW_SAVE_SIZE,
+            draftRaw.get(), ROGUE_RAW_SAVE_SIZE, &stagedChangedBytes))
+        : pokemonEditActive
         ? int(rogue_make_pokemon_stats_draft(
             originalRaw.get(), ROGUE_RAW_SAVE_SIZE, &pokemonEdit,
             draftRaw.get(), ROGUE_RAW_SAVE_SIZE, &stagedChangedBytes))
@@ -133,7 +137,16 @@ void RogueInspectScreen::stageDraft()
     {
         awaitingExport = false;
         draftRaw.reset();
-        status = "Draft refused (code " + std::to_string(int(result)) + ")";
+        if (masterBallInsertActive && result == ROGUE_BALL_INSERT_ALREADY_OWNED)
+            status = "Master Ball owned: select its slot + X";
+        else if (masterBallInsertActive && result == ROGUE_BALL_INSERT_NO_CAPACITY)
+            status = "Bag has no verified spare capacity";
+        else if (masterBallInsertActive && result == ROGUE_BALL_INSERT_BAG_UNSAFE)
+            status = "Bag order/pocket unsafe: no draft";
+        else if (masterBallInsertActive && result == ROGUE_BALL_INSERT_UNSUPPORTED_VERSION)
+            status = "Insert supported only on EX 2.1.2";
+        else
+            status = "Draft refused (code " + std::to_string(int(result)) + ")";
     }
 }
 
@@ -180,6 +193,7 @@ bool RogueInspectScreen::exportVerified()
         edits = rogue_draft_request{};
         pokemonEdit = rogue_pokemon_stats_request{};
         pokemonEditActive = false;
+        masterBallInsertActive = false;
         return true;
     }
     status = "No unused export filename";
@@ -239,7 +253,9 @@ void RogueInspectScreen::drawBottom() const
     Gui::backgroundBottom(true);
     Gui::text("Candidate only - not ROM verified", 160, 90, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
-    Gui::text(page == Page::Party ? "X: IVs31  Y: 252Atk/252Spd" : "X: item x999  A: money max", 160, 125, FONT_SIZE_11, COLOR_WHITE,
+    Gui::text(page == Page::Party ? "X: IVs31  Y: 252Atk/252Spd" :
+        (page == Page::Bag ? "X: item x999  Y: add Master Ball x999" :
+        "A: money 999999"), 160, 125, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
     if (page == Page::Party && snapshot)
     {
@@ -283,6 +299,7 @@ void RogueInspectScreen::update(touchPosition*)
     {
         pokemonEditActive = false;
         pokemonEdit = rogue_pokemon_stats_request{};
+        masterBallInsertActive = false;
         edits.change_money = !edits.change_money;
         edits.money = 999999;
         awaitingExport = false;
@@ -294,6 +311,7 @@ void RogueInspectScreen::update(touchPosition*)
     {
         pokemonEditActive = false;
         pokemonEdit = rogue_pokemon_stats_request{};
+        masterBallInsertActive = false;
         rogue_item_candidate item{};
         if (rogue_snapshot_item(snapshot.get(), firstRow, &item))
         {
@@ -310,6 +328,18 @@ void RogueInspectScreen::update(touchPosition*)
             draftRaw.reset();
             status = edits.change_quantity ? "Existing item x999 staged" : "Item edit cancelled";
         }
+        return;
+    }
+    if ((keys & KEY_Y) && page == Page::Bag)
+    {
+        pokemonEdit = rogue_pokemon_stats_request{};
+        pokemonEditActive = false;
+        edits = rogue_draft_request{};
+        masterBallInsertActive = !masterBallInsertActive;
+        awaitingExport = false;
+        draftRaw.reset();
+        status = masterBallInsertActive ?
+            "Add 999 Master Balls staged (offline)" : "Master Ball insert cancelled";
         return;
     }
     if ((keys & (KEY_X | KEY_Y)) && page == Page::Party)
@@ -336,6 +366,7 @@ void RogueInspectScreen::update(touchPosition*)
         const uint32_t personality = uint32_t(mon[0]) | (uint32_t(mon[1]) << 8) |
             (uint32_t(mon[2]) << 16) | (uint32_t(mon[3]) << 24);
         edits = rogue_draft_request{};
+        masterBallInsertActive = false;
         pokemonEdit = rogue_pokemon_stats_request{};
         pokemonEdit.party_index = static_cast<uint8_t>(firstRow);
         pokemonEdit.expected_species = party.species_id;
