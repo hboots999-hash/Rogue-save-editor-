@@ -78,6 +78,8 @@ jobs:
             ./squashfs-root/AppRun "$1" >cia-launch.log 2>&1 &
             pid=$!
             sleep 15
+            scrot -q 90 cia-launch-initial.png
+            sleep 22
             scrot -q 90 cia-launch.png
             if ! kill -0 "$pid" 2>/dev/null; then
               echo "Emulator closed before review"; cat cia-launch.log
@@ -99,6 +101,7 @@ jobs:
             cia-install.log
             cia-launch.log
             cia-launch.png
+            cia-launch-initial.png
             installed-apps.txt
           if-no-files-found: ignore
           retention-days: 7
