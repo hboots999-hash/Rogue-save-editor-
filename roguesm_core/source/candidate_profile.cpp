@@ -34,3 +34,4 @@ static CandidateResult inspectWithVersion(const uint8_t* flash, std::size_t leng
 }
 CandidateResult inspectCandidate(const uint8_t* flash, std::size_t length) { return inspectWithVersion(flash,length,8); }
 CandidateResult inspectCandidate212(const uint8_t* flash, std::size_t length) { return inspectWithVersion(flash,length,6); }
+}
