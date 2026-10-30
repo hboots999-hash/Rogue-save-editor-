@@ -26,5 +26,7 @@ jobs:
           g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Itests/host_stubs -Ibridge \
             -c pksm_overlay/RogueInspectScreen.cpp -o /tmp/rogue_screen.o
+      - name: Test guarded PKSM overlay patch
+        run: python3 tests/test_pksm_patch.py
       - name: Syntax-check integration tool
         run: python3 -m py_compile tools/apply_to_pksm.py
