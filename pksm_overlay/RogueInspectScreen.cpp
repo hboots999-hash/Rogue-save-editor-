@@ -225,8 +225,11 @@ void RogueInspectScreen::drawTop() const
             unsigned index = firstRow+i;
             rogue_item_candidate item{};
             if (!rogue_snapshot_item(snapshot.get(), index, &item)) break;
-            drawRow("Slot " + std::to_string(item.slot_index) + "  ID " +
-                std::to_string(item.item_id) + "  x" + std::to_string(item.quantity), i);
+            const std::string candidateName =
+                item.item_id == 113 ? "Rare Candy*" :
+                (item.item_id == 4 ? "Master Ball*" : "ID " + std::to_string(item.item_id));
+            drawRow("Slot " + std::to_string(item.slot_index) + "  " +
+                candidateName + "  x" + std::to_string(item.quantity), i);
         }
     }
 }
