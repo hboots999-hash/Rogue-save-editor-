@@ -8,6 +8,7 @@
 #define ROGUE_INSPECT_SCREEN_HPP
 #include "Screen.hpp"
 #include "rogue_bridge.h"
+#include "rogue_edit.h"
 #include <memory>
 #include <string>
 
@@ -24,6 +25,13 @@ private:
     using SnapshotHandle = std::unique_ptr<rogue_snapshot, decltype(&rogue_snapshot_close)>;
     SnapshotHandle snapshot{nullptr, &rogue_snapshot_close};
     rogue_preview preview{};
+    std::unique_ptr<uint8_t[]> originalRaw;
+    std::unique_ptr<uint8_t[]> draftRaw;
+    rogue_draft_request edits{};
+    size_t stagedChangedBytes = 0;
+    bool awaitingExport = false;
+    bool exportVerified();
+    void stageDraft();
     std::string status;
     enum class Page { Summary, Party, Bag } page = Page::Summary;
     unsigned firstRow = 0;
