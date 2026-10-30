@@ -1,0 +1,167 @@
+name: Azahar actual buttons and offline exports
+on:
+  push:
+    branches: ["feature/phase3-rogue-inspect"]
+    paths:
+      - ".github/workflows/emulator-export.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  cia-install:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Retrieve unverified CIA from pinned source build
+        uses: actions/download-artifact@v4
+        with:
+          name: DO-NOT-INSTALL-unverified-Rogue-PKSM-CIA
+          path: candidate
+          repository: hboots999-hash/Rogue-save-editor-
+          run-id: 41142340297
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify actual CIA bytes and expected build hash
+        run: |
+          set -euo pipefail
+          test -s candidate/PKSM_Rogue_Inspect.cia
+          echo '3c230fbeb95ec398ba31854a8b79cfbc7b262d34df2896a2cb40939f5d8d245c  candidate/PKSM_Rogue_Inspect.cia' | sha256sum -c -
+      - name: Prepare ephemeral emulator and dependencies
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb scrot xdotool libgl1-mesa-dri libopengl0 libegl1 libgles2 libpulse0 libxkbcommon-x11-0 libasound2t64
+          curl -fL --retry 3 --output azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          ./azahar.AppImage --appimage-extract >/dev/null
+      - name: Install CIA in empty emulator storage only
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/pksm-rogue-cia-config
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+          XDG_CACHE_HOME: /tmp/pksm-rogue-cia-cache
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 45s xvfb-run -a -s "-screen 0 1280x800x24" \
+            ./squashfs-root/AppRun --install "$PWD/candidate/PKSM_Rogue_Inspect.cia" \
+            2>&1 | tee cia-install.log
+          grep -F 'Installed CIA successfully.' cia-install.log
+          echo "CIA installed into temporary Azahar storage ONLY."
+      - name: Inject only a synthetic disposable Rogue candidate file
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          set -euo pipefail
+          fixture="$XDG_DATA_HOME/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          python3 tests/generate_synthetic_save.py "$fixture"
+          test "$(stat -c%s "$fixture")" -eq 131072
+          sha256sum "$fixture"
+      - name: Locate installed CIA executable rather than relaunching its installer
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share"
+          find "$XDG_DATA_HOME" "$HOME/.local/share" -type f -name '*.app' -print 2>/dev/null | sort -u > installed-apps.txt
+          cat installed-apps.txt
+          if test "$(wc -l < installed-apps.txt)" -ne 1; then
+            echo "Expected exactly one executable in the fresh emulator data directory." >&2
+            exit 1
+          fi
+          installed_app="$(head -n 1 installed-apps.txt)"
+          test -s "$installed_app"
+          echo "ROGUE_INSTALLED_APP=$installed_app" >> "$GITHUB_ENV"
+      - name: Drive real emulator controls on synthetic save only
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/pksm-rogue-cia-config
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+          XDG_CACHE_HOME: /tmp/pksm-rogue-cia-cache
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 65s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            set -e
+            ./squashfs-root/AppRun "$1" >cia-launch.log 2>&1 &
+            pid=$!
+            sleep 16
+            win="$(xdotool search --onlyvisible --name "Azahar" | tail -n 1)"
+            if test -z "$win"; then echo "Azahar window missing"; cat cia-launch.log; exit 1; fi
+            xdotool windowactivate --sync "$win"
+            scrot -q 90 before-edit.png
+            # Default Azahar keyboard mappings: 3DS A = a, START = m.
+            xdotool key --clearmodifiers a
+            sleep 1
+            xdotool key --clearmodifiers m
+            sleep 1
+            scrot -q 90 preview-money.png
+            xdotool key --clearmodifiers m
+            sleep 2
+            scrot -q 90 exported-money.png
+            # 3DS R = w. From Summary, R twice selects Bag; 3DS X = z.
+            xdotool key --clearmodifiers w
+            sleep 0.5
+            xdotool key --clearmodifiers w
+            sleep 0.5
+            xdotool key --clearmodifiers z
+            sleep 0.5
+            xdotool key --clearmodifiers m
+            sleep 0.5
+            xdotool key --clearmodifiers m
+            sleep 2
+            scrot -q 90 exported-items.png
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 1
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          ' bash "$ROGUE_INSTALLED_APP"
+      - name: Verify both independent drafts and unchanged imported save
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import struct
+          root=Path("/tmp/pksm-rogue-cia-data/azahar-emu/sdmc/3ds/PKSM-Rogue")
+          original=(root/"imports/00000001.sav").read_bytes()
+          assert len(original)==131072
+          assert struct.unpack_from("<I",original,4096+0x4a8)[0]^0x11223344==123456
+          originals=sorted((root/"originals").glob("*.sav"))
+          drafts=sorted((root/"drafts").glob("*.sav"))
+          print("Originals:",len(originals),"Drafts:",len(drafts))
+          assert len(originals)==2 and len(drafts)==2
+          assert all(p.read_bytes()==original for p in originals)
+          values=[]
+          for p in drafts:
+              data=p.read_bytes()
+              assert len(data)==131072
+              money=struct.unpack_from("<I",data,4096+0x4a8)[0]^0x11223344
+              item=struct.unpack_from("<H",data,4096+0x57a)[0]^0x3344
+              diff=sum(a!=b for a,b in zip(original,data))
+              print(p.name,"money",money,"item",item,"diff bytes",diff)
+              assert 0 < diff <= 10
+              values.append((money,item))
+          assert (999999,50) in values
+          assert (123456,999) in values
+          print("PASS: emulator A/X/START exports verified original+2 offline drafts; import unchanged")
+          PY
+      - name: Keep emulator diagnostics private to the CI run
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: azahar-real-input-offline-export-results
+          path: |
+            cia-install.log
+            cia-launch.log
+            before-edit.png
+            preview-money.png
+            exported-money.png
+            exported-items.png
+            installed-apps.txt
+          if-no-files-found: ignore
+          retention-days: 7
