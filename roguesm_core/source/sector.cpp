@@ -28,3 +28,4 @@ int chooseSlot(const SlotStatus& a,const SlotStatus& b) {
  if(uint32_t(b.counter+1u)==a.counter) return 0;
  return -1;
 }
+}
