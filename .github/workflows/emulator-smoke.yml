@@ -1,0 +1,73 @@
+name: Azahar emulator — tested 3DSX only
+on:
+  push:
+    branches: ["feature/phase3-rogue-inspect"]
+    paths:
+      - ".github/workflows/emulator-smoke.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  launch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - name: Download already-verified 3DSX from native build
+        uses: actions/download-artifact@v4
+        with:
+          name: do-not-install-experimental-pksm-rogue
+          path: candidate
+          repository: hboots999-hash/Rogue-save-editor-
+          run-id: 41137817866
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: Independently verify file signature
+        run: |
+          set -euo pipefail
+          test -s candidate/PKSM_Rogue_Inspect.3dsx
+          python3 -c 'from pathlib import Path; p=Path("candidate/PKSM_Rogue_Inspect.3dsx"); assert p.read_bytes()[:4]==b"3DSX"; print(p.stat().st_size)'
+          sha256sum candidate/PKSM_Rogue_Inspect.3dsx
+      - name: Install Azahar headless runtime
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb scrot libgl1-mesa-dri libopengl0 libpulse0 libxkbcommon-x11-0 libasound2t64
+          curl -fL --retry 3 --output azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          ./azahar.AppImage --appimage-extract >/dev/null
+      - name: Attempt first launch and capture screenshot
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/rogue-only-emulator-config
+          XDG_DATA_HOME: /tmp/rogue-only-emulator-data
+          XDG_CACHE_HOME: /tmp/rogue-only-emulator-cache
+        run: |
+          set -euo pipefail
+          xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            set -e
+            ./squashfs-root/AppRun "$1" >azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "Emulator process terminated unexpectedly" >&2
+              cat azahar.log >&2
+              exit 1
+            fi
+            scrot -q 90 azahar-screen.png
+            kill -TERM "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            test -s azahar-screen.png
+            echo "Emulator process stayed alive and screenshot exists; screenshot content needs manual inspection."
+          ' bash "$PWD/candidate/PKSM_Rogue_Inspect.3dsx"
+      - name: Preserve screenshot and diagnostics
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-azahar-screen-and-logs
+          path: |
+            azahar-screen.png
+            azahar.log
+          if-no-files-found: ignore
+          retention-days: 7
