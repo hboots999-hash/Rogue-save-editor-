@@ -95,26 +95,28 @@ jobs:
             win="$(xdotool search --onlyvisible --name "Azahar" | tail -n 1)"
             if test -z "$win"; then echo "Azahar window missing"; cat cia-launch.log; exit 1; fi
             xdotool windowactivate --sync "$win"
+            # Hold each input for several 60 Hz frames; brief XTEST taps can be missed.
+            press() { xdotool keydown "$1"; sleep 0.30; xdotool keyup "$1"; sleep 0.40; }
             scrot -q 90 before-edit.png
             # Default Azahar keyboard mappings: 3DS A = a, START = m.
-            xdotool key --clearmodifiers a
+            press a
             sleep 1
-            xdotool key --clearmodifiers m
+            press m
             sleep 1
             scrot -q 90 preview-money.png
-            xdotool key --clearmodifiers m
+            press m
             sleep 2
             scrot -q 90 exported-money.png
             # 3DS R = w. From Summary, R twice selects Bag; 3DS X = z.
-            xdotool key --clearmodifiers w
+            press w
             sleep 0.5
-            xdotool key --clearmodifiers w
+            press w
             sleep 0.5
-            xdotool key --clearmodifiers z
+            press z
             sleep 0.5
-            xdotool key --clearmodifiers m
+            press m
             sleep 0.5
-            xdotool key --clearmodifiers m
+            press m
             sleep 2
             scrot -q 90 exported-items.png
             kill -TERM "$pid" 2>/dev/null || true
