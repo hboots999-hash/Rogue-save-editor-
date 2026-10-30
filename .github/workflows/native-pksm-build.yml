@@ -10,6 +10,7 @@ on:
       - "tools/apply_to_pksm.py"
       - "tools/isolate_pksm.py"
       - "tools/restrict_startup.py"
+      - "tools/install_cia_tools.sh"
       - ".github/workflows/native-pksm-build.yml"
 permissions:
   contents: read
@@ -82,6 +83,33 @@ jobs:
           test -s 3ds/out/PKSM_Rogue_Inspect.3dsx
           python3 -c 'from pathlib import Path; p=Path("3ds/out/PKSM_Rogue_Inspect.3dsx"); assert p.read_bytes()[:4]==b"3DSX"; print(f"Verified 3DSX header and file size: {p.stat().st_size} bytes")'
           sha256sum 3ds/out/PKSM_Rogue_Inspect.3dsx
+      - name: Install pinned 3DS CIA packaging utilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash rogue/tools/install_cia_tools.sh
+          command -v bannertool
+          command -v makerom
+          command -v 3dstool
+      - name: Package experimental isolated CIA (NEVER INSTALL ON USER CONSOLE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eq 'UNIQUE_ID[[:space:]]*:=.*0xF73A2' upstream/3ds/Makefile
+          grep -Eq 'Priority[[:space:]]*:[[:space:]]*16' upstream/assets/app.rsf
+          cd upstream
+          make -j2 no-deps PYTHON=python3 2>&1 | tee -a ../native_build.log
+          test -s 3ds/out/PKSM_Rogue_Inspect.cia
+          python3 -c 'from pathlib import Path; p=Path("3ds/out/PKSM_Rogue_Inspect.cia"); assert p.stat().st_size > 1024*1024, p.stat().st_size; print(f"Unverified CIA output: {p.stat().st_size} bytes")'
+          sha256sum 3ds/out/PKSM_Rogue_Inspect.cia
+      - name: Archive unverified CIA for isolated emulator analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DO-NOT-INSTALL-unverified-Rogue-PKSM-CIA
+          path: upstream/3ds/out/*.cia
+          if-no-files-found: ignore
+          retention-days: 7
       - name: Archive unverified development executables (DO NOT INSTALL)
         if: always()
         uses: actions/upload-artifact@v4
