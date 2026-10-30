@@ -7,6 +7,7 @@ enum class TextPosX { LEFT,CENTER };
 enum class TextPosY {TOP};
 enum class TextWidthAction {SQUISH};
 namespace Gui {
+inline void exitMainLoop() {}
 inline void text(const std::string&,float,float,int,PKSM_Color,TextPosX,TextPosY,TextWidthAction=TextWidthAction::SQUISH,float=0) {}
 inline void drawSolidRect(float,float,float,float,PKSM_Color) {}
 inline void backgroundBottom(bool) {}
