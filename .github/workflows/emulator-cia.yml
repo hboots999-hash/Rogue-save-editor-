@@ -49,6 +49,21 @@ jobs:
             2>&1 | tee cia-install.log
           grep -F 'Installed CIA successfully.' cia-install.log
           echo "CIA installed into temporary Azahar storage ONLY."
+      - name: Locate installed CIA executable rather than relaunching its installer
+        env:
+          XDG_DATA_HOME: /tmp/pksm-rogue-cia-data
+        run: |
+          set -euo pipefail
+          mkdir -p "$HOME/.local/share"
+          find "$XDG_DATA_HOME" "$HOME/.local/share" -type f -name '*.app' -print 2>/dev/null | sort -u > installed-apps.txt
+          cat installed-apps.txt
+          if test "$(wc -l < installed-apps.txt)" -ne 1; then
+            echo "Expected exactly one executable in the fresh emulator data directory." >&2
+            exit 1
+          fi
+          installed_app="$(head -n 1 installed-apps.txt)"
+          test -s "$installed_app"
+          echo "ROGUE_INSTALLED_APP=$installed_app" >> "$GITHUB_ENV"
       - name: Attempt CIA startup and preserve screen
         env:
           LIBGL_ALWAYS_SOFTWARE: "1"
@@ -74,7 +89,7 @@ jobs:
             wait "$pid" 2>/dev/null || true
             test -s cia-launch.png
             echo "CIA launch screenshot collected. Human inspection REQUIRED to verify actual Rogue screen."
-          ' bash "$PWD/candidate/PKSM_Rogue_Inspect.cia"
+          ' bash "$ROGUE_INSTALLED_APP"
       - name: Keep emulator diagnostics private to the CI run
         if: always()
         uses: actions/upload-artifact@v4
@@ -84,5 +99,6 @@ jobs:
             cia-install.log
             cia-launch.log
             cia-launch.png
+            installed-apps.txt
           if-no-files-found: ignore
           retention-days: 7
