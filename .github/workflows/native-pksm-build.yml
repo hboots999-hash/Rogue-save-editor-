@@ -8,6 +8,7 @@ on:
       - "roguesm_core/**"
       - "pksm_overlay/**"
       - "tools/apply_to_pksm.py"
+      - "tools/isolate_pksm.py"
       - ".github/workflows/native-pksm-build.yml"
 permissions:
   contents: read
@@ -44,6 +45,12 @@ jobs:
             command -v "$cmd" || echo "MISSING OPTIONAL: $cmd"
           done
           python3 -c 'import git; print("GitPython installed")' || true
+      - name: Isolate inherited PKSM SD paths before overlay
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/isolate_pksm.py upstream
+          git -C upstream diff --check
       - name: Apply isolated read-only Rogue screen
         shell: bash
         run: |
