@@ -40,7 +40,7 @@ namespace {
 }
 
 RogueInspectScreen::RogueInspectScreen()
-    : Screen("L/R: page   Up/Down: scroll   B: back")
+    : Screen("L/R: page   Up/Down: scroll   B: exit")
 {
     const auto bytes = readCopiedSave();
     if (!bytes)
@@ -106,14 +106,14 @@ void RogueInspectScreen::drawBottom() const
     Gui::backgroundBottom(true);
     Gui::text("Read-only candidate data", 160, 100, FONT_SIZE_14, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
-    Gui::text("L/R change page   B returns", 160, 135, FONT_SIZE_11, COLOR_WHITE,
+    Gui::text("L/R change page   B exits", 160, 135, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
 }
 
 void RogueInspectScreen::update(touchPosition*)
 {
     const u32 keys = hidKeysDown();
-    if (keys & KEY_B) { ScreenStack::requestPop(); return; }
+    if (keys & KEY_B) { Gui::exitMainLoop(); return; }
     if (!snapshot) return;
     const unsigned current = static_cast<unsigned>(page);
     if (keys & KEY_R) { page = static_cast<Page>((current + 1) % 3); firstRow = 0; }
