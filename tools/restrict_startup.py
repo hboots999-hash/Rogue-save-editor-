@@ -18,8 +18,9 @@ def once(data: str, old: str, new: str, name: str) -> str:
 
 def restrict(root: Path) -> None:
     app = root / "3ds/source/app.cpp"
+    archive = root / "3ds/source/io/Archive.cpp"
     inspector = root / "3ds/source/gui/screen/RogueInspectScreen.cpp"
-    if not app.is_file() or not inspector.is_file():
+    if not app.is_file() or not inspector.is_file() or not archive.is_file():
         raise ValueError("Missing upstream app.cpp or Rogue inspector overlay; apply overlay first")
     old = app.read_text(encoding="utf-8")
     if 'rogueInspectOnly' in old:
@@ -45,6 +46,10 @@ def restrict(root: Path) -> None:
         'if (!rogueInspectOnly && Configuration::getInstance().autoUpdate() && update(execPath))',
         "automatic update")
     edited = once(edited,
+        "Archive::init(execPath, confirmExtdataReset);",
+        "Archive::init(execPath, nullptr);",
+        "disable destructive extdata reset prompt")
+    edited = once(edited,
         '    const bool contentUp =\n',
         '    const bool contentUp = rogueInspectOnly || (\n',
         "save-scanning startup block")
@@ -63,7 +68,39 @@ def restrict(root: Path) -> None:
         raise ValueError("Title/bank/save startup gating missing")
     if 'ScreenStack::push(std::make_unique<RogueInspectScreen>());' not in edited:
         raise ValueError("Direct Rogue UI startup missing")
+    # Never offer reset/delete of an extdata archive in the Rogue inspector.
+    # The branch below may CREATE the fork's distinct extdata ID, but it
+    # never calls FSUSER_DeleteExtSaveData. If creation fails, abort.
+    archive_old = archive.read_text(encoding="utf-8")
+    old_block = """if (R_SUMMARY(openResult) == RS_INVALIDSTATE)
+        {
+            if (!confirmReset())
+            {
+                return openResult;
+            }
+
+            if (R_FAILED(res = resetPKSMExtdataArchive(execPath)))
+            {
+                return res;
+            }
+        }"""
+    new_block = """if (R_SUMMARY(openResult) == RS_INVALIDSTATE)
+        {
+            // Rogue-only fork: CREATE the separate extdata if absent; never reset.
+            // A present but unmountable archive must fail rather than be erased.
+            if (R_FAILED(res = mountNewPKSMExtdataArchive(execPath)))
+            {
+                return res;
+            }
+        }"""
+    archive_new = once(archive_old, old_block, new_block, "non-destructive extdata handling")
+    if "Archive::init(execPath, nullptr);" not in edited:
+        raise ValueError("Unsafe extdata reset callback still present")
+    if "resetPKSMExtdataArchive(execPath)" in new_block:
+        raise ValueError("Destructive reset inadvertently enabled")
+    # Apply only after all markers have been checked in both source files.
     app.write_text(edited, encoding="utf-8")
+    archive.write_text(archive_new, encoding="utf-8")
 
 def main() -> int:
     parser=argparse.ArgumentParser()
