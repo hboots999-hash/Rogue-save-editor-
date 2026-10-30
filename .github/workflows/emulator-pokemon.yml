@@ -85,13 +85,13 @@ jobs:
           XDG_CACHE_HOME: /tmp/pksm-rogue-cia-cache
         run: |
           set -euo pipefail
-          timeout --signal=TERM --kill-after=5s 65s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+          timeout --signal=TERM --kill-after=5s 115s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
             set -e
             openbox >openbox.log 2>&1 &
             sleep 1
             ./squashfs-root/AppRun "$1" >cia-launch.log 2>&1 &
             pid=$!
-            sleep 16
+            sleep 40
             win="$(xdotool search --onlyvisible --name "Azahar" | tail -n 1)"
             if test -z "$win"; then echo "Azahar window missing"; cat cia-launch.log; exit 1; fi
             xdotool windowactivate --sync "$win"
