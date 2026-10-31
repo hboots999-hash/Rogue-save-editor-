@@ -86,7 +86,7 @@ jobs:
             sleep 8
             xwd -root -silent -out evidence/before-guest-input.xwd 2>/dev/null || true
             # Azahar default virtual 3DS A button = Qt Key_A.
-            # This test has isolated emulator extdata, never a user's SD/save.
+            # This test has isolated emulator extdata, never a real SD save.
             xdotool key --clearmodifiers a
             sleep 17
             if kill -0 "$PID" 2>/dev/null; then
