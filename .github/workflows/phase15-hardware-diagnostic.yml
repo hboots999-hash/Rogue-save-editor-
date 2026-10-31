@@ -1,0 +1,171 @@
+name: Phase 15 read-only 3DS CMAC hardware diagnostic
+on:
+  push:
+    branches: [feature/phase15-readonly-hardware-validation]
+    paths:
+      - 'phase15/**'
+      - '.github/workflows/phase15-hardware-diagnostic.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  host:
+    name: Host fail-closed and Phase 14 regression (synthetic)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Fresh snapshot, CMAC double, malformed-container regression
+        run: bash phase15/run_tests.sh
+      - name: Prohibit live writes or private files
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Fq 'constexpr bool LiveWritesEnabled = false;' phase14/authenticated_restore.hpp
+          if grep -En 'FSPXI_WriteFile|FS_OPEN_WRITE.*GBA|LiveWritesEnabled = true' phase15/{main.cpp,diagnostic.hpp,sd_probe.hpp}; then exit 1; fi
+          if git ls-files | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then exit 1; fi
+  native:
+    name: devkitPro builds a real 3DSX and ELF with game writes blocked
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Build native read-only hardware probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
+          mkdir -p phase15-build/source phase15-build/include/vendor
+          curl -fLsS -o phase15-build/Makefile https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+          sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase15-build/Makefile
+          sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRoguePhase15RO/g' phase15-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase15 Read Only\n' >> phase15-build/Makefile
+          cp phase15/main.cpp phase15-build/source/main.cpp
+          cp phase11/rogue_svc.s phase15-build/source/rogue_svc.s
+          cp phase14/vendor/sha256.c phase15-build/source/sha256.c
+          cp phase14/vendor/sha256.h phase15-build/include/vendor/sha256.h
+          cp phase15/diagnostic.hpp phase15/sd_probe.hpp phase15-build/include/
+          cp phase14/authenticated_restore.hpp phase14/native_pxi.hpp phase14/native_journal.hpp phase14/journal_codec.hpp phase15-build/include/
+          cp phase11/live_header.hpp phase15-build/include/
+          cp phase13/restore_preflight.hpp phase15-build/include/
+          cp phase10/preview/offline.hpp phase15-build/include/
+          make -C phase15-build -j2
+          test -s phase15-build/PKSMRoguePhase15RO.3dsx
+          test -s phase15-build/PKSMRoguePhase15RO.elf
+          if arm-none-eabi-nm -u phase15-build/build/main.o | grep FSPXI_WriteFile; then
+            echo 'ERROR: unexpected privileged write symbol in Phase15 main'; exit 1
+          fi
+          sha256sum phase15-build/PKSMRoguePhase15RO.{3dsx,elf} > phase15-build/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase15-H168-READONLY-3DSX-NOT-RELEASE
+          path: |
+            phase15-build/PKSMRoguePhase15RO.3dsx
+            phase15-build/PKSMRoguePhase15RO.elf
+            phase15-build/SHA256SUMS.txt
+          retention-days: 7
+  azahar:
+    name: Azahar 3DSX launch smoke - does not call privileged PxiFS0
+    needs: [host,native]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase15-H168-READONLY-3DSX-NOT-RELEASE
+          path: binary
+      - name: Launch read-only UI in Azahar (Y not pressed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence
+          export XDG_DATA_HOME="$PWD/isolated-data" XDG_CONFIG_HOME="$PWD/isolated-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/PKSMRoguePhase15RO.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 20
+            import -window root evidence/start.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          test -s evidence/start.png
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase15-H168-Azahar-3DSX-boot-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+  package-cia:
+    name: Package distinct experimental CIA, no game save writes
+    needs: [host,native,azahar]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase15-H168-READONLY-3DSX-NOT-RELEASE
+          path: binary
+      - name: Package CIA with existing isolated Phase 10 title ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          chmod +x /tmp/makerom-tools/makerom
+          mkdir -p experimental
+          /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-Phase15-READONLY-NOT-RELEASE.cia \
+            -target t -elf binary/PKSMRoguePhase15RO.elf -rsf phase10/preview/rsf \
+            -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
+          test -s experimental/PKSMRogue-Phase15-READONLY-NOT-RELEASE.cia
+          python3 - <<'PY'
+          from pathlib import Path
+          cia=Path('experimental/PKSMRogue-Phase15-READONLY-NOT-RELEASE.cia').read_bytes()
+          assert cia.count(bytes.fromhex('000400000f73a400'))>=2
+          assert bytes.fromhex('0004000007d7ba00') not in cia
+          print('PASS Phase15 app ID isolated from Emerald Rogue title')
+          PY
+          sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
+          cat > experimental/READ_ME_FIRST.txt <<'TEXT'
+          PKSM Rogue Phase 15 - READ ONLY hardware diagnostic. NOT a release.
+          Test only after independent Checkpoint/GodMode9 backups.
+          Test Homebrew Launcher 3DSX first; install CIA only if willing.
+          Title ID 000400000F73A400 (same experimental app, NOT the game).
+          Y = READ TWO LIVE CONTAINER SNAPSHOTS AND VERIFY TWO SLOT CMACs.
+          A then A = OPTIONAL 256-byte scratch write on SD only, not game.
+          START = EXIT. B = CLEAR DIAGNOSTIC. No direct restore or live save write.
+          Photograph result and native last FS result code, if present.
+          PxiFS0 is a Luma-specific service, not available in Azahar.
+          Full Phase15 hardware instructions are in phase15/README.md.
+          TEXT
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase15-H168-experimental-CIA-READONLY
+          path: experimental/
+          retention-days: 7
