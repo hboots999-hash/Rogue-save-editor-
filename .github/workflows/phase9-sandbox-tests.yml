@@ -1,4 +1,4 @@
-name: PKSM Rogue Phase 9.2 — synthetic offline draft integration
+name: PKSM Rogue Phase 9.3 — synthetic Pokémon draft integration
 on:
   push:
     branches: [feature/phase7-native-ci]
@@ -28,9 +28,9 @@ jobs:
           tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
           python3 phase7/create_synthetic_fixture.py /tmp/synthetic_candidate_test.sav
           echo '90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da  /tmp/synthetic_candidate_test.sav' | sha256sum -c -
-          g++ -std=gnu++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox
+          g++ -std=gnu++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox
           /tmp/phase9_sandbox /tmp/synthetic_candidate_test.sav
-          g++ -std=gnu++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox_asan
+          g++ -std=gnu++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox_asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase9_sandbox_asan /tmp/synthetic_candidate_test.sav
       - name: Reject any personal game files in tracked sources
         run: |
