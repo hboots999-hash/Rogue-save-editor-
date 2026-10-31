@@ -49,7 +49,18 @@ def inspect(raw):
             if r32(block,0xff8)!=SIGNATURE or r16(block,0xff6)!=checksum(block[:0xff4]):
                 ok=False
         if ok and set(sectors)==set(range(14)) and len(set(counters))==1:
-            valid.append(Bank(number,sectors,counters[0],r32(raw,sectors[0]+0x4c)))
+            sec1=sectors[1]
+            count=r32(raw,sec1+0x234)
+            if count>6:continue
+            for i in range(count):
+                mon=raw[sec1+0x238+104*i:sec1+0x238+104*(i+1)]
+                if len(mon)!=104:ok=False;break
+                key=r32(mon,0)^r32(mon,4)
+                plain=bytearray(48)
+                for j in range(0,48,4):w32(plain,j,r32(mon,32+j)^key)
+                total=sum(r16(plain,k) for k in range(0,48,2))&0xffff
+                if total!=r16(mon,28):ok=False;break
+            if ok:valid.append(Bank(number,sectors,counters[0],r32(raw,sectors[0]+0x4c)))
     if not valid:raise ValueError("No valid bank")
     if len(valid)==2 and valid[0].counter==valid[1].counter:
         raise ValueError("Ambiguous save counters")
