@@ -1,0 +1,32 @@
+{
+  "schema_version": 1,
+  "status": "identified_CIA_and_embedded_ROM_only",
+  "allow_real_save_write": false,
+  "allow_real_save_restore": false,
+  "source": "local inspection of user-supplied GodMode9 Build CIA (standard); no ROM or CIA bytes committed",
+  "observed_at": "2026-10-31",
+  "title_id": "0004000007D7BA00",
+  "title_smdh": "Pokémon: Emerald Rogue v2.1.2",
+  "product_code": "GBA-P-H168",
+  "publisher": "Pokabbie",
+  "cia_size_bytes": 34177984,
+  "cia_sha256": "19ecc93f8c5775c46431161bd51b4dc96978e6ec893c0d80eebf4549552a0531",
+  "gba_rom_size_bytes": 33554432,
+  "gba_rom_sha256": "111b0008bcec519c59a02de57895a924fee5d3633c8b8fbb394a497153778ca3",
+  "gba_rom_sha1": "11e8d8e37502215883813e0ff5ac0f84d43932f1",
+  "gba_header_game_code": "BPEE",
+  "flash1m_marker": "FLASH1M_V103",
+  "integrity": {
+    "smdh_header": true,
+    "ncch_exefs_header_sha256": true,
+    "gba_header_checksum": true,
+    "gba_vc_caa_footer": true
+  },
+  "missing_evidence": [
+    "matching untouched 0004000007D7BA00.gbavc.sav copy",
+    "verify ROM build maps to intended v2.1.2 source (SMDH label alone cannot prove patched build)",
+    "independent save-sector and encrypted party / bag checks",
+    "disposable hardware restore test"
+  ],
+  "warning": "Research fingerprint only. Must NOT be used as permission to write or restore any installed game save."
+}
