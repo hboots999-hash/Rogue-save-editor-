@@ -28,6 +28,9 @@ jobs:
           apt-get install -y --no-install-recommends python3-git python3-pip
           echo "DEVKITPRO=${DEVKITPRO:-missing}"
           echo "DEVKITARM=${DEVKITARM:-missing}"
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/tools/bin" >> "$GITHUB_PATH"
           arm-none-eabi-g++ --version | head -1
           for tool in 3dstool tex3ds makerom bannertool arm-none-eabi-pkg-config; do
             command -v "$tool" || echo "MISSING TOOL: $tool"
