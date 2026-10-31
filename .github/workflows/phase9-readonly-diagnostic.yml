@@ -211,7 +211,7 @@ jobs:
 
   package-lab-cia:
     name: Package emulator-only synthetic lab CIA — NOT FOR INSTALLATION
-    needs: [build, emulator]
+    needs: [build]
     runs-on: ubuntu-latest
     timeout-minutes: 12
     steps:
