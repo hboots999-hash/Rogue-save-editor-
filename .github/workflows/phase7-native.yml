@@ -50,6 +50,11 @@ jobs:
           export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
           echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
           echo "$DEVKITPRO/tools/bin" >> "$GITHUB_PATH"
+          # Cross pkg-config is installed with the 3DS portlibs, not devkitARM/bin.
+          export PATH="$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          echo "$DEVKITPRO/portlibs/3ds/bin" >> "$GITHUB_PATH"
+          echo "Cross pkg-config candidates:"
+          find "$DEVKITPRO" -type f -name 'arm-none-eabi-pkg-config' -print
           arm-none-eabi-g++ --version | head -1
           for tool in 3dstool tex3ds makerom bannertool arm-none-eabi-pkg-config; do
             command -v "$tool" || echo "MISSING TOOL: $tool"
