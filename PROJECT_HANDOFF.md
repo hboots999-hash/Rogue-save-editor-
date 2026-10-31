@@ -1,3 +1,7 @@
+## Observed installed game build (31 Oct 2026)
+
+User-provided GodMode9 Title Manager screenshots display the installed SD title name **`Pokémon Emerald Rogue 2.1.2`** and the selected title's 3DS package metadata **`(v0.0.0)`**. These are distinct values: `2.1.2` is the package label, while `v0.0.0` is the 3DS wrapper title version. The selected application occupies ~33 MiB on the SD title list. The screenshot contains the title ID, but the digits are blurred enough that confirmation from a standard CIA filename or a sharper title screen is required before storing an exact identifier. This is **not** yet evidence that the embedded patched GBA ROM is exactly Rogue 2.1.2 or that the current save offsets are compatible. GodMode9's read-only title manager was used; suggested next evidence is a private **Build CIA (standard)** backup under `SD:/gm9/out/` and SHA-256 of that copy (never post a game CIA/ROM to the public repo). Keep all exact-file gates intact. No user hardware editing/restore approved.
+
 # PKSM Rogue Edition — PROJECT HANDOFF
 Last updated: 31 October 2026
 Repository: https://github.com/hboots999-hash/Rogue-save-editor-
