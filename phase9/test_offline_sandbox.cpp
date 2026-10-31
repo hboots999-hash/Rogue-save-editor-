@@ -115,6 +115,76 @@ int main(int argc,char** argv){
         assert(!badSlot.ok && !fs::exists(toy/"drafts/rogue_002.sav"));
     }
 
+    // Configurable values: verify the proposal, not just a hard-coded preset.
+    struct CustomCase{const char* name;rogue_sandbox::Edit edit;};
+    const CustomCase cases[]={
+        {"money_custom",rogue_sandbox::Edit::Money},
+        {"quantity_custom",rogue_sandbox::Edit::ExistingItem},
+        {"iv_custom",rogue_sandbox::Edit::AllIV},
+        {"ev_custom",rogue_sandbox::Edit::OffensiveEV},
+        {"move_custom",rogue_sandbox::Edit::FirstMove}
+    };
+    for(const auto& test:cases){
+        const auto folder=setup(temp,test.name,initial);
+        rogue_sandbox::Values values{};
+        if(test.edit==rogue_sandbox::Edit::Money)values.money=654321;
+        if(test.edit==rogue_sandbox::Edit::ExistingItem)values.quantity=50;
+        if(test.edit==rogue_sandbox::Edit::AllIV)
+            for(auto& iv:values.ivs)iv=21;
+        if(test.edit==rogue_sandbox::Edit::OffensiveEV){
+            const uint8_t ev[]={4,20,0,252,200,0};
+            std::memcpy(values.evs,ev,6);
+        }
+        if(test.edit==rogue_sandbox::Edit::FirstMove){
+            values.moveId=77;values.movePP=20;
+        }
+        assert(rogue_sandbox::valid(test.edit,values));
+        const auto result=rogue_sandbox::exportOne(initial.data(),
+            (folder/"imports/00000001.sav").c_str(),folder.c_str(),
+            test.edit,0,values);
+        assert(result.ok && result.changed>0);
+        assert(read(folder/"backups/import_001.sav")==initial);
+        assert(read(folder/"imports/00000001.sav")==initial);
+        const Bytes modified=read(folder/"drafts/rogue_001.sav");
+        assert(modified!=initial);
+        rogue_preview preview{};
+        assert(rogue_preview_copy(modified.data(),modified.size(),&preview));
+        if(test.edit==rogue_sandbox::Edit::Money)assert(preview.money==654321);
+        else if(test.edit==rogue_sandbox::Edit::ExistingItem){
+            rogue_item_candidate found{};
+            std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+                rogue_snapshot_open(modified.data(),modified.size()),rogue_snapshot_close);
+            assert(snap && rogue_snapshot_item(snap.get(),0,&found));
+            assert(found.quantity==50);
+        }else{
+            rogue_party_candidate mon{};
+            std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+                rogue_snapshot_open(modified.data(),modified.size()),rogue_snapshot_close);
+            assert(snap && rogue_snapshot_party(snap.get(),0,&mon));
+            if(test.edit==rogue_sandbox::Edit::AllIV)
+                assert(std::memcmp(mon.ivs,values.ivs,6)==0);
+            if(test.edit==rogue_sandbox::Edit::OffensiveEV)
+                assert(std::memcmp(mon.evs,values.evs,6)==0);
+            if(test.edit==rogue_sandbox::Edit::FirstMove)
+                assert(mon.moves[0]==77 && mon.move_pp[0]==20);
+        }
+    }
+    {
+        const auto invalid=setup(temp,"invalid_ev",initial);
+        rogue_sandbox::Values vals{};
+        for(auto& ev:vals.evs)ev=252;
+        assert(!rogue_sandbox::valid(rogue_sandbox::Edit::OffensiveEV,vals));
+        const auto r=rogue_sandbox::exportOne(initial.data(),
+            (invalid/"imports/00000001.sav").c_str(),invalid.c_str(),
+            rogue_sandbox::Edit::OffensiveEV,0,vals);
+        assert(!r.ok && !fs::exists(invalid/"backups") && !fs::exists(invalid/"drafts"));
+        vals=rogue_sandbox::Values{};vals.moveId=0;
+        assert(!rogue_sandbox::valid(rogue_sandbox::Edit::FirstMove,vals));
+        vals=rogue_sandbox::Values{};vals.ivs[0]=32;
+        assert(!rogue_sandbox::valid(rogue_sandbox::Edit::AllIV,vals));
+        assert(read(invalid/"imports/00000001.sav")==initial);
+    }
+
     // Pre-existing names cannot be replaced. Both exports skip occupied slots.
     const auto occupied=setup(temp,"occupied",initial);
     fs::create_directories(occupied/"backups");
