@@ -233,6 +233,13 @@ jobs:
           mkdir -p experimental
           /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia -target t -elf binary/RogueReadOnlyDiagnostic.elf -rsf phase9/lab.rsf -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
           test -s experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia
+          python3 - <<'PY'
+          from pathlib import Path
+          cia=Path('experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia').read_bytes()
+          assert cia.count(bytes.fromhex('000400000f73a300')) >= 2, 'Unexpected Title ID'
+          assert bytes.fromhex('000400000f73a200') not in cia, 'Conflicts with full fork'
+          print('PASS: isolated lab title ID 000400000F73A300 appears in CIA metadata')
+          PY
           printf 'EXPERIMENTAL 3DS CIA FOR EMULATOR RESEARCH ONLY.\nNOT A HARDWARE RELEASE.\nOnly the exact Phase 7 synthetic fixture is accepted for offline edits.\nNo installed-game save access or restore.\nTitle ID/collision and hardware testing still required.\n' > experimental/DO_NOT_INSTALL.txt
           sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
@@ -317,7 +324,24 @@ jobs:
           test -s evidence/installed-content.txt
           test -s evidence/installed-launch.png
           test -s evidence/installed-after-confirm.png
-          echo 'CIA title installed and content launch attempted. Review screenshots and logs before claiming guest success.'
+          ROOT="$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          IMPORT="$ROOT/imports/00000001.sav"
+          BACKUP="$ROOT/backups/import_001.sav"
+          DRAFT="$ROOT/drafts/rogue_001.sav"
+          test -s "$IMPORT" && test -s "$BACKUP" && test -s "$DRAFT"
+          cmp -s "$IMPORT" "$BACKUP"
+          python3 - "$IMPORT" "$DRAFT" <<'PY'
+          from pathlib import Path
+          import sys,struct,hashlib
+          orig=Path(sys.argv[1]).read_bytes()
+          draft=Path(sys.argv[2]).read_bytes()
+          assert len(orig)==len(draft)==131072
+          assert hashlib.sha256(orig).hexdigest()=='90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da'
+          money=struct.unpack_from('<I',draft,4096+0x4a8)[0]^0x1234abcd
+          assert money==999999 and draft!=orig
+          print('PASS: installed CIA guest wrote synthetic offline draft, untouched backup and no source change')
+          PY
+          echo 'PASS: isolated installed CIA launched and created a separate synthetic money draft' | tee -a evidence/guest-result.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
