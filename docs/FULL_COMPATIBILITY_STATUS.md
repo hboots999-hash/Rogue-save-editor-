@@ -1,6 +1,6 @@
 # Emerald Rogue EX compatibility — verified and unresolved
 
-Last reviewed: 30 October 2026. **Experimental development only; not a physical-3DS release.**
+Last reviewed: 31 October 2026. **Experimental development only; not a physical-3DS release.**
 
 ## Source profile under investigation
 - Public candidate: Pokabbie/pokeemerald-rogue expansion ancestor `518b7b4d8381ce865febb581c1e534d67d19d56d` (EX 2.1.2-era source).
@@ -22,17 +22,22 @@ Last reviewed: 30 October 2026. **Experimental development only; not a physical-
 ## Items
 - Candidate constants from pinned EX 2.1.2 source: `ITEM_MASTER_BALL=4`, `ITEM_RARE_CANDY=113`.
 - Two historical SAV samples contain Rare Candy quantities 899 and 954; neither contains an occupied Master Ball slot. These sample details are not stored in the public repo.
-- **Inserting new items is NOT implemented.** Source `UpdateBagItemsPointers` requires contiguous grouping by pocket, while `SortItemSlotPlaceBefore` uses runtime sort mode and the game enforces reserved slots/capacity. Arbitrary writes into empty slot 449 can yield invalid game bag state.
+- **Guarded new Master Ball insertion is implemented and Azahar E2E-tested** [run 41146923377](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41146923377). It requires a valid 2.1.2 candidate source, contiguous bag, recognized type-sort mode, a contiguous ball pocket and conservative spare capacity. Other item insertion is not implemented, and no real Emerald Rogue game-load acceptance test has passed. Arbitrary writes into empty slot 449 can yield invalid game bag state.
 
 ## Hub and progression
-- Candidate source serializes hub areas, coordinates and upgrades in variable-length sections after quest and campaign data, not a single fixed 1-byte unlock flag.
-- No robust published-game-specific hub serializer/round-trip implementation has been verified. **Do not write hub bits using guessed offsets.**
+- Added **read-only candidate hub parser** using the Rogue custom PC storage block at logical sector 10 + 0xE00. Synthetic tests verify 11 named areas, 48 named upgrades, source-defined counts, header and strict refusal of corrupt metadata.
+- Real historical samples show an **observed four-byte coordinate stride**, but pinned source declares `struct Coords8` with **two bytes**. This prevents safe hub writes until the exact ROM/ABI is identified.
+- Added a read-only `Hub` tab, `docs/hub_upgrade_matrix.json` with all 48 source upgrade dependencies, and `tools/hub_plan.py` to report eligibility without editing.
+- No verified game-specific hub serializer/round-trip or gameplay acceptance. **Do not write hub bits using guessed offsets.**
+
+## ROM identity
+- Added `tools/rom_identity.py` to compute a local-only GBA SHA-256 + validated header report; never upload a proprietary ROM or keys to this public repository. A hash alone is NOT a game-load test.
 
 ## Required before safe release
 1. Cryptographically identify the *actual* installed patched Emerald Rogue ROM/version/edition and its VC save container.
 2. Validate candidate profile against a game-generated save and independent gameplay tests (money, item quantity, Pokémon IV/EV).
-3. Implement and test item-pocket-aware insertion using pinned source sorting, per-pocket counts and capacity gates.
-4. Implement version-specific hub serializer/upgrade dependency checks only after confirmed structure and game acceptance.
+3. Validate the guarded Master Ball insertion against a real game-loaded disposable save; implement other item-pocket-aware insertion only where the precise game capacity and sorting are proven.
+4. Resolve the observed 4-byte vs source 2-byte hub coordinate discrepancy; then validate version-specific hub serialization, coordinates, area construction and dependency-aware upgrade writes on a disposable game round-trip.
 5. Test physical 3DS isolated title/storage paths, reversible backup, clean exit, install collision checks and **recoverable** restore.
 6. Maintain fail-closed checks: no live-game writes until the above have passed.
 
