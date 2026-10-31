@@ -55,6 +55,15 @@ jobs:
             roguesm_core/source/observed_profile.cpp \
             -o /tmp/rogue-pokemon-stats
           /tmp/rogue-pokemon-stats /tmp/rogue-synthetic.sav
+      - name: Read-only hub area/upgrade layout validation and refusal tests
+        run: |
+          python3 tests/generate_synthetic_hub.py /tmp/rogue-hub-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_hub_probe.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/sector.cpp roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp -o /tmp/rogue-hub-probe
+          /tmp/rogue-hub-probe /tmp/rogue-hub-synthetic.sav
       - name: Compile UI source with host stubs
         run: |
           g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
@@ -66,7 +75,7 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
             tests/test_screen_export.cpp pksm_overlay/RogueInspectScreen.cpp \
-            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
             roguesm_core/source/edit_draft.cpp \
             roguesm_core/source/sector.cpp \
             roguesm_core/source/candidate_profile.cpp \
@@ -79,7 +88,7 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
             tests/test_screen_pokemon_export.cpp pksm_overlay/RogueInspectScreen.cpp \
-            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
             roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
             roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
             -o /tmp/rogue-screen-mon
@@ -100,7 +109,7 @@ jobs:
             -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
             tests/test_screen_masterball.cpp pksm_overlay/RogueInspectScreen.cpp \
             bridge/rogue_bridge.cpp bridge/rogue_edit.cpp \
-            bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp \
+            bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
             roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
             roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
             -o /tmp/test-master-screen
