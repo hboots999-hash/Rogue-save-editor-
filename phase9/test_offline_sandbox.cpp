@@ -185,6 +185,38 @@ int main(int argc,char** argv){
         assert(read(invalid/"imports/00000001.sav")==initial);
     }
 
+    // Insert-item actions reuse the vetted Phase 7 routine; fixture only.
+    for(const unsigned desired : {113u,1u}){
+        const auto folder=setup(temp,desired==113?"insert_candy":"insert_masterball",initial);
+        rogue_sandbox::Values values{};
+        values.insertItemId=static_cast<uint16_t>(desired);
+        values.quantity=222;
+        const auto result=rogue_sandbox::exportOne(initial.data(),
+            (folder/"imports/00000001.sav").c_str(),folder.c_str(),
+            rogue_sandbox::Edit::InsertItem,0,values);
+        assert(result.ok && result.changed>0);
+        assert(read(folder/"imports/00000001.sav")==initial);
+        assert(read(folder/"backups/import_001.sav")==initial);
+        const auto bytes=read(folder/"drafts/rogue_001.sav");
+        assert(bytes.size()==ROGUE_RAW_SAVE_SIZE && bytes!=initial);
+        rogue_preview parsed{};
+        assert(rogue_preview_copy(bytes.data(),bytes.size(),&parsed));
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> check(
+            rogue_snapshot_open(bytes.data(),bytes.size()),rogue_snapshot_close);
+        bool found=false;
+        for(unsigned i=0;i<parsed.occupied_bag_slots;i++){
+            rogue_item_candidate item{};
+            if(check && rogue_snapshot_item(check.get(),i,&item) &&
+               item.item_id==desired && item.quantity==222)found=true;
+        }
+        assert(found);
+        auto stale=initial;
+        stale[stale.size()-1]^=0x5a;
+        const auto denied=rogue_sandbox::exportOne(stale.data(),
+            (folder/"imports/00000001.sav").c_str(),folder.c_str(),
+            rogue_sandbox::Edit::InsertItem,0,values);
+        assert(!denied.ok && !fs::exists(folder/"drafts/rogue_002.sav"));
+    }
     // Pre-existing names cannot be replaced. Both exports skip occupied slots.
     const auto occupied=setup(temp,"occupied",initial);
     fs::create_directories(occupied/"backups");
