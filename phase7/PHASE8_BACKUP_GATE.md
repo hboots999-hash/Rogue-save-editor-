@@ -30,3 +30,10 @@ The user's actual copied save is **not** committed to this repository. The sourc
 4. Verify backup/recovery and manually restored game-save behavior in a disposable setup, then conduct a controlled physical-3DS launch test.
 
 This is **not** a live installed-game backup or restore solution, and is not evidence that any user-generated draft is safe to restore. Avoid installing experimental CIA artifacts on a 3DS.
+
+## Verified cloud results
+
+- **Native Phase 8 CIA compilation: PASS**, including SD-path isolation and backup-gate patch: [GitHub Actions run 41157334536](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41157334536).
+- Compiled artifact file checksums verified against the workflow's own SHA256SUMS; ELF, 3DSX and CIA present. **Artifact is experimental, DO NOT INSTALL.**
+- **Synthetic host regression: PASS** on GitHub: [run 41157776550](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41157776550). Builds and tests the very same patched Rogue screen using a wholly synthetic 128-KiB save (no personal files) and passes AddressSanitizer and UndefinedBehaviorSanitizer.
+- These tests do not certify launch on physical 3DS, game ROM version compatibility, or any direct installed-game backup/restore functionality.
