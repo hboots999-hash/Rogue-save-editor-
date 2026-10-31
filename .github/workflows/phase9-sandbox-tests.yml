@@ -1,10 +1,12 @@
-name: PKSM Rogue Phase 9.3 — synthetic Pokémon draft integration
+name: PKSM Rogue Phase 9.4 — configurable synthetic editor regressions
 on:
   push:
     branches: [feature/phase7-native-ci]
     paths:
       - 'phase9/offline_sandbox.hpp'
       - 'phase9/test_offline_sandbox.cpp'
+      - 'phase9/edit_values.hpp'
+      - 'phase9/test_edit_values.cpp'
       - '.github/workflows/phase9-sandbox-tests.yml'
   workflow_dispatch:
 permissions:
@@ -32,6 +34,10 @@ jobs:
           /tmp/phase9_sandbox /tmp/synthetic_candidate_test.sav
           g++ -std=gnu++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox_asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase9_sandbox_asan /tmp/synthetic_candidate_test.sav
+          g++ -std=gnu++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_test
+          /tmp/edit_values_test
+          g++ -std=gnu++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/edit_values_asan
       - name: Reject any personal game files in tracked sources
         run: |
           if git ls-files | grep -Ei '\.(sav|cia|gba|3ds|3dsx|rom)$'; then exit 1; fi
