@@ -8,6 +8,8 @@ on:
       - 'phase9/edit_values.hpp'
       - 'phase9/test_edit_values.cpp'
       - 'phase9/tools/inspect_gbavc_save.py'
+      - 'phase10/memory_only_roundtrip.py'
+      - 'phase10/test_memory_only_roundtrip.py'
       - '.github/workflows/phase9-sandbox-tests.yml'
   workflow_dispatch:
 permissions:
@@ -31,6 +33,7 @@ jobs:
           tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
           python3 phase7/create_synthetic_fixture.py /tmp/synthetic_candidate_test.sav
           echo '90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da  /tmp/synthetic_candidate_test.sav' | sha256sum -c -
+          PYTHONPATH=phase10 python3 phase10/test_memory_only_roundtrip.py /tmp/synthetic_candidate_test.sav
           python3 - <<'PY'
           import importlib.util
           from pathlib import Path
