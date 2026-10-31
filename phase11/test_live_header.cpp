@@ -8,7 +8,7 @@ static void w32(unsigned char* p,unsigned k,uint32_t v) {
     p[k]=uint8_t(v);p[k+1]=uint8_t(v>>8);p[k+2]=uint8_t(v>>16);p[k+3]=uint8_t(v>>24);
 }
 int main(){
-    std::array<uint8_t,HeaderSize> a{},b{};
+    std::array<uint8_t,HeaderSize> a{};
     Slot s{};
     assert(!parseHeader(a.data(),a.size(),0).valid);
     std::memcpy(a.data(),".SAV",4);
