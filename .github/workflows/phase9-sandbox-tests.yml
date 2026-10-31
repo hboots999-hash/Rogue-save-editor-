@@ -28,6 +28,8 @@ jobs:
           echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/phase7-src.tar.xz' | sha256sum -c -
           mkdir -p parser-src
           tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
+          echo '=== INSPECT EXISTING PHASE 7 ITEM INSERTION ==='
+          grep -n -A 115 'rogue_make_insert_item_draft(' parser-src/editor/rogue_moves_items_edit.cpp | head -125
           python3 phase7/create_synthetic_fixture.py /tmp/synthetic_candidate_test.sav
           echo '90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da  /tmp/synthetic_candidate_test.sav' | sha256sum -c -
           g++ -std=gnu++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 -Iparser-src/editor -Iparser-src/bridge -Iparser-src/roguesm_core/include phase9/test_offline_sandbox.cpp parser-src/editor/rogue_numeric_edit.cpp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp parser-src/bridge/rogue_bridge.cpp parser-src/roguesm_core/source/*.cpp -o /tmp/phase9_sandbox
