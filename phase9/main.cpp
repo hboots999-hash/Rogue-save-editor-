@@ -64,9 +64,9 @@ void show(int page,const rogue_snapshot* snapshot,const rogue_preview& p,unsigne
 }
 int main(){
     gfxInitDefault(); consoleInit(GFX_TOP,nullptr);
-    Result sd=sdmcInit();
+    // Standard libctru runtime provides the sdmc: POSIX mount for fopen().
     std::unique_ptr<uint8_t[]> data;
-    if(R_SUCCEEDED(sd))data=readExact();
+    data=readExact();
     std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
         data?rogue_snapshot_open(data.get(),ROGUE_RAW_SAVE_SIZE):nullptr,rogue_snapshot_close);
     rogue_preview info{};
@@ -84,6 +84,6 @@ int main(){
         gspWaitForVBlank();
     }
     snap.reset();data.reset();
-    if(R_SUCCEEDED(sd))sdmcExit();
+    // No game-save service, extdata archive or explicit mount was opened.
     gfxExit();return 0;
 }
