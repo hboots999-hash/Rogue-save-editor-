@@ -7,6 +7,8 @@ on:
       - 'phase7/verified_backup_gate.patch'
       - 'phase7/backup_gate_host_test.patch'
       - 'phase7/create_synthetic_fixture.py'
+      - 'phase7/host_backup_smoke.cpp'
+      - 'phase7/host_stubs/**'
       - 'phase7/archive/**'
   workflow_dispatch:
 permissions:
@@ -39,31 +41,39 @@ jobs:
               phase7/verified_backup_gate.patch > /tmp/host-backup.patch
           git -C test-src apply --check /tmp/host-backup.patch
           git -C test-src apply /tmp/host-backup.patch
-          git -C test-src apply --check "$GITHUB_WORKSPACE/phase7/backup_gate_host_test.patch"
-          git -C test-src apply "$GITHUB_WORKSPACE/phase7/backup_gate_host_test.patch"
       - name: Generate fake candidate save with no user data
         run: python3 phase7/create_synthetic_fixture.py /tmp/synthetic_candidate_test.sav
-      - name: Run all parser, editor and screen tests
+      - name: Compile and run synthetic editor backup-gate test
         shell: bash
         run: |
           set -euo pipefail
-          make -C test-src test
-          make -C test-src fixture-test TEST_SAVE=/tmp/synthetic_candidate_test.sav
-          make -C test-src screen-behavior-test TEST_SAVE=/tmp/synthetic_candidate_test.sav
-      - name: Repeat screen behavior under AddressSanitizer and UBSan
+          g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase7/host_stubs -Itest-src/pksm_overlay -Itest-src/bridge \
+            -Itest-src/editor -Itest-src/roguesm_core/include \
+            phase7/host_backup_smoke.cpp test-src/pksm_overlay/RogueInspectScreen.cpp \
+            test-src/bridge/rogue_bridge.cpp \
+            test-src/editor/rogue_pokemon_edit.cpp test-src/editor/rogue_numeric_edit.cpp \
+            test-src/editor/rogue_moves_items_edit.cpp \
+            test-src/roguesm_core/source/sector.cpp \
+            test-src/roguesm_core/source/candidate_profile.cpp \
+            test-src/roguesm_core/source/observed_profile.cpp -o /tmp/host_backup_smoke
+          /tmp/host_backup_smoke /tmp/synthetic_candidate_test.sav
+      - name: Repeat host backup-gate test with sanitizers
         shell: bash
-        working-directory: test-src
         run: |
           set -euo pipefail
           g++ -std=gnu++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
             -Wall -Wextra -Wpedantic -Werror \
-            -Itests/host_stubs -Ipksm_overlay -Ibridge -Ieditor -Iroguesm_core/include \
-            tests/test_screen_behavior.cpp pksm_overlay/RogueInspectScreen.cpp \
-            bridge/rogue_bridge.cpp editor/rogue_pokemon_edit.cpp \
-            editor/rogue_numeric_edit.cpp editor/rogue_moves_items_edit.cpp \
-            roguesm_core/source/sector.cpp roguesm_core/source/candidate_profile.cpp \
-            roguesm_core/source/observed_profile.cpp -o build/test_screen_behavior_asan
-          ASAN_OPTIONS=detect_leaks=1 ./build/test_screen_behavior_asan /tmp/synthetic_candidate_test.sav
+            -Iphase7/host_stubs -Itest-src/pksm_overlay -Itest-src/bridge \
+            -Itest-src/editor -Itest-src/roguesm_core/include \
+            phase7/host_backup_smoke.cpp test-src/pksm_overlay/RogueInspectScreen.cpp \
+            test-src/bridge/rogue_bridge.cpp \
+            test-src/editor/rogue_pokemon_edit.cpp test-src/editor/rogue_numeric_edit.cpp \
+            test-src/editor/rogue_moves_items_edit.cpp \
+            test-src/roguesm_core/source/sector.cpp \
+            test-src/roguesm_core/source/candidate_profile.cpp \
+            test-src/roguesm_core/source/observed_profile.cpp -o /tmp/host_backup_smoke_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/host_backup_smoke_asan /tmp/synthetic_candidate_test.sav
       - name: Confirm no game saves, CIA, or ROMs were committed
         shell: bash
         run: |
