@@ -10,8 +10,24 @@ permissions:
   contents: read
   actions: read
 jobs:
+  ui-contract:
+    name: Host navigation and fail-closed confirmation tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and run isolated UI state contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_test
+          /tmp/rogue_ui_test
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/rogue_ui_asan
   build:
-    name: Build extdata-free read-only runtime test
+    name: Build extdata-free read-only UI test
     runs-on: ubuntu-latest
     timeout-minutes: 22
     container:
@@ -42,6 +58,7 @@ jobs:
           sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := RogueReadOnlyDiagnostic/g' phase9-build/Makefile
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Read Only Test\n' >> phase9-build/Makefile
           cp phase9/main.cpp phase9-build/source/main.cpp
+          cp phase9/ui_state.hpp phase9-build/include/ui_state.hpp
           cp parser-src/bridge/rogue_bridge.cpp phase9-build/source/rogue_bridge.cpp
           cp parser-src/roguesm_core/source/*.cpp phase9-build/source/
           cp parser-src/bridge/rogue_bridge.h phase9-build/include/
@@ -67,7 +84,7 @@ jobs:
           retention-days: 7
   emulator:
     name: Azahar launch and page-key diagnostics
-    needs: build
+    needs: [build, ui-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
@@ -93,7 +110,6 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          # A wholly fake 128-KiB save exercises party/bag parsing on native 3DS.
           mkdir -p "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
           python3 phase7/create_synthetic_fixture.py "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
           export XDG_DATA_HOME="$PWD/test-user-data"
@@ -115,7 +131,6 @@ jobs:
             xdotool getwindowgeometry "$WIN" >> evidence/focus.txt || true
             timeout 3s xdotool windowactivate "$WIN" || true
             timeout 3s xdotool windowfocus "$WIN" || true
-            # Set keyboard focus on the guest render screen, not the menu bar.
             xdotool mousemove --sync 650 360 click 1 || true
             xdotool getactivewindow getwindowname >> evidence/focus.txt 2>&1 || true
             xdotool getwindowfocus >> evidence/focus.txt 2>&1 || true
@@ -129,10 +144,8 @@ jobs:
           '
           test -s evidence/page1.png
           test -s evidence/page2.png
-          if test -s evidence/page1.png && test -s evidence/page2.png; then
-            compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
-          fi
-          echo 'Screenshots are evidence of emulator output only; inspect before claiming guest navigation.'
+          compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
+          echo 'Emulator screenshots require manual review; pixel difference is not guest-navigation proof.'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
