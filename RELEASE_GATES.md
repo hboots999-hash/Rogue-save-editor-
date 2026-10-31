@@ -1,3 +1,5 @@
+**Phase 15 status (31 October 2026, isolated branch only):** [All five CI jobs PASS](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41253909119) — host/sanitized synthetic CMAC *double*, native 3DSX/ELF, Azahar 3DSX boot, CIA packaging, and isolated installed-CIA emulator launch. A source-only, read-only dual-slot GBA VC authentication diagnostic and optional SD-only 256-byte scratch test are in draft [PR #5](https://github.com/hboots999-hash/Rogue-save-editor-/pull/5). **No real console CMAC verification, native SD scratch result, full-container hardware read or authenticated restore/rollback has been performed. Gate F remains PARTIAL, E remains PARTIAL, G remains NOT APPROVED. Phase 14 live writes are still hard-disabled.**
+
 # PKSM Rogue Edition — release gates (31 October 2026)
 
 **Current artifacts:** (1) Phase 9.4 full-feature *synthetic-only* lab; (2) Phase 12 physical 3DS live read+backup test; (3) Phase 13 current-live-save-derived SD draft code, not yet tested on hardware. No direct live restoration yet.
