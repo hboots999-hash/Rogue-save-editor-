@@ -1,0 +1,129 @@
+name: PKSM Rogue Phase 9 — read-only 3DS runtime diagnostic
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase9-readonly-diagnostic.yml'
+      - 'phase9/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  build:
+    name: Build extdata-free read-only runtime test
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check toolchain, authenticate Phase 7 parser source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/tools/bin" >> "$GITHUB_PATH"
+          dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 -d > /tmp/phase7-src.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/phase7-src.tar.xz' | sha256sum -c -
+          mkdir -p parser-src
+          tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
+      - name: Prepare disposable devkitPro standard application template
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase9-build/source phase9-build/include
+          curl -fLsS -o phase9-build/Makefile https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+          sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase9-build/Makefile
+          sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := RogueReadOnlyDiagnostic/g' phase9-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Read Only Test\n' >> phase9-build/Makefile
+          cp phase9/main.cpp phase9-build/source/main.cpp
+          cp parser-src/bridge/rogue_bridge.cpp phase9-build/source/rogue_bridge.cpp
+          cp parser-src/roguesm_core/source/*.cpp phase9-build/source/
+          cp parser-src/bridge/rogue_bridge.h phase9-build/include/
+          cp parser-src/roguesm_core/include/*.hpp phase9-build/include/
+          find phase9-build/source -maxdepth 1 -type f -printf '%f\n'
+      - name: Compile independent 3DSX, no PKSM extdata or game save services
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C phase9-build -j2
+          test -s phase9-build/RogueReadOnlyDiagnostic.3dsx
+          test -s phase9-build/RogueReadOnlyDiagnostic.elf
+          sha256sum phase9-build/RogueReadOnlyDiagnostic.{3dsx,elf} > phase9-build/SHA256SUMS.txt
+          grep -aob 'PKSM ROGUE - 3DS RUNTIME TEST' phase9-build/RogueReadOnlyDiagnostic.elf
+      - name: Save emulator-only native probe, not a console release
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: |
+            phase9-build/RogueReadOnlyDiagnostic.3dsx
+            phase9-build/RogueReadOnlyDiagnostic.elf
+            phase9-build/SHA256SUMS.txt
+          retention-days: 7
+  emulator:
+    name: Azahar launch and page-key diagnostics
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Verify test binary and install software rendering
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(head -c 4 binary/RogueReadOnlyDiagnostic.3dsx)" = 3DSX
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+      - name: Launch in clean Azahar, capture initial and page-changed screens
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          export XDG_DATA_HOME="$PWD/test-user-data"
+          export XDG_CONFIG_HOME="$PWD/test-user-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450
+          export QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            PID=$!
+            sleep 18
+            xwd -root -silent -out evidence/page1.xwd || true
+            WIN=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$WIN" || true
+            timeout 3s xdotool windowfocus "$WIN" || true
+            xdotool key --clearmodifiers w || true
+            sleep 4
+            xwd -root -silent -out evidence/page2.xwd || true
+            kill "$PID" 2>/dev/null || true
+            wait "$PID" 2>/dev/null || true
+          '
+          for p in page1 page2; do
+            if test -s "evidence/$p.xwd"; then convert "evidence/$p.xwd" "evidence/$p.png"; fi
+          done
+          if test -s evidence/page1.png && test -s evidence/page2.png; then
+            compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
+          fi
+          echo 'Screenshots are evidence of emulator output only; inspect before claiming guest navigation.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-readonly-3DS-emulator-screen-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
