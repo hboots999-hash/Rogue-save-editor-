@@ -22,3 +22,17 @@ The live PxiFS0 read path is verified on user's physical hardware in Phase 11. T
 2. Port remaining party IV/EV/move edits, Pokémon selection, new items, party insertions, hub unlocks and intuitive PKSM UI from toy-only Phase 9 to the exact H168 real save format, with per-feature game-play validation. **Do not claim features are done from toy tests alone.**
 
 Upstream restoration reference: [Checkpoint `3ds/source/gbasave.cpp`](https://github.com/BernardoGiordano/Checkpoint/blob/master/3ds/source/gbasave.cpp) (GPL-3.0). The only user ROM/save fingerprint permitted in the public repository remains metadata, not any copyrighted ROM or personal save bytes.
+
+## Isolated Phase 13 hardening follow-up
+
+Branch: `feature/phase13-hardening`, based on `feature/phase7-native-ci`. This work does not change Phase 14's branch or enable any direct save restoration.
+
+`test_fail_closed.cpp` runs on a deterministic synthetic fixture. It injects failed live reads at each of five checkpoints (the initial two reads, backup postcheck, pre-draft freshness check, and final recheck), verifies no successful receipt on failure, checks that drafts are absent until the last stage, rejects a *valid but stale* changed save, and confirms that a pre-existing partial `live_001.sav` remains untouched while the backup uses the next available name. The final reread failure is deliberately reported as `DO NOT RESTORE` even though an SD draft may already exist.
+
+Run host-only checks by generating the synthetic Phase 7 one-bank fixture, then:
+```sh
+g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase10/preview -Iphase12 -Iphase13 phase13/test_fail_closed.cpp -o /tmp/phase13_failclosed
+/tmp/phase13_failclosed /tmp/h168-one-bank.sav
+```
+
+The Phase 13 GitHub Actions workflow runs this regression on `feature/phase13-hardening`. This is **not** physical proof of live SD draft creation, restoration, CMAC, rollback or in-game save persistence. Those gates remain blocked.
