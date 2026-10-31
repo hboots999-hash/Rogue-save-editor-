@@ -6,6 +6,7 @@ on:
     paths:
       - '.github/workflows/phase7-native.yml'
       - 'phase7/archive/**'
+      - 'phase7/patch_sd_isolation.py'
   workflow_dispatch:
 
 permissions:
@@ -97,6 +98,12 @@ jobs:
         run: |
           set -euo pipefail
           python3 phase7-src/tools/apply_to_pksm.py disposable-PKSM
+          python3 phase7/patch_sd_isolation.py disposable-PKSM
+          # Block a build if Rogue still shares upstream's main SD folder paths.
+          if grep -R -n '/3ds/PKSM/' disposable-PKSM/3ds/source disposable-PKSM/common/include/sound; then
+            echo 'Shared PKSM SD paths remain; refusing build' >&2
+            exit 1
+          fi
       - name: Compile 3DS files and record errors
         shell: bash
         run: |
