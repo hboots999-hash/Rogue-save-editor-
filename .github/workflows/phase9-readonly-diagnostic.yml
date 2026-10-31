@@ -1,4 +1,4 @@
-name: PKSM Rogue Phase 9 — read-only 3DS runtime diagnostic
+name: PKSM Rogue Phase 9.2 — native synthetic-only editing shell
 on:
   push:
     branches: [feature/phase7-native-ci]
@@ -27,7 +27,7 @@ jobs:
           g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/rogue_ui_asan
   build:
-    name: Build extdata-free read-only UI test
+    name: Build extdata-free synthetic-only editor UI
     runs-on: ubuntu-latest
     timeout-minutes: 22
     container:
@@ -59,6 +59,9 @@ jobs:
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Read Only Test\n' >> phase9-build/Makefile
           cp phase9/main.cpp phase9-build/source/main.cpp
           cp phase9/ui_state.hpp phase9-build/include/ui_state.hpp
+          cp phase9/offline_sandbox.hpp phase9-build/include/offline_sandbox.hpp
+          cp parser-src/editor/rogue_numeric_edit.h phase9-build/include/
+          cp parser-src/editor/rogue_numeric_edit.cpp phase9-build/source/
           cp parser-src/bridge/rogue_bridge.cpp phase9-build/source/rogue_bridge.cpp
           cp parser-src/roguesm_core/source/*.cpp phase9-build/source/
           cp parser-src/bridge/rogue_bridge.h phase9-build/include/
@@ -73,7 +76,7 @@ jobs:
           test -s phase9-build/RogueReadOnlyDiagnostic.elf
           sha256sum phase9-build/RogueReadOnlyDiagnostic.{3dsx,elf} > phase9-build/SHA256SUMS.txt
           grep -aob 'PKSM ROGUE - 3DS RUNTIME TEST' phase9-build/RogueReadOnlyDiagnostic.elf
-      - name: Save emulator-only native probe, not a console release
+      - name: Save emulator-only prototype, not a console release
         uses: actions/upload-artifact@v4
         with:
           name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
