@@ -52,12 +52,12 @@ jobs:
           set -euo pipefail
           mkdir -p emulator-evidence
           set +e
-          xvfb-run -a -s '-screen 0 1280x720x24' bash -c '
+          timeout --signal=TERM --kill-after=8s 80s xvfb-run -a -s '-screen 0 1280x720x24' bash -c '
             export LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=4.3 QT_QPA_PLATFORM=xcb
             ./squashfs-root/AppRun "$PWD/build-outputs/PKSM_Rogue_Inspect.3dsx" > emulator-evidence/azahar.log 2>&1 &
             pid=$!
             sleep 25
-            import -display "$DISPLAY" -window root emulator-evidence/window.png 2> emulator-evidence/screenshot.log || true
+            timeout --signal=TERM --kill-after=2s 8s import -display "$DISPLAY" -window root emulator-evidence/window.png 2> emulator-evidence/screenshot.log || true
             if kill -0 "$pid" 2>/dev/null; then
               echo PROCESS_SURVIVED_25_SECONDS_NOT_BOOT_VERIFIED > emulator-evidence/process-status.txt
               kill "$pid" 2>/dev/null || true
@@ -72,6 +72,8 @@ jobs:
           rc=$?
           set -e
           echo "smoke_exit_code=$rc" >> emulator-evidence/process-status.txt
+          find "$HOME" -type f \( -iname '*citra*log*' -o -iname '*azahar*log*' \) -print 2>/dev/null > emulator-evidence/log-file-paths.txt || true
+          while IFS= read -r path; do cp "$path" "emulator-evidence/$(basename "$path")" 2>/dev/null || true; done < emulator-evidence/log-file-paths.txt
           exit "$rc"
       - name: Save logs and screenshot, not a CIA release
         if: always()
