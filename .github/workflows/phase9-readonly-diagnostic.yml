@@ -1,4 +1,4 @@
-name: PKSM Rogue Phase 9.3 — synthetic native Pokémon editing
+name: PKSM Rogue Phase 9.4 — configurable synthetic edit controls
 on:
   push:
     branches: [feature/phase7-native-ci]
@@ -26,6 +26,10 @@ jobs:
           /tmp/rogue_ui_test
           g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/rogue_ui_asan
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_test
+          /tmp/edit_values_test
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/edit_values_asan
   build:
     name: Build extdata-free synthetic-only editor UI
     runs-on: ubuntu-latest
@@ -60,6 +64,7 @@ jobs:
           cp phase9/main.cpp phase9-build/source/main.cpp
           cp phase9/ui_state.hpp phase9-build/include/ui_state.hpp
           cp phase9/offline_sandbox.hpp phase9-build/include/offline_sandbox.hpp
+          cp phase9/edit_values.hpp phase9-build/include/edit_values.hpp
           cp parser-src/editor/rogue_numeric_edit.h phase9-build/include/
           cp parser-src/editor/rogue_numeric_edit.cpp phase9-build/source/
           cp parser-src/editor/rogue_pokemon_edit.h parser-src/editor/rogue_moves_items_edit.h phase9-build/include/
