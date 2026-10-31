@@ -52,6 +52,7 @@ jobs:
           cp phase11/rogue_svc.s phase15-build/source/rogue_svc.s
           cp phase14/vendor/sha256.c phase15-build/source/sha256.c
           cp phase14/vendor/sha256.h phase15-build/include/vendor/sha256.h
+          cp phase14/vendor/sha256.h phase15-build/include/sha256.h
           cp phase15/diagnostic.hpp phase15/sd_probe.hpp phase15-build/include/
           cp phase14/authenticated_restore.hpp phase14/native_pxi.hpp phase14/native_journal.hpp phase14/journal_codec.hpp phase15-build/include/
           cp phase11/live_header.hpp phase15-build/include/
