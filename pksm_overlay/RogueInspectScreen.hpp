@@ -11,6 +11,7 @@
 #include "rogue_edit.h"
 #include "rogue_pokemon_edit.h"
 #include "rogue_ball_insert.h"
+#include "rogue_hub_probe.h"
 #include <memory>
 #include <string>
 
@@ -27,6 +28,8 @@ private:
     using SnapshotHandle = std::unique_ptr<rogue_snapshot, decltype(&rogue_snapshot_close)>;
     SnapshotHandle snapshot{nullptr, &rogue_snapshot_close};
     rogue_preview preview{};
+    rogue_hub_report hubPreview{};
+    rogue_hub_status hubStatus = ROGUE_HUB_BAD_SOURCE;
     std::unique_ptr<uint8_t[]> originalRaw;
     std::unique_ptr<uint8_t[]> draftRaw;
     rogue_draft_request edits{};
@@ -38,7 +41,7 @@ private:
     bool exportVerified();
     void stageDraft();
     std::string status;
-    enum class Page { Summary, Party, Bag } page = Page::Summary;
+    enum class Page { Summary, Party, Bag, Hub } page = Page::Summary;
     unsigned firstRow = 0;
 };
 #endif
