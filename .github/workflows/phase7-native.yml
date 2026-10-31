@@ -26,7 +26,9 @@ jobs:
           set -euo pipefail
           apt-get update -qq
           apt-get install -y --no-install-recommends python3-git python3-pip libcurl4-openssl-dev unzip
-          dkp-pacman -Sy --noconfirm --needed 3ds-dev 3ds-portlibs 3ds-pkg-config 3ds-curl 3ds-bzip2 3ds-mpg123 3dstools
+          # Avoid refreshing remote devkitPro DB: pkg.devkitpro.org returned 403 in CI.
+          # Use the official image's packaged DB; a missing package must fail explicitly.
+          dkp-pacman -S --noconfirm --needed 3ds-pkg-config 3ds-curl 3ds-bzip2 3ds-mpg123 3dstools
           # PKSM requires external host-side CIA tools in addition to devkitPro.
           curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
           echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
