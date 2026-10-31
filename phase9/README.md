@@ -1,4 +1,4 @@
-# PKSM Rogue Phase 9.3 — synthetic-only offline Pokémon editor
+# PKSM Rogue Phase 9.4 — configurable synthetic-only offline editor
 
 **EMULATOR EXPERIMENT ONLY — DO NOT INSTALL CIA ON A PHYSICAL 3DS.**
 
@@ -22,10 +22,20 @@ Phase 9.3 connects the existing IV/EV and move writers. On the one known toy Pok
 
 All other save files remain read-only. No species, nature, ability, held item, PC, hub area, upgrade or live-restore editor is available here.
 
+## Phase 9.4 configurable inputs (31 October 2026)
+
+In the synthetic lab viewer, select **Summary** to edit money, **Party** to edit Pokémon, or **Bag** to modify item quantities. X stages the default operation. On Party, X stages IVs, Y EVs, SELECT a move slot/ID/PP change. On Bag, X stages the selected existing item's quantity, Y ensures Rare Candy ID 113, and SELECT ensures Master Ball ID 1. All operations work on the **exact deterministic synthetic fixture only**.
+
+On the first confirmation screen, use **Up/Down** to select the numerical field, **Left/Right** to change it by one, and **L/R** to change it by ten (money 10,000). Press **A** to review the proposal; press **A** again to create a **separate** SD draft. **B** cancels. Money is capped at 999,999; existing item quantities at 999; IVs at 31; EVs at 252 each and 510 total; move IDs at 1–848; PP at 1–40. Move slots use internal numbering 0–3. Insert-item IDs are restricted to the test ball subset 1–24 and Rare Candy 113, not arbitrary items. If a permitted item already exists, it updates that stack; insertion into a new slot uses the conservative Phase 7 pocket routine and can refuse unknown layouts. There is still only one export attempt per app launch.
+
+Verified in the host synthetic suite and Azahar-native guest tests, including adjustable money, IV, EV and move values; existing Rare Candy/Master Ball stacks; and preserved backups. The installed-CIA guest workflow is also rerun. See [release gates](../RELEASE_GATES.md) and the newest [GitHub Actions](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase9-readonly-diagnostic.yml).
+
+**No real game-save edits are enabled.** Never install this toy CIA onto a real console or attempt to restore one of these synthetic drafts into Emerald Rogue.
+
 ## Next steps before an installable release
 
 1. Isolated direct-content CIA installation and launch now passed in Azahar. Verify normal HOME Menu launch/exit, restart, and recovery separately before any hardware test.
-2. Complete the three native Azahar guest UI IV/EV/move tests, then add user-adjustable numerical edit controls (current toy targets are presets). Expand adversarial and I/O failure tests without touching a real game.
+2. Phase 9.4 now supports adjustable numerical controls, conservative toy item updates and independent guest tests. Next validate unknown-copy refusal in the guest, cancel, forced disk failure and recovery; do not touch live game files.
 3. Validate exactly the user's patched Emerald Rogue ROM/build and disposable save; add build-specific compatibility allowlist only with positive evidence. Unverified saves remain read-only.
 4. Validate live-archive backup and disposable game-save restore with correct ROM, then console safety and rollback without touching the user's installed game until the release gates pass.
 5. Resolve the full PKSM UI's extdata startup setup and confirm isolated title and SD paths; only then consider a hardware release CIA.
