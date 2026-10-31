@@ -240,3 +240,88 @@ jobs:
           name: phase9-SYNTHETIC-LAB-CIA-NOT-FOR-INSTALL
           path: experimental/
           retention-days: 7
+
+  cia-install-probe:
+    name: Install and launch isolated synthetic lab CIA in Azahar
+    needs: [package-lab-cia]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-NOT-FOR-INSTALL
+          path: experimental
+      - name: Prepare isolated Azahar virtual SD
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports
+          python3 phase7/create_synthetic_fixture.py "$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+      - name: CIA installation then installed-title launch probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/isolated-data"
+          export XDG_CONFIG_HOME="$PWD/isolated-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450
+          export QT_QPA_PLATFORM=xcb
+          CIA="$(realpath experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia)"
+          test -s "$CIA"
+          export CIA
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 timeout 55s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
+            pid=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$pid" || true
+            find isolated-data -type f -name "*.app" -printf "%p %s bytes\n" > evidence/installed-files.txt || true
+            CONTENT=$(find isolated-data -type f -name "*.app" -path "*0f73a300*" -print -quit)
+            if [ -z "$CONTENT" ]; then
+              echo "EXPECTED_TITLE_NOT_INSTALLED" > evidence/guest-result.txt
+              exit 0
+            fi
+            CONTENT=$(realpath "$CONTENT")
+            echo "$CONTENT" > evidence/installed-content.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$CONTENT" > evidence/emulator.log 2>&1 &
+            guest=$!
+            sleep 20
+            import -window root evidence/installed-launch.png || true
+            xdotool keydown --clearmodifiers z
+            sleep 0.5
+            xdotool keyup z
+            sleep 1
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 1
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 3
+            import -window root evidence/installed-after-confirm.png || true
+            echo "INSTALLED_TITLE_LAUNCH_ATTEMPTED" > evidence/guest-result.txt
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+          '
+          test -s evidence/installed-content.txt
+          test -s evidence/installed-launch.png
+          test -s evidence/installed-after-confirm.png
+          echo 'CIA title installed and content launch attempted. Review screenshots and logs before claiming guest success.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-install-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
