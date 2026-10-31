@@ -20,11 +20,11 @@ def make_hub_save():
           +struct.pack("<H",6)+bytes((0x05,0,0,0,0,0))
           +struct.pack("<H",192)+bytes(192*4))
     blob=bytearray().join(save[i*4096:i*4096+0xff4] for i in range(5,14))
-    at=5*0xff4+0xe00
+    at=(10-5)*0xff4+0xe00
     assert header==bytes((6,0,2,0xdf,0x6b,1,0x26,0x06))
     blob[at:at+len(header+body)]=header+body
     for i in range(5,14):
-        start=i*0xff4
+        start=(i-5)*0xff4
         save[i*4096:i*4096+0xff4]=blob[start:start+0xff4]
         struct.pack_into("<H",save,i*4096+0xff6,
                          checksum(save[i*4096:(i+1)*4096],SECTOR_DATA_LENGTHS[i]))
