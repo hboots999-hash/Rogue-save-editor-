@@ -186,8 +186,8 @@ int main(int argc,char** argv){
     }
 
     // Insert-item actions reuse the vetted Phase 7 routine; fixture only.
-    for(const unsigned desired : {113u,1u}){
-        const auto folder=setup(temp,desired==113?"insert_candy":"insert_masterball",initial);
+    for(const unsigned desired : {113u,1u,2u}){
+        const auto folder=setup(temp,desired==113?"insert_candy":desired==1?"insert_masterball":"insert_new_ball",initial);
         rogue_sandbox::Values values{};
         values.insertItemId=static_cast<uint16_t>(desired);
         values.quantity=222;
