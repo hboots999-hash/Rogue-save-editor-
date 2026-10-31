@@ -13,3 +13,6 @@ Option:
   EnableCompress: true
 AccessControlInfo:
   UseExtSaveData: false
+
+SystemControlInfo:
+  StackSize: 0x40000
