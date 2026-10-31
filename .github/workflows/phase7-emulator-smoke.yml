@@ -83,7 +83,12 @@ jobs:
             xdotool key --clearmodifiers ctrl+l
             xdotool type --clearmodifiers --delay 4 "$1"
             xdotool key Return
-            sleep 22
+            sleep 8
+            xwd -root -silent -out evidence/before-guest-input.xwd 2>/dev/null || true
+            # Azahar default virtual 3DS A button = Qt Key_A.
+            # This test has isolated emulator extdata, never a user's SD/save.
+            xdotool key --clearmodifiers a
+            sleep 17
             if kill -0 "$PID" 2>/dev/null; then
               echo "Azahar process alive after GUI Load File attempt (NOT proof of guest launch)" | tee evidence/process-status.txt
             else
@@ -101,6 +106,10 @@ jobs:
           if test -s evidence/dialog-screen.xwd; then
             convert evidence/dialog-screen.xwd -resize 1100x900\> evidence/dialog-screen.png || true
             rm -f evidence/dialog-screen.xwd
+          fi
+          if test -s evidence/before-guest-input.xwd; then
+            convert evidence/before-guest-input.xwd -resize 1100x900\> evidence/before-guest-input.png || true
+            rm -f evidence/before-guest-input.xwd
           fi
           cp binary-types.txt binary-sha256.txt azahar-sha256.txt evidence/
           ls -lh evidence/
