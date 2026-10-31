@@ -12,6 +12,9 @@ struct Receipt {
     std::string message;
     std::string backupName,draftName;
     Validation editProof{};
+    Receipt(bool v,std::string msg,std::string b={},std::string d={},Validation p={})
+        : ok(v),message(std::move(msg)),backupName(std::move(b)),draftName(std::move(d)),editProof(std::move(p)) {}
+
 };
 template<typename Reader>
 Receipt stageFromLive(Reader&& read,const char* root,
