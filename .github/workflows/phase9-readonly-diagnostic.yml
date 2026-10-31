@@ -229,6 +229,7 @@ jobs:
           curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
           echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
           unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          chmod +x /tmp/makerom-tools/makerom
           mkdir -p experimental
           /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia -target t -elf binary/RogueReadOnlyDiagnostic.elf -rsf phase9/lab.rsf -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
           test -s experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia
