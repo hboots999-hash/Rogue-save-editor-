@@ -1,0 +1,58 @@
+name: Phase 14 authenticated restore - live writes disabled
+on:
+  push:
+    branches: [feature/phase14-authenticated-restore]
+  pull_request:
+    branches: [feature/phase7-native-ci]
+    paths: ['phase14/**', '.github/workflows/phase14-authenticated-restore.yml', 'PHASE_HANDOFF.md']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - run: bash phase14/run_tests.sh
+      - name: Guard native write gate and private data
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          core=Path('phase14/authenticated_restore.hpp').read_text()
+          native=Path('phase14/native_pxi.hpp').read_text()
+          assert 'constexpr bool LiveWritesEnabled = false;' in core
+          assert 'FS_OPEN_WRITE' not in native
+          assert 'if(!LiveWritesEnabled ||' in native
+          PY
+          if git ls-files | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then exit 1; fi
+  native:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile native adapter and link all probe symbols (no CIA)
+        shell: bash
+        run: |
+          set -euo pipefail
+          dkp-pacman -S --noconfirm --needed 3ds-dev
+          export PATH="$DEVKITARM/bin:$PATH"
+          mkdir -p /tmp/phase14-build
+          FLAGS='-march=armv6k -mtune=mpcore -mfloat-abi=hard -mtp=soft -D__3DS__ -O2 -Wall -Wextra -Werror'
+          arm-none-eabi-gcc $FLAGS -c phase14/vendor/sha256.c -o /tmp/phase14-build/sha.o
+          arm-none-eabi-g++ $FLAGS -std=gnu++17 -I"$DEVKITPRO/libctru/include" \
+            -Iphase10/preview -Iphase11 -Iphase13 -Iphase14 \
+            -c phase14/native_probe.cpp -o /tmp/phase14-build/probe.o
+          arm-none-eabi-gcc $FLAGS -c phase11/rogue_svc.s -o /tmp/phase14-build/svc.o
+          # A relocatable probe plus libctru resolves the PXI API signatures.
+          arm-none-eabi-g++ $FLAGS -r /tmp/phase14-build/{probe,sha,svc}.o \
+            -L"$DEVKITPRO/libctru/lib" -lctru -o /tmp/phase14-build/combined.o
+          # The permanently closed gate must eliminate privileged write calls.
+          if arm-none-eabi-nm -u /tmp/phase14-build/probe.o | grep FSPXI_WriteFile; then exit 1; fi
+          if arm-none-eabi-nm -u /tmp/phase14-build/combined.o | grep -E 'FSPXI_|rogueSvc|sha256_'; then exit 1; fi
