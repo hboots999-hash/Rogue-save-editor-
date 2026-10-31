@@ -18,6 +18,8 @@ This is *not* release-equivalent to an installed game save editor, even if compi
 | F. Physical device lifecycle | Physical 3DS preview CIA now launches, parses copied real save and reports successful verified offline export `h168_002.sav` after X+A+A, using native SDMC file creation. The original import remains unchanged and the installed Emerald Rogue save is untouched. Independent file inspection, native app exit/recovery and game restore are still pending | **PARTIAL: real hardware offline draft success, live restore/full editor not tested** |
 | G. Release approval | All above passing, checksummed release, installation and rollback guide, verified no personal saves/ROMs in artifacts | **NOT APPROVED** |
 
+**Phase 11 live GBA VC reader (read-only):** New `phase11/` native bridge triggers only with Y and uses Luma PxiFS0 read-only access to the exact installed H168 GBA VC title; title-ID, slot, and dual-bank validation are required. **No native direct writes/restores or CMAC handling are enabled.** Hardware compatibility of this reader remains unverified; Checkpoint's separate confirmed restore path requires title-specific CMAC signing. See `phase11/README.md`.
+
 ## Allowed and forbidden work now
 
 Safe research work is limited to **synthetic or disposable copied SD save files**, and does not allow the native editor to write to live VC save, delete PKSM extdata, or restore into the user's installed title. The exact-user-ROM gate must remain fail-closed until positive evidence is available. The toy synthetic save is intentionally **not playable**.
