@@ -205,3 +205,34 @@ jobs:
           path: evidence/
           retention-days: 7
           if-no-files-found: warn
+
+  package-lab-cia:
+    name: Package emulator-only synthetic lab CIA — NOT FOR INSTALLATION
+    needs: [build, emulator]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Fetch pinned makerom and assemble standalone lab CIA
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          mkdir -p experimental
+          /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia -target t -elf binary/RogueReadOnlyDiagnostic.elf -rsf phase9/lab.rsf -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
+          test -s experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia
+          printf 'EXPERIMENTAL 3DS CIA FOR EMULATOR RESEARCH ONLY.\nNOT A HARDWARE RELEASE.\nOnly the exact Phase 7 synthetic fixture is accepted for offline edits.\nNo installed-game save access or restore.\nTitle ID/collision and hardware testing still required.\n' > experimental/DO_NOT_INSTALL.txt
+          sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-NOT-FOR-INSTALL
+          path: experimental/
+          retention-days: 7
