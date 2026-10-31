@@ -3,7 +3,8 @@
 Date: 31 October 2026
 Branch: `feature/phase14-authenticated-restore`
 Base: `feature/phase7-native-ci` at `64cb5f0d4c393e23c4b2da70a4643c5b81f68d3a`
-Status: source implementation and host recovery tests; **live writes disabled, no hardware restore claim**.
+Draft PR: https://github.com/hboots999-hash/Rogue-save-editor-/pull/3
+Status: source implementation, host recovery tests and native compile/link PASS; **live writes disabled, no hardware restore claim**.
 
 ## Progress
 
@@ -18,7 +19,7 @@ Implemented authenticated full-container planning, stable console MAC-service ad
 - Phase 11 header, Phase 12 backup, Phase 13 preflight and live-draft host regressions: PASS.
 - Tests cover SHA-256 known answers; stable/stale/failing/unstable MAC service responses; malformed/foreign/CID-mismatched containers; counter ties/overflow; both slot directions and edit operations; modified plans; failed backup/readback/stale source before writes; each partial write; interrupted transactions after each of four writes; fresh journal reload/recovery; failed rollback; unrelated live changes; corrupt/truncated journals and non-overwrite.
 - The host MAC service is a deterministic test double, NOT Nintendo AES-CMAC validation.
-- GitHub CI native devkitPro compilation and host sanitizer results: pending first branch run; update this section once observed.
+- GitHub CI **PASS**, both `host` and `native` jobs: https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41252281936 (implementation commit `9f93fe8afb822f5bd98661481d54e7385cb7c005`). Host includes ASan/UBSan with leak detection, all Phase 11–13 regressions, write-gate and private-file guards. Native includes devkitPro compilation, relocatable linking with libctru, and confirmation that the probe has no privileged write reference. This subsequent handoff-only update does not change the tested code.
 - No physical console or game/emulator restore was performed. No installable Phase 14 binary is shipped.
 
 ## Outstanding problems / required integration work
