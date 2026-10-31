@@ -1,17 +1,26 @@
-# Phase 9 — independent, read-only 3DS runtime test
+# Phase 9 — independent, extdata-free 3DS runtime (NOT A RELEASE)
 
-This project is **not the PKSM Rogue app release**. It is a separate homebrew 3DSX using exactly the same Rogue candidate bridge/observed parser code as the PKSM fork, without the standard PKSM extdata/archive or asset initialization that fails in the fresh Azahar environment.
+This is a separate diagnostic 3DSX built from the **same** candidate save bridge as the experimental PKSM fork. It deliberately avoids official PKSM's extdata startup path, installed title access, backup/restore APIs, and all output/save-writing functions. Do **not** install a GitHub CI CIA on physical hardware.
 
-## Build and launch
-The devkitPro standard 3DS application template is used in GitHub Actions. See [Phase 9 diagnostic and emulator screenshots](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase9-readonly-diagnostic.yml). The input source core archive is verified using a pinned SHA256 before compilation.
+## Existing native evidence
 
-It tries to read ONLY the SD copy `sdmc:/3ds/PKSM-Rogue/imports/00000001.sav`. No game title lookup, live archive access, writes, editing, backups or restore are compiled into this test. Without a copy it should display `No supported SD copy loaded` and still allow L/R page and START exit.
+- The original 3DSX built and ran in Azahar 2126.2, reading a wholly synthetic 128-KiB SD-copy fixture and showing money 40000, party 1, bag 3, species ID 25, HP IV 10: [run 41158813605](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41158813605).
+- Phase 9.1 adds read-only details for selected party Pokémon (numeric species, held item, nature, ability slot, IVs/EVs, four moves) and bag items, with an isolated ui_state.hpp input model. Native 3DS compilation, ASan/UBSan host contract tests, and emulator launch workflow passed: [run 41159666627](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159666627).
+- The follow-up workflow captures additional guest input screenshots (A details, B back, X request, A twice to a **blocked** result), checks imported fixture SHA-256 before and after, and asserts that no backups/drafts are created. See [Phase 9 workflow](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase9-readonly-diagnostic.yml) for the latest outcome. Keyboard maps and screenshots must be inspected before claiming guest modal controls were observed.
 
-**Do not install an experimental CIA on a physical 3DS based on a successful test 3DSX run.**
+## Controls
 
-## Remaining blockers for final PKSM Rogue CIA
-- PKSM 10.4.2 (official and our fork) shows the same extdata startup warning in a clean Azahar 2126.2 environment.
-- The standalone diagnostic is only a way to isolate native renderer and input from PKSM initialisation.
-- The final PKSM fork still requires a verified full editor-screen session, exact modified Emerald Rogue build compatibility, and real game-backup/restore testing.
-- No user game save or ROM is committed to this repository.
-\n## Verified emulator experiment\n\n[Successful native build + virtual SD test](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41158813605): Azahar 2126.2 launched the standalone 3DSX, which read a wholly synthetic (non-playable) SD file and displayed money **40000**, party **1** and bag **3** on page 1. Virtual R-button navigation displayed page 2 with **species ID 25 and HP IV 10**, exactly as created by the synthetic fixture. Both screenshots are in the GitHub Actions artifact `phase9-readonly-3DS-emulator-screen-evidence`.\n\nThis is native candidate-save parsing and page navigation only, **not** the main graphical editor, proof of exact Emerald Rogue ROM compatibility, or a game-save restore.\n
+- L/R: pages (summary / party / bag); D-pad up/down: select a party or bag entry; A: numeric detail screen; B: return/cancel; START: exit.
+- X: rehearse an edit request; A first and second confirmation; after both confirmations display **EDIT BLOCKED - NO SAVE WRITTEN**; B returns to viewer.
+- This is not a functioning money, bag, IV/EV, or move editor on 3DS. Phase 7/8 already contain offline candidate editors and the distinct verified SD-import backup gate, but they are **not integrated into this independent Phase 9 shell**. No installed game save is accessible here.
+
+The optional input is a COPY at sdmc:/3ds/PKSM-Rogue/imports/00000001.sav, exactly 131072 bytes. The simulator's synthetic fixture is not playable. Unsupported/missing input is rejected; the UI should still allow page navigation and safe exit.
+
+## What remains before MVP and any hardware use
+
+1. Integrate the already-tested Phase 7/8 candidate editing and byte-verified import-backup/draft mechanisms with a stable emulator-native UI, without weakening readback, O_EXCL, or stale-import rejection.
+2. Add a ROM-build-specific compatibility allowlist, validated against an exact disposable patched Emerald Rogue ROM and save. Fail closed for unknown versions, unsupported items/pockets or fields.
+3. Run guest emulator input sequences and negative I/O tests on entirely synthetic data; collect and inspect screenshots and on-disk before/after evidence.
+4. Validate disposable game save extraction/restore and recovery with the correct game build. Only thereafter consider a separate hardware-safe release candidate with distinct title ID/SD paths, hashes and rollback instructions.
+
+A successful host test, 3DS compiler job, or Azahar launch is **not proof** that a draft plays correctly in the user's Emerald Rogue build or that the CIA is safe to install.
