@@ -70,24 +70,24 @@ jobs:
             fi
             CONTENT=$(realpath "$CONTENT")
             echo "$CONTENT" > evidence/installed-content-path.txt
-            ./azahar.AppImage --appimage-extract-and-run > evidence/emulator.log 2>&1 &
+            # Bypass GUI File > Load. Azahar accepts one plain file-path argument.
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$CONTENT" > evidence/emulator.log 2>&1 &
             emu_pid=$!
-            sleep 8
-            window_id=$(xdotool search --name Azahar | head -1)
+            sleep 17
+            xwd -root -silent -out evidence/before-A.xwd 2>/dev/null || true
+            window_id=$(xdotool search --name Azahar | tail -1)
             timeout 4s xdotool windowactivate "$window_id" || true
             timeout 4s xdotool windowfocus "$window_id" || true
-            xdotool key --clearmodifiers ctrl+o
-            sleep 2
-            xdotool key --clearmodifiers ctrl+l
-            xdotool type --clearmodifiers --delay 2 "$CONTENT"
-            xdotool key Return
-            sleep 18
+            xdotool mousemove 600 260 click 1 || true
+            xdotool keydown a; sleep 0.4; xdotool keyup a
+            sleep 15
             xwd -root -silent -out evidence/guest.xwd 2>/dev/null || true
-            echo "SCREEN_CAPTURED_GUEST_NOT_YET_VERIFIED" > evidence/guest-result.txt
+            echo "DIRECT_PATH_AND_A_INPUT_ATTEMPTED_NOT_YET_GUEST_VERIFIED" > evidence/guest-result.txt
             kill "$emu_pid" 2>/dev/null || true
             wait "$emu_pid" 2>/dev/null || true
           '
           if test -s evidence/guest.xwd; then convert evidence/guest.xwd -resize 1100x900\> evidence/guest.png || true; rm -f evidence/guest.xwd; fi
+          if test -s evidence/before-A.xwd; then convert evidence/before-A.xwd -resize 1100x900\> evidence/before-A.png || true; rm -f evidence/before-A.xwd; fi
           find evidence -maxdepth 1 -type f -printf '%f %s bytes\n'
       - name: Upload only diagnostic images and logs; never save/ROM/CIA
         if: always()
