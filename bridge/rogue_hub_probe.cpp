@@ -8,7 +8,6 @@
 namespace {
 uint16_t rd16(const uint8_t* p){return uint16_t(p[0])|uint16_t(p[1])<<8;}
 constexpr size_t kData=0xff4;
-constexpr size_t kStart=5*kData;
 constexpr size_t kHubAt=(10-5)*kData+0xe00;
 bool take16(const std::vector<uint8_t>& buf,size_t& pos,uint16_t& result) {
  if(pos>buf.size()||buf.size()-pos<2)return false;
