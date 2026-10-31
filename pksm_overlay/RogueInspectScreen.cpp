@@ -82,6 +82,32 @@ namespace {
         return okay;
     }
 
+
+    // IDs and names from Pokabbie/pokeemerald-rogue EX 2.1.2
+    // include/constants/rogue_hub.h, commit 518b7b4d. Display only.
+    const char* const kAreaNames[11] = {
+        "Town Square", "Adventure Entrance", "Labs", "Safari Zone",
+        "Challenge Frontier", "Berry Field", "Home", "Marts",
+        "Ride Training", "Day Care", "Market"
+    };
+    const char* const kUpgradeNames[48] = {
+        "School", "Tutors", "Random starter", "Adventure replay",
+        "Unique Mon Lab", "Unique slots I", "Unique slots II",
+        "Rare rarity", "Epic rarity", "Exotic rarity", "Reserved rarity",
+        "Home lower floor", "Reserved upper floor", "Home styles",
+        "Berry brewing", "Reserved brewing", "Berry field I",
+        "Berry field II", "Berry field III", "Berry yield I",
+        "Berry yield II", "Berry yield III", "Legends Cave",
+        "General stock", "Poke Ball stock", "More Poke Balls",
+        "TMs", "More TMs", "Battle enhancers", "Held items",
+        "Day Care capacity I", "Day Care capacity II", "Breeder",
+        "Seen Dex breeder", "Reserved breeder", "Day Care phone I",
+        "Tea Shop", "Exp Share I", "Exp Share II", "Exp Share III",
+        "Pokeblock blenders", "Bakery", "Treat Shop", "More treats",
+        "Market bank", "Day Care phone II", "Day Care phone III",
+        "Unique typings"
+    };
+
     void drawRow(const std::string& text, unsigned row)
     {
         Gui::text(text, 12, 52 + static_cast<int>(row) * 20, FONT_SIZE_11, COLOR_WHITE,
@@ -106,6 +132,7 @@ RogueInspectScreen::RogueInspectScreen()
         return;
     }
     originalRaw = std::move(bytes);
+    hubStatus = rogue_probe_hub(originalRaw.get(), ROGUE_RAW_SAVE_SIZE, &hubPreview);
     status = "CANDIDATE ONLY - ROM NOT VERIFIED";
 }
 
@@ -232,7 +259,7 @@ void RogueInspectScreen::drawTop() const
                 std::to_string(p.species_id) + "  item ID " + std::to_string(p.held_item_id), i);
         }
     }
-    else
+    else if (page == Page::Bag)
     {
         for (unsigned i=0; i<kRowsPerPage; ++i)
         {
@@ -246,6 +273,34 @@ void RogueInspectScreen::drawTop() const
                 candidateName + "  x" + std::to_string(item.quantity), i);
         }
     }
+    else if (page == Page::Hub)
+    {
+        if (hubStatus != ROGUE_HUB_OK)
+        {
+            drawRow("Hub layout not verified - display refused", 0);
+            drawRow("No progression flags are editable", 1);
+        }
+        else
+        {
+            for (unsigned i = 0; i < kRowsPerPage; ++i)
+            {
+                const unsigned index = firstRow + i;
+                if (index < 11)
+                {
+                    drawRow(std::string("Area ") + std::to_string(index) + ": " +
+                        kAreaNames[index] +
+                        (hubPreview.area_built[index] ? " [BUILT]" : " [LOCKED]"), i);
+                }
+                else if (index < 59)
+                {
+                    const unsigned upgrade = index - 11;
+                    drawRow(std::string("Upg ") + std::to_string(upgrade) + ": " +
+                        kUpgradeNames[upgrade] +
+                        (hubPreview.upgrade_owned[upgrade] ? " [YES]" : " [NO]"), i);
+                }
+            }
+        }
+    }
 }
 
 void RogueInspectScreen::drawBottom() const
@@ -257,6 +312,17 @@ void RogueInspectScreen::drawBottom() const
         (page == Page::Bag ? "X: item x999  Y: add Master Ball x999" :
         "A: money 999999"), 160, 125, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
+    if (page == Page::Hub)
+    {
+        const std::string info = hubStatus == ROGUE_HUB_OK ?
+            ("Areas: " + std::to_string(hubPreview.built_count) +
+             "/11   Upgrades: " + std::to_string(hubPreview.upgrades_count) + "/48") :
+            "Hub parser refused unknown layout";
+        Gui::text(info, 160, 160, FONT_SIZE_11, COLOR_WHITE,
+            TextPosX::CENTER, TextPosY::TOP);
+        Gui::text("VIEW ONLY. Unlock editing disabled.", 160, 195,
+            FONT_SIZE_11, COLOR_WHITE, TextPosX::CENTER, TextPosY::TOP);
+    }
     if (page == Page::Party && snapshot)
     {
         rogue_party_candidate p{};
@@ -391,12 +457,13 @@ void RogueInspectScreen::update(touchPosition*)
         return;
     }
     const unsigned current = static_cast<unsigned>(page);
-    if (keys & KEY_R) { page = static_cast<Page>((current + 1) % 3); firstRow = 0; }
-    else if (keys & KEY_L) { page = static_cast<Page>((current + 2) % 3); firstRow = 0; }
+    if (keys & KEY_R) { page = static_cast<Page>((current + 1) % 4); firstRow = 0; }
+    else if (keys & KEY_L) { page = static_cast<Page>((current + 3) % 4); firstRow = 0; }
     else if (keys & KEY_DOWN)
     {
         const unsigned count = page == Page::Party ? preview.party_count :
-            (page == Page::Bag ? preview.occupied_bag_slots : 0);
+            (page == Page::Bag ? preview.occupied_bag_slots :
+            (page == Page::Hub && hubStatus == ROGUE_HUB_OK ? 59 : 0));
         if (firstRow + 1 < count && firstRow < kMaxBagPages) ++firstRow;
     }
     else if (keys & KEY_UP && firstRow > 0) --firstRow;
