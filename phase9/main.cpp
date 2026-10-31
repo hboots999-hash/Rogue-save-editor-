@@ -9,6 +9,8 @@
 #include <new>
 #include "rogue_bridge.h"
 #include "ui_state.hpp"
+#include "offline_sandbox.hpp"
+#include <string>
 
 namespace {
 constexpr const char* importPath = "sdmc:/3ds/PKSM-Rogue/imports/00000001.sav";
@@ -25,13 +27,15 @@ std::unique_ptr<uint8_t[]> readExact() {
 }
 
 void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
-          const rogue_preview& p, bool inputPresent) {
+          const rogue_preview& p, bool inputPresent, bool sandbox, const std::string& status) {
     consoleClear();
     puts("PKSM ROGUE - 3DS RUNTIME TEST");
     puts("==============================");
     puts("READ ONLY. NO LIVE SAVE ACCESS.");
-    printf("PAGE %u/3 - INPUT %s\n\n",
+    printf("PAGE %u/3 - INPUT %s\n",
            static_cast<unsigned>(s.page) + 1u, inputPresent ? "PRESENT" : "MISSING");
+    puts(sandbox ? "SYNTHETIC LAB: DRAFTS ENABLED" : "UNKNOWN ROM: READ ONLY");
+    puts("");
 
     if (!snapshot) {
         puts("No supported SD copy loaded.");
@@ -39,23 +43,23 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
         puts("00000001.sav (128 KiB)");
     } else if (s.mode == rogue_ui::Mode::ConfirmOne
                || s.mode == rogue_ui::Mode::ConfirmTwo) {
-        puts("OFFLINE EDIT REQUEST (REHEARSAL)");
+        puts("OFFLINE EDIT REQUEST");
         puts("No data has been modified.");
-        puts("ROM layout is not verified.");
+        puts(sandbox ? "EXACT TOY FIXTURE ONLY." : "REAL SAVE: EXPORT FORBIDDEN.");
         printf("Confirm %u/2 with A, B cancels.\n",
                s.mode == rogue_ui::Mode::ConfirmOne ? 1u : 2u);
-        puts("Any confirmed edit will be BLOCKED.");
+        puts(sandbox ? "Money/item: export separate SD draft." : "Confirmed action will be BLOCKED.");
     } else if (s.mode == rogue_ui::Mode::Blocked) {
-        puts("EDIT BLOCKED - NO SAVE WRITTEN");
-        puts("Exact Rogue ROM mapping unknown.");
-        puts("Imported SD copy remains untouched.");
-        puts("B: return to read-only viewer.");
+        puts(status.empty() ? "BLOCKED - NO SAVE WRITTEN" : status.c_str());
+        puts("Import SD copy remains untouched.");
+        puts("No live game-save restoration.");
+        puts("B: return to viewer.");
     } else if (s.mode == rogue_ui::Mode::Detail) {
         if (s.page == rogue_ui::Page::Summary) {
             printf("MONEY: %lu\n", static_cast<unsigned long>(p.money));
             printf("Counter: %lu\n", static_cast<unsigned long>(p.save_counter));
             printf("Profile candidate: %u\n", static_cast<unsigned>(p.profile));
-            puts("Money edits disabled until ROM check.");
+            puts(sandbox ? "X: stage 999999 synthetic draft" : "Real-game edits disabled.");
         } else if (s.page == rogue_ui::Page::Party) {
             rogue_party_candidate mon{};
             if (rogue_snapshot_party(snapshot, s.selected, &mon)) {
@@ -76,7 +80,7 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
                        item.slot_index, item.item_id, item.quantity);
             else puts("Bag slot could not be decoded.");
         }
-        puts("\nB: back   X: test blocked confirm");
+        puts("\nB: back   X: request SD draft");
     } else if (s.page == rogue_ui::Page::Summary) {
         printf("Marker %u, counter %lu\n", p.serialized_marker,
                static_cast<unsigned long>(p.save_counter));
@@ -106,8 +110,8 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
         }
     }
     puts("\nL/R pages, Up/Down select");
-    puts("A details, B cancel/back, X test");
-    puts("START safe exit. NO EDITS/RESTORE.");
+    puts("A details, B cancel/back, X stage");
+    puts("START exit. No LIVE game restore.");
 }
 } // namespace
 
@@ -122,13 +126,38 @@ int main() {
     if (snap && !rogue_snapshot_summary(snap.get(), &info)) snap.reset();
 
     rogue_ui::State state;
+    const bool syntheticLab = snap && rogue_sandbox::exactSynthetic(data.get(),ROGUE_RAW_SAVE_SIZE);
+    bool attemptedExport = false;
+    std::string exportStatus;
     bool dirty = true;
     while (aptMainLoop() && !state.exitRequested) {
         hidScanInput();
         const u32 keys = hidKeysDown();
         const bool supportedCopy = snap != nullptr;
         const auto pressKey = [&](rogue_ui::Key key) {
+            const auto previousMode = state.mode;
+            const auto previousPage = state.page;
+            const unsigned previousSelection = state.selected;
             rogue_ui::press(state, key, info.party_count, info.occupied_bag_slots, supportedCopy);
+            if(key == rogue_ui::Key::Open &&
+               previousMode == rogue_ui::Mode::ConfirmTwo &&
+               state.mode == rogue_ui::Mode::Blocked) {
+                if(!syntheticLab)
+                    exportStatus = "Unknown ROM: EXPORT BLOCKED";
+                else if(attemptedExport)
+                    exportStatus = "One lab export per launch; restart.";
+                else if(previousPage == rogue_ui::Page::Party)
+                    exportStatus = "Pokemon editing not wired yet.";
+                else {
+                    attemptedExport = true;
+                    const auto operation = previousPage == rogue_ui::Page::Summary
+                        ? rogue_sandbox::Edit::Money : rogue_sandbox::Edit::ExistingItem;
+                    const auto result = rogue_sandbox::exportOne(
+                        data.get(),importPath,"sdmc:/3ds/PKSM-Rogue",
+                        operation,previousSelection);
+                    exportStatus = result.message;
+                }
+            }
             dirty = true;
         };
         if (keys & KEY_START) pressKey(rogue_ui::Key::Exit);
@@ -140,7 +169,7 @@ int main() {
         else if (keys & KEY_DOWN) pressKey(rogue_ui::Key::Down);
         else if (keys & KEY_UP) pressKey(rogue_ui::Key::Up);
         if (dirty && !state.exitRequested) {
-            show(state, snap.get(), info, data != nullptr);
+            show(state, snap.get(), info, data != nullptr, syntheticLab, exportStatus);
             dirty = false;
         }
         gspWaitForVBlank();
