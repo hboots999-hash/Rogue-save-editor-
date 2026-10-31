@@ -86,7 +86,7 @@ jobs:
             phase9-build/SHA256SUMS.txt
           retention-days: 7
   emulator:
-    name: Azahar launch and page-key diagnostics
+    name: Azahar synthetic-only money export and recovery gate
     needs: [build, ui-contract]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -108,7 +108,7 @@ jobs:
           curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
           echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
           chmod +x azahar.AppImage
-      - name: Launch in clean Azahar, capture initial and page-changed screens
+      - name: Emulate double-confirm export and verify untouched input, backup and draft
         shell: bash
         run: |
           set -euo pipefail
@@ -151,6 +151,12 @@ jobs:
             import -window root evidence/detail.png
             xdotool key --clearmodifiers s
             sleep 1
+            # Return from party to bag, then summary before staging money.
+            xdotool key --clearmodifiers w
+            sleep 1
+            xdotool key --clearmodifiers w
+            sleep 2
+            import -window root evidence/summary-before-edit.png
             xdotool key --clearmodifiers z
             sleep 2
             import -window root evidence/confirm1.png
@@ -158,7 +164,7 @@ jobs:
             sleep 1
             xdotool key --clearmodifiers a
             sleep 2
-            import -window root evidence/blocked.png
+            import -window root evidence/export-result.png
             xdotool key --clearmodifiers s
             sleep 1
             kill "$PID" 2>/dev/null || true
@@ -168,19 +174,34 @@ jobs:
           test -s evidence/page2.png
           test -s evidence/detail.png
           test -s evidence/confirm1.png
-          test -s evidence/blocked.png
+          test -s evidence/export-result.png
+          test -s evidence/summary-before-edit.png
           AFTER_SHA="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
           printf '%s\n' "synthetic import sha256 before: $BEFORE_SHA" "synthetic import sha256 after: $AFTER_SHA" > evidence/no-write-check.txt
           test "$BEFORE_SHA" = "$AFTER_SHA"
-          test ! -e "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts"
-          test ! -e "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups"
-          echo 'PASS: synthetic import unchanged and no draft/backup directory created' | tee -a evidence/no-write-check.txt
+          ROOT="$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          BACKUP="$ROOT/backups/import_001.sav"
+          DRAFT="$ROOT/drafts/rogue_001.sav"
+          test -s "$BACKUP"
+          test -s "$DRAFT"
+          cmp -s "$IMPORT" "$BACKUP"
+          python3 - "$DRAFT" "$IMPORT" <<'PY'
+          import pathlib, struct,sys
+          draft=pathlib.Path(sys.argv[1]).read_bytes()
+          original=pathlib.Path(sys.argv[2]).read_bytes()
+          assert len(draft)==len(original)==131072
+          assert draft != original
+          money=struct.unpack_from('<I',draft,4096+0x4a8)[0]^0x1234abcd
+          assert money==999999,(money,len(draft))
+          print('PASS: emulator created synthetic 999999-money draft and untouched backup')
+          PY
+          echo 'PASS: import unchanged; byte-exact untouched backup, synthetic draft created' | tee -a evidence/no-write-check.txt
           compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
-          echo 'Emulator screenshots require manual review; pixel difference is not guest-navigation proof.'
+          echo 'Synthetic money export is verified by on-disk fixture and backup bytes; screenshots still need visual review.'
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: phase9-readonly-3DS-emulator-screen-evidence
+          name: phase9-sandbox-editor-3DS-emulator-evidence
           path: evidence/
           retention-days: 7
           if-no-files-found: warn
