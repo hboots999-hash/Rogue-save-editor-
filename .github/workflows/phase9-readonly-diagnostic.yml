@@ -103,19 +103,18 @@ jobs:
             APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
             PID=$!
             sleep 18
-            xwd -root -silent -out evidence/page1.xwd || true
+            import -window root evidence/page1.png
             WIN=$(xdotool search --name Azahar | tail -1)
             timeout 3s xdotool windowactivate "$WIN" || true
             timeout 3s xdotool windowfocus "$WIN" || true
             xdotool key --clearmodifiers w || true
             sleep 4
-            xwd -root -silent -out evidence/page2.xwd || true
+            import -window root evidence/page2.png
             kill "$PID" 2>/dev/null || true
             wait "$PID" 2>/dev/null || true
           '
-          for p in page1 page2; do
-            if test -s "evidence/$p.xwd"; then convert "evidence/$p.xwd" "evidence/$p.png"; fi
-          done
+          test -s evidence/page1.png
+          test -s evidence/page2.png
           if test -s evidence/page1.png && test -s evidence/page2.png; then
             compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
           fi
