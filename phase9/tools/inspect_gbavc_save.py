@@ -78,18 +78,20 @@ def inspect_bytes(raw):
     banks=[]
     for bank in (0,1):
         sectors={}
+        duplicate=False
         counters=[]
         checks=[]
         for physical in range(bank*14,(bank+1)*14):
             off=physical*SECTOR
             sid=u16(raw,off+0xff4)
             if sid in sectors:
-                raise ValueError("Duplicate sector ID in bank")
-            sectors[sid]=off
+                duplicate=True
+            else:
+                sectors[sid]=off
             counters.append(u32(raw,off+0xffc))
             checks.append(u32(raw,off+0xff8)==0x08012025 and
                 sector_checksum(raw[off:off+0xff4])==u16(raw,off+0xff6))
-        if set(sectors)!=set(range(14)) or len(set(counters))!=1:
+        if duplicate or set(sectors)!=set(range(14)) or len(set(counters))!=1:
             banks.append({"bank":bank,"valid":False,"reason":"Incomplete sector map",
                           "sectors_checksum_valid":sum(checks)})
             continue
