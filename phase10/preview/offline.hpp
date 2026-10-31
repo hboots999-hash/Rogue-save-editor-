@@ -153,7 +153,7 @@ inline std::string ioError(const char* operation,int code){
 // exclusive create on HARDWARE; never alter live game save archives.
 // FSUSER_CreateFile fails if the exact filename already exists.
 // Only a separate, explicitly imported SD copy can be written as a draft.
-inline std::string fsResult(const char* operation,Result rc){
+inline std::string fs::Result(const char* operation,::Result rc){
     char tmp[96];
     std::snprintf(tmp,sizeof(tmp),"%s FS=0x%08lX",operation,
                   static_cast<unsigned long>(static_cast<uint32_t>(rc)));
@@ -167,29 +167,29 @@ inline bool nativeSdmcCreateAndWrite(const std::string& full,
         error="Invalid SDMC-only target";return false;
     }
     FS_Archive archive{};
-    Result rc=FSUSER_OpenArchive(&archive,ARCHIVE_SDMC,fsMakePath(PATH_EMPTY,""));
-    if(R_FAILED(rc)){error=fsResult("SDMC archive",rc);return false;}
+    ::Result rc=FSUSER_OpenArchive(&archive,ARCHIVE_SDMC,fsMakePath(PATH_EMPTY,""));
+    if(R_FAILED(rc)){error=fs::Result("SDMC archive",rc);return false;}
     const FS_Path path=fsMakePath(PATH_ASCII,full.c_str()+prefix.size());
     // Pre-create at the required size. Never open with CREATE/TRUNCATE.
     rc=FSUSER_CreateFile(archive,path,0,Size);
     if(R_FAILED(rc)){
-        error=fsResult("CreateFile",rc);
+        error=fs::Result("CreateFile",rc);
         (void)FSUSER_CloseArchive(archive);return false;
     }
     Handle file=0;
     rc=FSUSER_OpenFile(&file,archive,path,FS_OPEN_WRITE,0);
     if(R_FAILED(rc)){
-        error=fsResult("OpenFile",rc);
+        error=fs::Result("OpenFile",rc);
         (void)FSUSER_CloseArchive(archive);return false;
     }
     uint32_t written=0;
     rc=FSFILE_Write(file,&written,0,bytes,Size,FS_WRITE_FLUSH);
-    const Result closed=FSFILE_Close(file);
-    const Result archived=FSUSER_CloseArchive(archive);
-    if(R_FAILED(rc)){error=fsResult("WriteFile",rc);return false;}
+    const ::Result closed=FSFILE_Close(file);
+    const ::Result archived=FSUSER_CloseArchive(archive);
+    if(R_FAILED(rc)){error=fs::Result("WriteFile",rc);return false;}
     if(written!=Size){error="WriteFile short count";return false;}
-    if(R_FAILED(closed)){error=fsResult("CloseFile",closed);return false;}
-    if(R_FAILED(archived)){error=fsResult("CloseArchive",archived);return false;}
+    if(R_FAILED(closed)){error=fs::Result("CloseFile",closed);return false;}
+    if(R_FAILED(archived)){error=fs::Result("CloseArchive",archived);return false;}
     return true;
 }
 #endif
