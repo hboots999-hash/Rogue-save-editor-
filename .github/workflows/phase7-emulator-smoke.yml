@@ -68,8 +68,8 @@ jobs:
             sleep 10
             azahar_window=$(xdotool search --name "Azahar" | head -1)
             echo "Azahar window id: $azahar_window" > evidence/focus-check.txt
-            xdotool windowactivate --sync "$azahar_window"
-            xdotool windowfocus --sync "$azahar_window"
+            timeout 5s xdotool windowactivate "$azahar_window" || true
+            timeout 5s xdotool windowfocus "$azahar_window" || true
             xdotool getactivewindow getwindowname >> evidence/focus-check.txt 2>&1 || true
             # Use the GUI File > Load File shortcut. The AppImage command line
             # accepted the path yet left Azahar at its empty library screen.
