@@ -139,29 +139,61 @@ inline bool directory(const char* path){
     struct stat st{};
     return stat(path,&st)==0 && S_ISDIR(st.st_mode);
 }
+inline std::string ioError(const char* operation,int code){
+    char text[96];
+    std::snprintf(text,sizeof(text),"%s (errno %d)",operation,code);
+    return std::string(text);
+}
+// Preserve every pre-existing file; failures are reported by stage and errno.
+// Any partial file is left at its unique name for inspection; never overwritten.
 inline bool uniqueWrite(const std::string& folder,const char* prefix,
-                        const uint8_t* bytes,std::string& filename){
-    if(!bytes)return false;
+                        const uint8_t* bytes,std::string& filename,
+                        std::string& error){
+    error.clear();
+    if(!bytes){error="Null source";return false;}
     for(unsigned i=1;i<=99;i++){
         char base[64];
-        snprintf(base,sizeof(base),"%s%03u.sav",prefix,i);
+        std::snprintf(base,sizeof(base),"%s%03u.sav",prefix,i);
         const std::string full=folder+"/"+base;
-        int fd=open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
-        if(fd<0){if(errno==EEXIST)continue;return false;}
-        size_t n=0;bool good=true;
-        while(n<Size){
-            const ssize_t k=write(fd,bytes+n,Size-n);
-            if(k<=0){good=false;break;}
-            n+=size_t(k);
+        errno=0;
+        int fd=::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
+        if(fd<0){
+            const int e=errno;
+            if(e==EEXIST)continue;
+            error=ioError("open",e);return false;
         }
-        if(good && fsync(fd)!=0)good=false;
-        if(close(fd)!=0)good=false;
-        if(!good)return false; // never overwrite or auto-restore
-        auto back=readExact(full.c_str());
-        if(!back || memcmp(back.get(),bytes,Size)!=0)return false;
+        size_t count=0;
+        while(count<Size){
+            errno=0;
+            const ssize_t n=::write(fd,bytes+count,Size-count);
+            if(n<=0){
+                const int e=errno;
+                error=ioError("write",e);
+                (void)::close(fd);return false;
+            }
+            count+=size_t(n);
+        }
+        errno=0;
+        const int synced=::fsync(fd);
+        const int syncError=errno;
+        errno=0;
+        const int closed=::close(fd);
+        const int closeError=errno;
+        if(synced!=0){
+            error=ioError("fsync",syncError);return false;
+        }
+        if(closed!=0){
+            error=ioError("close",closeError);return false;
+        }
+        const auto back=readExact(full.c_str());
+        if(!back){error="readback open/size";return false;}
+        if(std::memcmp(back.get(),bytes,Size)!=0){
+            error="readback content mismatch";return false;
+        }
         filename=base;
         return true;
     }
+    error="all 99 backup names occupied";
     return false;
 }
 // A deliberately tiny experimental edit surface: +1 to MONEY or an EXISTING item.
@@ -224,17 +256,17 @@ inline Result exportIncrement(const uint8_t* source,const char* importPath,
     if(!directory(root))return {false,"App folder unavailable",0};
     const std::string backups=std::string(root)+"/backups";
     if(!directory(backups.c_str()))return {false,"Backup folder unavailable",0};
-    std::string bk;
-    if(!uniqueWrite(backups,"import_",source,bk))
-        return {false,"Backup failed: no draft",0};
+    std::string bk,backupFailure;
+    if(!uniqueWrite(backups,"import_",source,bk,backupFailure))
+        return {false,"BACKUP: "+backupFailure,0};
     fresh=readExact(importPath);
     if(!fresh||memcmp(fresh.get(),source,Size)!=0)
         return {false,"Stale after backup: no draft",0};
     const std::string drafts=std::string(root)+"/drafts";
     if(!directory(drafts.c_str()))return {false,"Draft folder unavailable",0};
-    std::string df;
-    if(!uniqueWrite(drafts,"h168_",draft.get(),df))
-        return {false,"Draft write/readback failed",0};
+    std::string df,draftFailure;
+    if(!uniqueWrite(drafts,"h168_",draft.get(),df,draftFailure))
+        return {false,"DRAFT: "+draftFailure,0};
     return {true,"OFFLINE draft: "+df,changed};
 }
 } // namespace h168
