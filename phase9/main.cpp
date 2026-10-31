@@ -127,6 +127,7 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
     puts("\nL/R pages, Up/Down select");
     puts("A detail, B cancel, X stage");
     if(s.page==rogue_ui::Page::Party) puts("Party: X IV, Y EV, SELECT move");
+    if(s.page==rogue_ui::Page::Bag) puts("Bag: X quantity, Y candy, SELECT ball");
     puts("START exit. No LIVE game restore.");
 }
 } // namespace
@@ -148,6 +149,7 @@ int main() {
     std::string exportStatus;
     rogue_sandbox::Values values{};
     unsigned selectedField=0;
+    bool chooseMasterBall=false;
     bool dirty = true;
     while (aptMainLoop() && !state.exitRequested) {
         hidScanInput();
@@ -161,8 +163,11 @@ int main() {
                 (previousMode==rogue_ui::Mode::List || previousMode==rogue_ui::Mode::Detail);
             if(stageRequest){
                 if(previousPage==rogue_ui::Page::Summary) requested=rogue_sandbox::Edit::Money;
-                else if(previousPage==rogue_ui::Page::Bag) requested=rogue_sandbox::Edit::ExistingItem;
+                else if(previousPage==rogue_ui::Page::Bag && requested!=rogue_sandbox::Edit::InsertItem)
+                    requested=rogue_sandbox::Edit::ExistingItem;
                 values=rogue_sandbox::Values{};
+                if(requested==rogue_sandbox::Edit::InsertItem && chooseMasterBall)
+                    values.insertItemId=1;
                 selectedField=0;
                 exportStatus.clear();
                 // Party mode was selected by X/Y/SELECT before pressKey.
@@ -210,22 +215,31 @@ int main() {
         }
         else if (keys & KEY_A) pressKey(rogue_ui::Key::Open);
         else if (keys & KEY_X) {
-            if(state.page==rogue_ui::Page::Party &&
-               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail))
-                requested=rogue_sandbox::Edit::AllIV;
+            if(state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail){
+                if(state.page==rogue_ui::Page::Party)requested=rogue_sandbox::Edit::AllIV;
+                else if(state.page==rogue_ui::Page::Bag)requested=rogue_sandbox::Edit::ExistingItem;
+                chooseMasterBall=false;
+            }
             pressKey(rogue_ui::Key::Stage);
         }
         else if (keys & KEY_Y) {
-            if(state.page==rogue_ui::Page::Party &&
-               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail)){
-                requested=rogue_sandbox::Edit::OffensiveEV;
+            if(state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail){
+                if(state.page==rogue_ui::Page::Party)
+                    requested=rogue_sandbox::Edit::OffensiveEV;
+                else if(state.page==rogue_ui::Page::Bag){
+                    requested=rogue_sandbox::Edit::InsertItem;
+                    chooseMasterBall=false;
+                }else requested=rogue_sandbox::Edit::Money;
                 pressKey(rogue_ui::Key::Stage);
             }
         }
         else if (keys & KEY_SELECT) {
-            if(state.page==rogue_ui::Page::Party &&
-               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail)){
-                requested=rogue_sandbox::Edit::FirstMove;
+            if(state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail){
+                if(state.page==rogue_ui::Page::Party)requested=rogue_sandbox::Edit::FirstMove;
+                else if(state.page==rogue_ui::Page::Bag){
+                    requested=rogue_sandbox::Edit::InsertItem;
+                    chooseMasterBall=true;
+                }else requested=rogue_sandbox::Edit::Money;
                 pressKey(rogue_ui::Key::Stage);
             }
         }
