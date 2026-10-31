@@ -9,6 +9,11 @@ This is an EXPERIMENTAL PKSM fork. **Do not install on a physical Nintendo 3DS.*
 - Direct-path installed-content launch with an A-key attempt produces a different but unreadable/visually corrupted screen, run [41156216534](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41156216534). That **is not** verified navigation into PKSM Rogue Inspect.
 - Host-source tests of a copied candidate save passed earlier, but this does not prove game-compatibility or restore safety.
 
+## Stock PKSM control
+- A fresh Azahar 2126.2 profile with **unmodified official FlagBrew PKSM 10.4.2** CIA produces the *same* `PKSM ext data appears to be corrupted` warning and the same unreadable display after automated A input. [Stock control](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41156495959).
+- This strongly indicates the clean emulator environment's FS/extdata support or system setup, **not a fork-specific crash**. It does not establish game-safe writes or console compatibility.
+- Fork source now has a fail-closed SD-data path patch `phase7/patch_sd_isolation.py`, remapping 76 observed upstream references in 16 files from `/3ds/PKSM` to `/3ds/PKSM-Rogue`. Integration passes; the newly isolated native build is pending final compilation verification.
+
 ## Remaining REQUIRED before an installable release
 1. Determine the precise extdata failure and resolve it while preserving data; **never auto-reset extdata on hardware**.
 2. Navigate to `RogueInspectScreen` in emulator, verify SELECT, B, screen switching and error handling.
