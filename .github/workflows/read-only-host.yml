@@ -55,6 +55,8 @@ jobs:
             roguesm_core/source/observed_profile.cpp \
             -o /tmp/rogue-pokemon-stats
           /tmp/rogue-pokemon-stats /tmp/rogue-synthetic.sav
+      - name: Verify source-derived 48-upgrade dependency and eligible-area checks
+        run: python3 tests/test_hub_plan.py
       - name: Verify privacy-preserving GBA ROM fingerprint guard
         run: python3 tests/test_rom_identity.py
       - name: Read-only hub area/upgrade layout validation and refusal tests
