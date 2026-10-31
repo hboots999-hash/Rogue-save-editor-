@@ -24,7 +24,7 @@ jobs:
           name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
           path: build-outputs
           run-id: 41153365442
-          github-token: \${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Verify artifact hashes and CIA/3DSX structure
         shell: bash
         run: |
