@@ -7,6 +7,7 @@ on:
       - '.github/workflows/phase7-native.yml'
       - 'phase7/archive/**'
       - 'phase7/patch_sd_isolation.py'
+      - 'phase7/verified_backup_gate.patch'
   workflow_dispatch:
 
 permissions:
@@ -99,6 +100,10 @@ jobs:
           set -euo pipefail
           python3 phase7-src/tools/apply_to_pksm.py disposable-PKSM
           python3 phase7/patch_sd_isolation.py disposable-PKSM
+          git -C disposable-PKSM apply --check "$GITHUB_WORKSPACE/phase7/verified_backup_gate.patch"
+          git -C disposable-PKSM apply "$GITHUB_WORKSPACE/phase7/verified_backup_gate.patch"
+          echo "Import backup gate patched into Rogue editor (source-only)."
+
           # Block a build if Rogue still shares upstream's main SD folder paths.
           if grep -R -n '/3ds/PKSM/' disposable-PKSM/3ds/source disposable-PKSM/common/include/sound; then
             echo 'Shared PKSM SD paths remain; refusing build' >&2
