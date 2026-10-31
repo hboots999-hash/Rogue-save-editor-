@@ -1,0 +1,85 @@
+name: PKSM Rogue - emulator smoke (NOT A RELEASE)
+
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  emulator-smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout verifier
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Download successful native build
+        uses: actions/download-artifact@v4
+        with:
+          name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
+          path: build-outputs
+          run-id: 41153365442
+          github-token: \${{ secrets.GITHUB_TOKEN }}
+      - name: Verify artifact hashes and CIA/3DSX structure
+        shell: bash
+        run: |
+          set -euo pipefail
+          (cd build-outputs && sed 's#ci-evidence/##' SHA256SUMS.txt | sha256sum -c -)
+          python3 tools/verify_native_artifacts.py build-outputs | tee package-check.json
+      - name: Install Xvfb and software OpenGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth mesa-utils libgl1-mesa-dri imagemagick
+      - name: Download pinned Azahar 2126.2
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 2 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          ./azahar.AppImage --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+      - name: Attempt homebrew 3DSX startup with software OpenGL
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p emulator-evidence
+          set +e
+          xvfb-run -a -s '-screen 0 1280x720x24' bash -c '
+            export LIBGL_ALWAYS_SOFTWARE=1 MESA_GL_VERSION_OVERRIDE=4.3 QT_QPA_PLATFORM=xcb
+            ./squashfs-root/AppRun "$PWD/build-outputs/PKSM_Rogue_Inspect.3dsx" > emulator-evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 25
+            import -display "$DISPLAY" -window root emulator-evidence/window.png 2> emulator-evidence/screenshot.log || true
+            if kill -0 "$pid" 2>/dev/null; then
+              echo PROCESS_SURVIVED_25_SECONDS_NOT_BOOT_VERIFIED > emulator-evidence/process-status.txt
+              kill "$pid" 2>/dev/null || true
+              wait "$pid" 2>/dev/null || true
+              exit 0
+            fi
+            wait "$pid"
+            code=$?
+            echo "PROCESS_EXITED_EARLY_CODE_$code" > emulator-evidence/process-status.txt
+            exit 1
+          '
+          rc=$?
+          set -e
+          echo "smoke_exit_code=$rc" >> emulator-evidence/process-status.txt
+          exit "$rc"
+      - name: Save logs and screenshot, not a CIA release
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase8-emulator-evidence-UNVERIFIED
+          path: |
+            emulator-evidence/
+            package-check.json
+          retention-days: 7
+          if-no-files-found: warn
