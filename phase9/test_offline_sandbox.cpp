@@ -77,6 +77,44 @@ int main(int argc,char** argv){
     r=run(good,initial,rogue_sandbox::Edit::ExistingItem,999);
     assert(!r.ok && !fs::exists(good/"drafts/rogue_003.sav"));
 
+    // Each Pokemon operation starts from the pristine exact toy fixture and
+    // writes to a distinct separate draft, leaving the game/SD import intact.
+    for(const auto op : {rogue_sandbox::Edit::AllIV, rogue_sandbox::Edit::OffensiveEV,
+                         rogue_sandbox::Edit::FirstMove}){
+        const auto toy=setup(temp,op==rogue_sandbox::Edit::AllIV?"all_iv":
+                               op==rogue_sandbox::Edit::OffensiveEV?"offensive_ev":"move_slot",initial);
+        const auto result=run(toy,initial,op,0);
+        assert(result.ok && result.changed>0);
+        assert(read(toy/"imports/00000001.sav")==initial);
+        assert(read(toy/"backups/import_001.sav")==initial);
+        const auto bytes=read(toy/"drafts/rogue_001.sav");
+        assert(bytes.size()==ROGUE_RAW_SAVE_SIZE && bytes!=initial);
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> check(
+            rogue_snapshot_open(bytes.data(),bytes.size()),rogue_snapshot_close);
+        rogue_party_candidate mon{};
+        assert(check && rogue_snapshot_party(check.get(),0,&mon));
+        assert(mon.species_id==25);
+        if(op==rogue_sandbox::Edit::AllIV){
+            for(auto iv:mon.ivs) assert(iv==31);
+            assert(mon.moves[0]==33);
+        }else if(op==rogue_sandbox::Edit::OffensiveEV){
+            const uint8_t spread[]={4,0,0,252,252,0};
+            assert(std::memcmp(mon.evs,spread,6)==0);
+            assert(mon.ivs[0]==10);
+        }else{
+            assert(mon.moves[0]==85);
+            assert(mon.ivs[0]==10);
+        }
+        // Attempt to reuse a stale or unknown copy must never create another
+        // backup or edited draft.
+        auto unknown=initial;unknown[unknown.size()-1]^=0xa5;
+        const auto blockedResult=run(toy,unknown,op);
+        assert(!blockedResult.ok);
+        assert(!fs::exists(toy/"drafts/rogue_002.sav"));
+        const auto badSlot=run(toy,initial,op,1);
+        assert(!badSlot.ok && !fs::exists(toy/"drafts/rogue_002.sav"));
+    }
+
     // Pre-existing names cannot be replaced. Both exports skip occupied slots.
     const auto occupied=setup(temp,"occupied",initial);
     fs::create_directories(occupied/"backups");
@@ -99,5 +137,5 @@ int main(int argc,char** argv){
     assert(read(draftBlocked/"imports/00000001.sav")==initial);
 
     fs::remove_all(temp);
-    std::cout<<"PASS synthetic-only offline money/item export: byte-exact gate, stale input, backup failure, verified copies, exclusive names, draft I/O refusal\n";
+    std::cout<<"PASS synthetic-only offline money/item/IV/EV/move export: byte-exact gate, stale input, backup failure, verified copies, exclusive names, draft I/O refusal\n";
 }
