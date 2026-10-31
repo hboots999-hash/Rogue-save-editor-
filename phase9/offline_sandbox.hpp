@@ -15,10 +15,12 @@
 #include <unistd.h>
 #include "rogue_bridge.h"
 #include "rogue_numeric_edit.h"
+#include "rogue_pokemon_edit.h"
+#include "rogue_moves_items_edit.h"
 
 namespace rogue_sandbox {
 constexpr size_t Size = ROGUE_RAW_SAVE_SIZE;
-enum class Edit { Money, ExistingItem };
+enum class Edit { Money, ExistingItem, AllIV, OffensiveEV, FirstMove };
 struct Result {
     bool ok = false;
     std::string message;
@@ -140,30 +142,80 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
     rogue_preview before{};
     if(!rogue_preview_copy(fresh.get(),Size,&before))
         return {false,"Invalid candidate: BLOCKED",0};
-    rogue_numeric_request request{};
-    request.expected_money=before.money;
-    if(kind==Edit::Money){
-        request.kind=ROGUE_EDIT_MONEY;
-        request.new_money=999999;
-    }else if(kind==Edit::ExistingItem){
-        rogue_item_candidate item{};
-        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snapshot(
-            rogue_snapshot_open(fresh.get(),Size),rogue_snapshot_close);
-        if(!snapshot || !rogue_snapshot_item(snapshot.get(),index,&item))
-            return {false,"Item selection invalid: BLOCKED",0};
-        request.kind=ROGUE_EDIT_EXISTING_QUANTITY;
-        request.slot_index=item.slot_index;
-        request.expected_item_id=item.item_id;
-        request.new_quantity=999;
-    }else return {false,"Unsupported operation: BLOCKED",0};
-
+    // Use the Phase 7 vetted buffer-only routines. Never write a file
+    // unless a fresh parsed snapshot also confirms the requested change.
     size_t changed=0;
-    if(rogue_make_numeric_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
-          !=ROGUE_NUMERIC_OK || changed==0 || changed>Size)
-        return {false,"Editor rejected draft: BLOCKED",0};
+    if(kind==Edit::Money || kind==Edit::ExistingItem){
+        rogue_numeric_request request{};
+        request.expected_money=before.money;
+        if(kind==Edit::Money){
+            request.kind=ROGUE_EDIT_MONEY;
+            request.new_money=999999;
+        }else{
+            rogue_item_candidate item{};
+            std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+                rogue_snapshot_open(fresh.get(),Size),rogue_snapshot_close);
+            if(!snap || !rogue_snapshot_item(snap.get(),index,&item))
+                return {false,"Item selection invalid: BLOCKED",0};
+            request.kind=ROGUE_EDIT_EXISTING_QUANTITY;
+            request.slot_index=item.slot_index;
+            request.expected_item_id=item.item_id;
+            request.new_quantity=999;
+        }
+        if(rogue_make_numeric_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
+            !=ROGUE_NUMERIC_OK)
+            return {false,"Numeric editor rejected draft: BLOCKED",0};
+    }else if(kind==Edit::AllIV || kind==Edit::OffensiveEV || kind==Edit::FirstMove){
+        // The allowlisted test fixture has EXACTLY one toy Pokemon.
+        // Do not extend this selection rule to a real save/profile.
+        if(index!=0 || before.party_count!=1)
+            return {false,"Toy Pokemon selection invalid: BLOCKED",0};
+        rogue_party_candidate initial{};
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+            rogue_snapshot_open(fresh.get(),Size),rogue_snapshot_close);
+        if(!snap || !rogue_snapshot_party(snap.get(),index,&initial)
+           || initial.species_id!=25 || initial.moves[0]!=33)
+            return {false,"Toy Pokemon has unexpected data: BLOCKED",0};
+        if(kind==Edit::FirstMove){
+            rogue_move_request req{};
+            req.party_index=0;
+            req.move_index=0;
+            req.expected_species=initial.species_id;
+            req.expected_personality=2400; // Exact fixture: not a guessed ROM PID
+            req.expected_move=initial.moves[0];
+            req.replacement_move=85;  // Test-only move ID
+            req.replacement_pp=15;
+            if(rogue_make_move_draft(fresh.get(),Size,&req,draft.get(),Size,&changed)
+               !=ROGUE_EXT_OK)
+                return {false,"Move editor rejected draft: BLOCKED",0};
+        }else{
+            rogue_pokemon_stats_request req{};
+            req.party_index=0;
+            req.expected_species=initial.species_id;
+            req.expected_personality=2400; // Exact toy fixture PID
+            if(kind==Edit::AllIV){
+                req.change_ivs=1;
+                for(auto& iv:req.ivs) iv=31;
+            }else{
+                req.change_evs=1;
+                // HP, Atk, Def, Speed, SpAtk, SpDef: 508 valid total
+                const uint8_t spread[6]={4,0,0,252,252,0};
+                std::memcpy(req.evs,spread,sizeof(spread));
+            }
+            if(rogue_make_pokemon_stats_draft(fresh.get(),Size,&req,draft.get(),Size,&changed)
+               !=ROGUE_MON_EDIT_OK)
+                return {false,"Pokemon stats editor rejected draft: BLOCKED",0};
+        }
+    }else return {false,"Unknown edit operation: BLOCKED",0};
+
+    if(changed==0 || changed>Size)
+        return {false,"Draft changed-byte count invalid: BLOCKED",0};
     rogue_preview after{};
     if(!rogue_preview_copy(draft.get(),Size,&after))
         return {false,"Draft parser reload failed",0};
+    if(after.profile!=before.profile || after.party_count!=before.party_count ||
+       after.occupied_bag_slots!=before.occupied_bag_slots)
+        return {false,"Draft structural changes: BLOCKED",0};
     if(kind==Edit::Money && after.money!=999999)
         return {false,"Money readback mismatch",0};
     if(kind==Edit::ExistingItem){
@@ -172,6 +224,22 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
             rogue_snapshot_open(draft.get(),Size),rogue_snapshot_close);
         if(!snap || !rogue_snapshot_item(snap.get(),index,&item) || item.quantity!=999)
             return {false,"Item readback mismatch",0};
+    }
+    if(kind==Edit::AllIV || kind==Edit::OffensiveEV || kind==Edit::FirstMove){
+        rogue_party_candidate mon{};
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+            rogue_snapshot_open(draft.get(),Size),rogue_snapshot_close);
+        if(!snap || !rogue_snapshot_party(snap.get(),index,&mon) || mon.species_id!=25)
+            return {false,"Pokemon draft cannot be decoded: BLOCKED",0};
+        if(kind==Edit::AllIV){
+            for(auto iv:mon.ivs) if(iv!=31)
+                return {false,"IV readback mismatch: BLOCKED",0};
+        }else if(kind==Edit::OffensiveEV){
+            const uint8_t spread[6]={4,0,0,252,252,0};
+            if(std::memcmp(mon.evs,spread,sizeof(spread))!=0)
+                return {false,"EV readback mismatch: BLOCKED",0};
+        }else if(mon.moves[0]!=85)
+            return {false,"Move readback mismatch: BLOCKED",0};
     }
     // Check input A SECOND time immediately before creating an untouched backup.
     fresh=readExact(importPath);
