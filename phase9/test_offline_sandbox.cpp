@@ -194,6 +194,7 @@ int main(int argc,char** argv){
         const auto result=rogue_sandbox::exportOne(initial.data(),
             (folder/"imports/00000001.sav").c_str(),folder.c_str(),
             rogue_sandbox::Edit::InsertItem,0,values);
+        if(!result.ok) std::cerr<<"INSERT ID "<<desired<<": "<<result.message<<"\n";
         assert(result.ok && result.changed>0);
         assert(read(folder/"imports/00000001.sav")==initial);
         assert(read(folder/"backups/import_001.sav")==initial);
