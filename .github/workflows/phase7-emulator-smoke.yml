@@ -1,5 +1,8 @@
 name: PKSM Rogue - emulator launch smoke (diagnostic only)
 on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths: ['.github/workflows/phase7-emulator-smoke.yml']
   workflow_dispatch:
 
 permissions:
