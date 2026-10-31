@@ -167,6 +167,14 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
         if(rogue_make_numeric_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
             !=ROGUE_NUMERIC_OK)
             return {false,"Numeric editor rejected draft: BLOCKED",0};
+    }else if(kind==Edit::InsertItem){
+        rogue_insert_item_request request{};
+        request.expected_money=before.money;
+        request.item_id=values.insertItemId;
+        request.quantity=values.quantity;
+        if(rogue_make_insert_item_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
+           !=ROGUE_EXT_OK)
+            return {false,"Insert-item editor rejected draft: BLOCKED",0};
     }else if(kind==Edit::AllIV || kind==Edit::OffensiveEV || kind==Edit::FirstMove){
         // The allowlisted test fixture has EXACTLY one toy Pokemon.
         // Do not extend this selection rule to a real save/profile.
@@ -215,7 +223,9 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
     if(!rogue_preview_copy(draft.get(),Size,&after))
         return {false,"Draft parser reload failed",0};
     if(after.profile!=before.profile || after.party_count!=before.party_count ||
-       after.occupied_bag_slots!=before.occupied_bag_slots)
+       (after.occupied_bag_slots!=before.occupied_bag_slots &&
+        !(kind==Edit::InsertItem &&
+          after.occupied_bag_slots==before.occupied_bag_slots+1)))
         return {false,"Draft structural changes: BLOCKED",0};
     if(kind==Edit::Money && after.money!=values.money)
         return {false,"Money readback mismatch",0};
@@ -225,6 +235,21 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
             rogue_snapshot_open(draft.get(),Size),rogue_snapshot_close);
         if(!snap || !rogue_snapshot_item(snap.get(),index,&item) || item.quantity!=values.quantity)
             return {false,"Item readback mismatch",0};
+    }
+    if(kind==Edit::InsertItem){
+        bool found=false;
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> snap(
+            rogue_snapshot_open(draft.get(),Size),rogue_snapshot_close);
+        if(!snap)return {false,"Inserted bag not readable: BLOCKED",0};
+        for(unsigned i=0;i<after.occupied_bag_slots;i++){
+            rogue_item_candidate item{};
+            if(rogue_snapshot_item(snap.get(),i,&item) &&
+               item.item_id==values.insertItemId && item.quantity==values.quantity){
+                found=true;
+                break;
+            }
+        }
+        if(!found)return {false,"Inserted item readback mismatch: BLOCKED",0};
     }
     if(kind==Edit::AllIV || kind==Edit::OffensiveEV || kind==Edit::FirstMove){
         rogue_party_candidate mon{};
