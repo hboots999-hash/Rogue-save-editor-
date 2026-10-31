@@ -3,6 +3,9 @@ name: PKSM Rogue Phase 7 - native compile check
 on:
   push:
     branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase7-native.yml'
+      - 'phase7/archive/**'
   workflow_dispatch:
 
 permissions:
