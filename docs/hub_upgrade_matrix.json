@@ -1,0 +1,492 @@
+{
+  "source_repository": "Pokabbie/pokeemerald-rogue",
+  "source_commit": "518b7b4d8381ce865febb581c1e534d67d19d56d",
+  "edition_interpretation": "ROGUE_EXPANSION branches take precedence where present; verify against the exact installed ROM",
+  "kind": "reference only; not authorization for progression writes",
+  "hub_area_count": 11,
+  "hub_upgrade_count": 48,
+  "upgrades": [
+    {
+      "id": 0,
+      "constant": "HUB_UPGRADE_TOWN_SQUARE_SCHOOL",
+      "area_id": 0,
+      "build_cost": 0,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 1,
+      "constant": "HUB_UPGRADE_TOWN_SQUARE_TUTORS",
+      "area_id": 0,
+      "build_cost": 5,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 2,
+      "constant": "HUB_UPGRADE_ADVENTURE_ENTRANCE_RANDOM_STARTER",
+      "area_id": 1,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 3,
+      "constant": "HUB_UPGRADE_ADVENTURE_ENTRANCE_ADVENTURE_REPLAY",
+      "area_id": 1,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 4,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_LAB",
+      "area_id": 2,
+      "build_cost": 0,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 5,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_SLOTS0",
+      "area_id": 2,
+      "build_cost": 5,
+      "requires": [
+        4
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 6,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_SLOTS1",
+      "area_id": 2,
+      "build_cost": 7,
+      "requires": [
+        5
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 7,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_RARITY_RARE",
+      "area_id": 2,
+      "build_cost": 3,
+      "requires": [
+        4
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 8,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_RARITY_EPIC",
+      "area_id": 2,
+      "build_cost": 5,
+      "requires": [
+        7
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 9,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_RARITY_EXOTIC",
+      "area_id": 2,
+      "build_cost": 7,
+      "requires": [
+        8
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 10,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_MON_RARITY_LEGENDARY",
+      "area_id": 2,
+      "build_cost": 0,
+      "requires": [
+        10
+      ],
+      "reserved_self_requirement": true,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 11,
+      "constant": "HUB_UPGRADE_HOME_LOWER_FLOOR",
+      "area_id": 6,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 12,
+      "constant": "HUB_UPGRADE_HOME_UPPER_FLOOR",
+      "area_id": 6,
+      "build_cost": 0,
+      "requires": [
+        12
+      ],
+      "reserved_self_requirement": true,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 13,
+      "constant": "HUB_UPGRADE_HOME_EDIT_STYLE",
+      "area_id": 6,
+      "build_cost": 3,
+      "requires": [
+        11
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 14,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_BREWING",
+      "area_id": 5,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 15,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_BREWING_UPGRADE",
+      "area_id": 6,
+      "build_cost": 0,
+      "requires": [
+        15
+      ],
+      "reserved_self_requirement": true,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 16,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_EXTRA_FIELD0",
+      "area_id": 5,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 17,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_EXTRA_FIELD1",
+      "area_id": 5,
+      "build_cost": 5,
+      "requires": [
+        16
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 18,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_EXTRA_FIELD2",
+      "area_id": 5,
+      "build_cost": 7,
+      "requires": [
+        17
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 19,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_HIGHER_YEILD0",
+      "area_id": 5,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 20,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_HIGHER_YEILD1",
+      "area_id": 5,
+      "build_cost": 5,
+      "requires": [
+        19
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 21,
+      "constant": "HUB_UPGRADE_BERRY_FIELD_HIGHER_YEILD2",
+      "area_id": 5,
+      "build_cost": 7,
+      "requires": [
+        20
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 22,
+      "constant": "HUB_UPGRADE_SAFARI_ZONE_LEGENDS_CAVE",
+      "area_id": 3,
+      "build_cost": 0,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 23,
+      "constant": "HUB_UPGRADE_MARTS_GENERAL_STOCK",
+      "area_id": 7,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 24,
+      "constant": "HUB_UPGRADE_MARTS_POKE_BALLS",
+      "area_id": 7,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 25,
+      "constant": "HUB_UPGRADE_MARTS_POKE_BALLS_STOCK",
+      "area_id": 7,
+      "build_cost": 7,
+      "requires": [
+        24
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 26,
+      "constant": "HUB_UPGRADE_MARTS_TMS",
+      "area_id": 7,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 27,
+      "constant": "HUB_UPGRADE_MARTS_TMS_STOCK",
+      "area_id": 7,
+      "build_cost": 7,
+      "requires": [
+        26
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 28,
+      "constant": "HUB_UPGRADE_MARTS_TRAVELER_BATTLE_ENCHANCERS",
+      "area_id": 7,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 29,
+      "constant": "HUB_UPGRADE_MARTS_TRAVELER_HELD_ITEMS",
+      "area_id": 7,
+      "build_cost": 7,
+      "requires": [
+        28
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 30,
+      "constant": "HUB_UPGRADE_DAY_CARE_CAPACITY0",
+      "area_id": 9,
+      "build_cost": 7,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 31,
+      "constant": "HUB_UPGRADE_DAY_CARE_CAPACITY1",
+      "area_id": 9,
+      "build_cost": 9,
+      "requires": [
+        30
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 32,
+      "constant": "HUB_UPGRADE_DAY_CARE_BREEDER",
+      "area_id": 9,
+      "build_cost": 5,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 33,
+      "constant": "HUB_UPGRADE_DAY_CARE_BREEDER_SEEN_DEX",
+      "area_id": 9,
+      "build_cost": 12,
+      "requires": [
+        32
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 34,
+      "constant": "HUB_UPGRADE_DAY_CARE_BREEDER_LEGENDS",
+      "area_id": 9,
+      "build_cost": 0,
+      "requires": [
+        34
+      ],
+      "reserved_self_requirement": true,
+      "special_quest_or_hidden": true
+    },
+    {
+      "id": 35,
+      "constant": "HUB_UPGRADE_DAY_CARE_PHONE0",
+      "area_id": 9,
+      "build_cost": 7,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 36,
+      "constant": "HUB_UPGRADE_DAY_CARE_TEA_SHOP",
+      "area_id": 9,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 37,
+      "constant": "HUB_UPGRADE_DAY_CARE_EXP_SHARE0",
+      "area_id": 9,
+      "build_cost": 5,
+      "requires": [
+        31
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 38,
+      "constant": "HUB_UPGRADE_DAY_CARE_EXP_SHARE1",
+      "area_id": 9,
+      "build_cost": 9,
+      "requires": [
+        37
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 39,
+      "constant": "HUB_UPGRADE_DAY_CARE_EXP_SHARE2",
+      "area_id": 9,
+      "build_cost": 12,
+      "requires": [
+        38
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 40,
+      "constant": "HUB_UPGRADE_MARKET_POKEBLOCK_BLENDERS",
+      "area_id": 10,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 41,
+      "constant": "HUB_UPGRADE_MARKET_BAKERY",
+      "area_id": 10,
+      "build_cost": 7,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 42,
+      "constant": "HUB_UPGRADE_MARKET_TREAT_SHOP",
+      "area_id": 10,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 43,
+      "constant": "HUB_UPGRADE_MARKET_TREAT_SHOP_STOCK",
+      "area_id": 10,
+      "build_cost": 5,
+      "requires": [
+        42
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 44,
+      "constant": "HUB_UPGRADE_MARKET_BANK",
+      "area_id": 10,
+      "build_cost": 3,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 45,
+      "constant": "HUB_UPGRADE_DAY_CARE_PHONE1",
+      "area_id": 9,
+      "build_cost": 9,
+      "requires": [
+        35
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 46,
+      "constant": "HUB_UPGRADE_DAY_CARE_PHONE2",
+      "area_id": 9,
+      "build_cost": 12,
+      "requires": [
+        45
+      ],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": false
+    },
+    {
+      "id": 47,
+      "constant": "HUB_UPGRADE_LAB_UNIQUE_TYPINGS",
+      "area_id": 2,
+      "build_cost": 0,
+      "requires": [],
+      "reserved_self_requirement": false,
+      "special_quest_or_hidden": true
+    }
+  ]
+}

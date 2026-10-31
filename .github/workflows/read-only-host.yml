@@ -1,0 +1,159 @@
+name: Rogue read-only host checks
+on:
+  push:
+    branches: ["feature/phase3-rogue-inspect"]
+  pull_request:
+    branches: ["main"]
+permissions:
+  contents: read
+jobs:
+  host:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify bridge parses conservatively
+        run: |
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            bridge/bridge_smoke_test.cpp bridge/rogue_bridge.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue_bridge_smoke
+          /tmp/rogue_bridge_smoke
+      - name: Validate deterministic synthetic candidate money and bag
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/synthetic_bridge_test.cpp bridge/rogue_bridge.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue_synthetic_check
+          /tmp/rogue_synthetic_check /tmp/rogue-synthetic.sav
+      - name: Test offline money and existing-item drafts (no game writes)
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_offline_draft.cpp bridge/rogue_edit.cpp \
+            roguesm_core/source/edit_draft.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-offline-draft
+          /tmp/rogue-offline-draft /tmp/rogue-synthetic.sav
+      - name: Validate candidate Pokemon IV/EV encrypted drafts on 24 permutations
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_pokemon_stats.cpp bridge/rogue_pokemon_edit.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-pokemon-stats
+          /tmp/rogue-pokemon-stats /tmp/rogue-synthetic.sav
+      - name: Verify source-derived 48-upgrade dependency and eligible-area checks
+        run: python3 tests/test_hub_plan.py
+      - name: Verify privacy-preserving GBA ROM fingerprint guard
+        run: python3 tests/test_rom_identity.py
+      - name: Read-only hub area/upgrade layout validation and refusal tests
+        run: |
+          python3 tests/generate_synthetic_hub.py /tmp/rogue-hub-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_hub_probe.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/sector.cpp roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp -o /tmp/rogue-hub-probe
+          /tmp/rogue-hub-probe /tmp/rogue-hub-synthetic.sav
+      - name: Compile UI source with host stubs
+        run: |
+          g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ibridge -Iroguesm_core/include \
+            -c pksm_overlay/RogueInspectScreen.cpp -o /tmp/rogue_screen.o
+      - name: Simulate 3DS A/X/START keys and verify offline exports
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
+            tests/test_screen_export.cpp pksm_overlay/RogueInspectScreen.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/edit_draft.cpp \
+            roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-screen-export-test
+          /tmp/rogue-screen-export-test /tmp/rogue-synthetic.sav
+      - name: Simulate 3DS Pokemon X/Y stats drafts and exclusive exports
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
+            tests/test_screen_pokemon_export.cpp pksm_overlay/RogueInspectScreen.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
+            -o /tmp/rogue-screen-mon
+          /tmp/rogue-screen-mon /tmp/rogue-synthetic.sav
+      - name: Validate conservative Master Ball insertion and failure guards
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iroguesm_core/include -Ibridge \
+            tests/test_master_ball_insert.cpp bridge/rogue_ball_insert.cpp \
+            roguesm_core/source/sector.cpp roguesm_core/source/candidate_profile.cpp \
+            roguesm_core/source/observed_profile.cpp -o /tmp/test-master-insert
+          /tmp/test-master-insert /tmp/rogue-synthetic.sav
+      - name: Simulate Bag Y START START Master Ball offline-copy export
+        run: |
+          python3 tests/generate_synthetic_save.py /tmp/rogue-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
+            tests/test_screen_masterball.cpp pksm_overlay/RogueInspectScreen.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp \
+            bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
+            -o /tmp/test-master-screen
+          /tmp/test-master-screen /tmp/rogue-synthetic.sav
+      - name: Verify Hub tab cannot stage money, item, or Pokémon edits
+        run: |
+          python3 tests/generate_synthetic_hub.py /tmp/rogue-hub-synthetic.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Itests/host_stubs -Ipksm_overlay -Ibridge -Iroguesm_core/include \
+            tests/test_screen_hub_readonly.cpp pksm_overlay/RogueInspectScreen.cpp \
+            bridge/rogue_bridge.cpp bridge/rogue_edit.cpp \
+            bridge/rogue_pokemon_edit.cpp bridge/rogue_ball_insert.cpp bridge/rogue_hub_probe.cpp \
+            roguesm_core/source/edit_draft.cpp roguesm_core/source/sector.cpp \
+            roguesm_core/source/candidate_profile.cpp roguesm_core/source/observed_profile.cpp \
+            -o /tmp/test-hub-page
+          /tmp/test-hub-page /tmp/rogue-hub-synthetic.sav
+      - name: Test guarded PKSM overlay patch
+        run: python3 tests/test_pksm_patch.py
+      - name: Test Rogue-only startup guards
+        run: python3 tests/test_startup_restriction.py
+      - name: Test PKSM SD path isolation
+        run: python3 tests/test_isolation.py
+      - name: Syntax-check integration tool
+        run: python3 -m py_compile tools/apply_to_pksm.py
+
+      - name: Fetch pinned PKSM source for actual integration check
+        uses: actions/checkout@v4
+        with:
+          repository: FlagBrew/PKSM
+          ref: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          submodules: recursive
+          path: upstream_pksm
+          persist-credentials: false
+      - name: Apply Rogue overlay to actual PKSM source
+        run: |
+          python3 tools/isolate_pksm.py upstream_pksm
+          python3 tools/apply_to_pksm.py upstream_pksm
+          python3 tools/restrict_startup.py upstream_pksm
+          grep -q 'const bool contentUp = rogueInspectOnly' upstream_pksm/3ds/source/app.cpp
+          ! grep -R -n -F '/3ds/PKSM/' upstream_pksm/3ds/source upstream_pksm/3ds/include upstream_pksm/common/source upstream_pksm/common/include upstream_pksm/core/source upstream_pksm/core/include --include='*.cpp' --include='*.hpp' --include='*.h' --include='*.c' --include='*.tcc' | grep -v '/3ds/PKSM-Rogue/'
+          grep -q 'RogueInspectScreen' upstream_pksm/3ds/source/gui/screen/TitleLoadScreen.cpp
+          grep -q 'source/rogue' upstream_pksm/3ds/Makefile
+          test -f upstream_pksm/3ds/source/gui/screen/RogueInspectScreen.cpp

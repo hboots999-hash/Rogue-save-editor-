@@ -1,0 +1,207 @@
+name: PKSM native 3DS compile (experimental)
+on:
+  workflow_dispatch:
+  push:
+    branches: [feature/phase3-rogue-inspect]
+    paths:
+      - "bridge/**"
+      - "roguesm_core/**"
+      - "pksm_overlay/**"
+      - "tools/apply_to_pksm.py"
+      - "tools/isolate_pksm.py"
+      - "tools/restrict_startup.py"
+      - "tools/install_cia_tools.sh"
+      - ".github/workflows/native-pksm-build.yml"
+permissions:
+  contents: read
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 40
+    container:
+      image: devkitpro/devkitarm:20260610
+    steps:
+      - name: Fetch Rogue code
+        uses: actions/checkout@v4
+        with:
+          path: rogue
+          persist-credentials: false
+      - name: Fetch pinned PKSM including submodules
+        uses: actions/checkout@v4
+        with:
+          repository: FlagBrew/PKSM
+          ref: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          submodules: recursive
+          path: upstream
+          persist-credentials: false
+      - name: Check native prerequisites
+        shell: bash
+        run: |
+          set -euxo pipefail
+          echo "DEVKITPRO=$DEVKITPRO DEVKITARM=$DEVKITARM"
+          export PATH="$DEVKITARM/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
+          arm-none-eabi-g++ --version | head -1
+          python3 --version
+          for cmd in make rsync tex3ds 3dstool makerom bannertool; do
+            command -v "$cmd" || echo "MISSING OPTIONAL: $cmd"
+          done
+          python3 -c 'import git; print("GitPython installed")' || true
+      - name: Isolate inherited PKSM SD paths before overlay
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/isolate_pksm.py upstream
+          git -C upstream diff --check
+      - name: Apply isolated read-only Rogue screen
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/apply_to_pksm.py upstream
+          git -C upstream diff --check
+          grep -q 'RogueInspectScreen' upstream/3ds/source/gui/screen/TitleLoadScreen.cpp
+      - name: Restrict inherited PKSM save scans and updater
+        shell: bash
+        run: |
+          set -euxo pipefail
+          python3 rogue/tools/restrict_startup.py upstream
+          git -C upstream diff --check
+          grep -q 'const bool contentUp = rogueInspectOnly' upstream/3ds/source/app.cpp
+      - name: Compile modified PKSM ELF using devkitARM (packaging tools absent)
+        shell: bash
+        run: |
+          set -o pipefail
+          cd upstream
+          make revision 2>&1 | tee ../native_build.log
+          make -C 3ds -j2 buildelf PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+      - name: Package experimental 3DSX and verify actual file
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd upstream
+          make -C 3ds -j2 "$PWD/3ds/out/PKSM_Rogue_Inspect.3dsx" _ROMFS_DEPS="../assets/romfs/i18n ../assets/romfs/personal" PYTHON=python3 PKSM_TITLE="PKSM Rogue Inspect" PKSM_AUTHOR="FlagBrew" PKSM_DESCRIPTION="Pokemon Rogue read-only inspector" VERSION_MAJOR=10 VERSION_MINOR=4 VERSION_MICRO=2 2>&1 | tee -a ../native_build.log
+          test -s 3ds/out/PKSM_Rogue_Inspect.3dsx
+          python3 -c 'from pathlib import Path; p=Path("3ds/out/PKSM_Rogue_Inspect.3dsx"); assert p.read_bytes()[:4]==b"3DSX"; print(f"Verified 3DSX header and file size: {p.stat().st_size} bytes")'
+          sha256sum 3ds/out/PKSM_Rogue_Inspect.3dsx
+      - name: Install pinned 3DS CIA packaging utilities
+        shell: bash
+        run: |
+          set -euo pipefail
+          bash rogue/tools/install_cia_tools.sh
+          command -v bannertool
+          command -v makerom
+          command -v 3dstool
+      - name: Package experimental isolated CIA (NEVER INSTALL ON USER CONSOLE)
+        shell: bash
+        run: |
+          set -euo pipefail
+          grep -Eq 'UNIQUE_ID[[:space:]]*:=.*0xF73A2' upstream/3ds/Makefile
+          grep -Eq 'Priority[[:space:]]*:[[:space:]]*16' upstream/assets/app.rsf
+          cd upstream
+          make -j2 no-deps PYTHON=python3 2>&1 | tee -a ../native_build.log
+          test -s 3ds/out/PKSM_Rogue_Inspect.cia
+          python3 -c 'from pathlib import Path; p=Path("3ds/out/PKSM_Rogue_Inspect.cia"); assert p.stat().st_size > 1024*1024, p.stat().st_size; print(f"Unverified CIA output: {p.stat().st_size} bytes")'
+          sha256sum 3ds/out/PKSM_Rogue_Inspect.cia
+      - name: Archive unverified CIA for isolated emulator analysis
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: DO-NOT-INSTALL-unverified-Rogue-PKSM-CIA
+          path: upstream/3ds/out/*.cia
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Archive unverified development executables (DO NOT INSTALL)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: do-not-install-experimental-pksm-rogue
+          path: |
+            upstream/3ds/out/*.elf
+            upstream/3ds/out/*.3dsx
+          if-no-files-found: ignore
+          retention-days: 7
+      - name: Summarize native compilation
+        if: always()
+        shell: bash
+        run: |
+          {
+            echo "## Experimental native build"
+            echo "Pinned upstream commit: 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8"
+            echo "This is not an emulator or hardware test, nor proof of installed-save safety."
+            if test -f native_build.log; then echo '### Final compiler output'; tail -n 70 native_build.log; fi
+          } >> "$GITHUB_STEP_SUMMARY"
+      - name: Preserve build logs for review
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-native-build-log
+          path: native_build.log
+          if-no-files-found: ignore
+          retention-days: 7
+
+  emulator:
+    name: Experimental Azahar launch smoke check
+    needs: native
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: do-not-install-experimental-pksm-rogue
+          path: candidate
+      - name: Confirm native build produced a real 3DSX
+        run: |
+          set -euo pipefail
+          test -s candidate/PKSM_Rogue_Inspect.3dsx
+          python3 -c 'from pathlib import Path; p=Path("candidate/PKSM_Rogue_Inspect.3dsx"); assert p.read_bytes()[:4]==b"3DSX"'
+          sha256sum candidate/PKSM_Rogue_Inspect.3dsx
+      - name: Prepare isolated software-rendered emulator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq xvfb scrot libgl1-mesa-dri libopengl0 libegl1 libgles2 libpulse0 libxkbcommon-x11-0 libasound2t64
+          curl -fL --retry 3 --output azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          ./azahar.AppImage --appimage-extract >/dev/null
+          find squashfs-root -name 'libQt6Core.so*' -print | head -5
+          # AppRun sets bundled Qt library paths; bare ldd on AppRun.wrapped is misleading.
+          ldd squashfs-root/AppRun.wrapped | tee azahar-dependencies.txt || true
+      - name: Attempt isolated GUI launch and capture screen
+        env:
+          LIBGL_ALWAYS_SOFTWARE: "1"
+          QT_QPA_PLATFORM: xcb
+          XDG_CONFIG_HOME: /tmp/pksm-rogue-azahar-config
+          XDG_DATA_HOME: /tmp/pksm-rogue-azahar-data
+          XDG_CACHE_HOME: /tmp/pksm-rogue-azahar-cache
+        run: |
+          set -euo pipefail
+          timeout --signal=TERM --kill-after=5s 55s xvfb-run -a -s "-screen 0 1280x800x24" bash -c '
+            set -e
+            ./squashfs-root/AppRun "$1" >azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            if ! kill -0 "$pid" 2>/dev/null; then
+              echo "Azahar process exited before screen inspection" >&2
+              cat azahar.log >&2
+              exit 1
+            fi
+            scrot -q 90 azahar-screen.png
+            kill -TERM "$pid" 2>/dev/null || true
+            sleep 2
+            kill -KILL "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            test -s azahar-screen.png
+            echo "Captured emulator screenshot; visual review is still required."
+          ' bash "$PWD/candidate/PKSM_Rogue_Inspect.3dsx"
+      - name: Upload emulator evidence (NOT a safety certificate)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: experimental-emulator-screenshot-and-logs
+          path: |
+            azahar-screen.png
+            azahar.log
+          if-no-files-found: ignore
+          retention-days: 7
