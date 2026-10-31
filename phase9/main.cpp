@@ -1,6 +1,5 @@
-/* PKSM Rogue Phase 9 experimental native UI: offline READ ONLY.
- * GPL-3.0-or-later. Never mounts extdata or installed game-save archives.
- * Double confirmation is a fail-closed UI rehearsal, NOT an editor release.
+/* PKSM Rogue Phase 9.3: synthetic-only offline editing experiment.
+ * GPL-3.0-or-later. No extdata, installed-game archive, or restore access.
  */
 #include <3ds.h>
 #include <cstdio>
@@ -27,11 +26,12 @@ std::unique_ptr<uint8_t[]> readExact() {
 }
 
 void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
-          const rogue_preview& p, bool inputPresent, bool sandbox, const std::string& status) {
+          const rogue_preview& p, bool inputPresent, bool sandbox, const std::string& status,
+          rogue_sandbox::Edit requested) {
     consoleClear();
     puts("PKSM ROGUE - 3DS RUNTIME TEST");
     puts("==============================");
-    puts("READ ONLY. NO LIVE SAVE ACCESS.");
+    puts("NO LIVE GAME-SAVE ACCESS.");
     printf("PAGE %u/3 - INPUT %s\n",
            static_cast<unsigned>(s.page) + 1u, inputPresent ? "PRESENT" : "MISSING");
     puts(sandbox ? "SYNTHETIC LAB: DRAFTS ENABLED" : "UNKNOWN ROM: READ ONLY");
@@ -48,7 +48,11 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
         puts(sandbox ? "EXACT TOY FIXTURE ONLY." : "REAL SAVE: EXPORT FORBIDDEN.");
         printf("Confirm %u/2 with A, B cancels.\n",
                s.mode == rogue_ui::Mode::ConfirmOne ? 1u : 2u);
-        puts(sandbox ? "Money/item: export separate SD draft." : "Confirmed action will be BLOCKED.");
+        if(s.page==rogue_ui::Page::Party){
+            if(requested==rogue_sandbox::Edit::AllIV) puts("All 6 IVs => 31 (toy only)");
+            else if(requested==rogue_sandbox::Edit::OffensiveEV) puts("EVs 4/0/0/252/252/0 (toy)");
+            else puts("Move slot 1 => ID 85 (toy)");
+        } else puts("Money/item: separate SD draft.");
     } else if (s.mode == rogue_ui::Mode::Blocked) {
         puts(status.empty() ? "BLOCKED - NO SAVE WRITTEN" : status.c_str());
         puts("Import SD copy remains untouched.");
@@ -80,7 +84,8 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
                        item.slot_index, item.item_id, item.quantity);
             else puts("Bag slot could not be decoded.");
         }
-        puts("\nB: back   X: request SD draft");
+        puts("\nB: back  X: IVs  Y: EVs");
+        puts("SELECT: move1 => ID85 (toy)");
     } else if (s.page == rogue_ui::Page::Summary) {
         printf("Marker %u, counter %lu\n", p.serialized_marker,
                static_cast<unsigned long>(p.save_counter));
@@ -110,7 +115,8 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
         }
     }
     puts("\nL/R pages, Up/Down select");
-    puts("A details, B cancel/back, X stage");
+    puts("A detail, B cancel, X stage");
+    if(s.page==rogue_ui::Page::Party) puts("Party: X IV, Y EV, SELECT move");
     puts("START exit. No LIVE game restore.");
 }
 } // namespace
@@ -128,6 +134,7 @@ int main() {
     rogue_ui::State state;
     const bool syntheticLab = snap && rogue_sandbox::exactSynthetic(data.get(),ROGUE_RAW_SAVE_SIZE);
     bool attemptedExport = false;
+    rogue_sandbox::Edit requested = rogue_sandbox::Edit::Money;
     std::string exportStatus;
     bool dirty = true;
     while (aptMainLoop() && !state.exitRequested) {
@@ -138,6 +145,13 @@ int main() {
             const auto previousMode = state.mode;
             const auto previousPage = state.page;
             const unsigned previousSelection = state.selected;
+            const bool stageRequest = key==rogue_ui::Key::Stage &&
+                (previousMode==rogue_ui::Mode::List || previousMode==rogue_ui::Mode::Detail);
+            if(stageRequest){
+                if(previousPage==rogue_ui::Page::Summary) requested=rogue_sandbox::Edit::Money;
+                else if(previousPage==rogue_ui::Page::Bag) requested=rogue_sandbox::Edit::ExistingItem;
+                // Party requested mode set by X/Y/SELECT before pressKey.
+            }
             rogue_ui::press(state, key, info.party_count, info.occupied_bag_slots, supportedCopy);
             if(key == rogue_ui::Key::Open &&
                previousMode == rogue_ui::Mode::ConfirmTwo &&
@@ -146,15 +160,11 @@ int main() {
                     exportStatus = "Unknown ROM: EXPORT BLOCKED";
                 else if(attemptedExport)
                     exportStatus = "One lab export per launch; restart.";
-                else if(previousPage == rogue_ui::Page::Party)
-                    exportStatus = "Pokemon editing not wired yet.";
                 else {
                     attemptedExport = true;
-                    const auto operation = previousPage == rogue_ui::Page::Summary
-                        ? rogue_sandbox::Edit::Money : rogue_sandbox::Edit::ExistingItem;
                     const auto result = rogue_sandbox::exportOne(
                         data.get(),importPath,"sdmc:/3ds/PKSM-Rogue",
-                        operation,previousSelection);
+                        requested,previousSelection);
                     exportStatus = result.message;
                 }
             }
@@ -163,13 +173,32 @@ int main() {
         if (keys & KEY_START) pressKey(rogue_ui::Key::Exit);
         else if (keys & KEY_B) pressKey(rogue_ui::Key::Back);
         else if (keys & KEY_A) pressKey(rogue_ui::Key::Open);
-        else if (keys & KEY_X) pressKey(rogue_ui::Key::Stage);
+        else if (keys & KEY_X) {
+            if(state.page==rogue_ui::Page::Party &&
+               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail))
+                requested=rogue_sandbox::Edit::AllIV;
+            pressKey(rogue_ui::Key::Stage);
+        }
+        else if (keys & KEY_Y) {
+            if(state.page==rogue_ui::Page::Party &&
+               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail)){
+                requested=rogue_sandbox::Edit::OffensiveEV;
+                pressKey(rogue_ui::Key::Stage);
+            }
+        }
+        else if (keys & KEY_SELECT) {
+            if(state.page==rogue_ui::Page::Party &&
+               (state.mode==rogue_ui::Mode::List || state.mode==rogue_ui::Mode::Detail)){
+                requested=rogue_sandbox::Edit::FirstMove;
+                pressKey(rogue_ui::Key::Stage);
+            }
+        }
         else if (keys & KEY_R) pressKey(rogue_ui::Key::NextPage);
         else if (keys & KEY_L) pressKey(rogue_ui::Key::PrevPage);
         else if (keys & KEY_DOWN) pressKey(rogue_ui::Key::Down);
         else if (keys & KEY_UP) pressKey(rogue_ui::Key::Up);
         if (dirty && !state.exitRequested) {
-            show(state, snap.get(), info, data != nullptr, syntheticLab, exportStatus);
+            show(state, snap.get(), info, data != nullptr, syntheticLab, exportStatus, requested);
             dirty = false;
         }
         gspWaitForVBlank();
