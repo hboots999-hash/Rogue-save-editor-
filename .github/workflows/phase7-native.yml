@@ -25,7 +25,24 @@ jobs:
         run: |
           set -euo pipefail
           apt-get update -qq
-          apt-get install -y --no-install-recommends python3-git python3-pip
+          apt-get install -y --no-install-recommends python3-git python3-pip libcurl4-openssl-dev unzip
+          dkp-pacman -Sy --noconfirm --needed 3ds-dev 3ds-portlibs 3ds-pkg-config 3ds-curl 3ds-bzip2 3ds-mpg123 3dstools
+          # PKSM requires external host-side CIA tools in addition to devkitPro.
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /usr/local/bin
+          chmod +x /usr/local/bin/makerom
+          curl -fLsS -o /tmp/bannertool.zip 'https://github.com/Epicpkmn11/bannertool/releases/download/v1.2.2/bannertool.zip'
+          echo 'e4259c08fe8944ebadd5f4b96f9a8603e5427338074cfc46323fbbc3410d51ed  /tmp/bannertool.zip' | sha256sum -c -
+          unzip -qjo /tmp/bannertool.zip 'linux-x86_64/bannertool' -d /usr/local/bin
+          chmod +x /usr/local/bin/bannertool
+          curl -fLsS -o /tmp/3dstool.tar.gz 'https://github.com/dnasdw/3dstool/releases/download/v1.2.6/3dstool_linux_x86_64.tar.gz'
+          echo "3dstool asset SHA256: $(sha256sum /tmp/3dstool.tar.gz)"
+          mkdir -p /tmp/3dstool-dir
+          tar -xzf /tmp/3dstool.tar.gz -C /tmp/3dstool-dir
+          find /tmp/3dstool-dir -maxdepth 3 -type f -name 3dstool -print
+          install -m 0755 "$(find /tmp/3dstool-dir -type f -name 3dstool | head -1)" /usr/local/bin/3dstool
+          command -v curl-config makerom bannertool 3dstool
           echo "DEVKITPRO=${DEVKITPRO:-missing}"
           echo "DEVKITARM=${DEVKITARM:-missing}"
           export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
