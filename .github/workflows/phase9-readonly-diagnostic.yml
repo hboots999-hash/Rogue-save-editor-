@@ -1,4 +1,4 @@
-name: PKSM Rogue Phase 9.2 — native synthetic-only editing shell
+name: PKSM Rogue Phase 9.3 — synthetic native Pokémon editing
 on:
   push:
     branches: [feature/phase7-native-ci]
@@ -62,6 +62,8 @@ jobs:
           cp phase9/offline_sandbox.hpp phase9-build/include/offline_sandbox.hpp
           cp parser-src/editor/rogue_numeric_edit.h phase9-build/include/
           cp parser-src/editor/rogue_numeric_edit.cpp phase9-build/source/
+          cp parser-src/editor/rogue_pokemon_edit.h parser-src/editor/rogue_moves_items_edit.h phase9-build/include/
+          cp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp phase9-build/source/
           cp parser-src/bridge/rogue_bridge.cpp phase9-build/source/rogue_bridge.cpp
           cp parser-src/roguesm_core/source/*.cpp phase9-build/source/
           cp parser-src/bridge/rogue_bridge.h phase9-build/include/
