@@ -82,7 +82,8 @@ inline bool exactSynthetic(const uint8_t* source,size_t n) {
 
 inline std::unique_ptr<uint8_t[]> readExact(const char* path) {
     if(!path)return {};
-    std::unique_ptr<FILE,decltype(&std::fclose)> f(std::fopen(path,"rb"),std::fclose);
+    struct FileClose {void operator()(FILE* f)const {if(f)std::fclose(f);}};
+    std::unique_ptr<FILE,FileClose> f(std::fopen(path,"rb"));
     if(!f)return {};
     std::unique_ptr<uint8_t[]> b(new(std::nothrow) uint8_t[Size]);
     if(!b || std::fread(b.get(),1,Size,f.get())!=Size ||
