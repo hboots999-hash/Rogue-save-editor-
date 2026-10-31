@@ -27,7 +27,8 @@ std::unique_ptr<uint8_t[]> readExact() {
 
 void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
           const rogue_preview& p, bool inputPresent, bool sandbox, const std::string& status,
-          rogue_sandbox::Edit requested) {
+          rogue_sandbox::Edit requested, const rogue_sandbox::Values& values,
+          unsigned selectedField) {
     consoleClear();
     puts("PKSM ROGUE - 3DS RUNTIME TEST");
     puts("==============================");
@@ -48,11 +49,20 @@ void show(const rogue_ui::State& s, const rogue_snapshot* snapshot,
         puts(sandbox ? "EXACT TOY FIXTURE ONLY." : "REAL SAVE: EXPORT FORBIDDEN.");
         printf("Confirm %u/2 with A, B cancels.\n",
                s.mode == rogue_ui::Mode::ConfirmOne ? 1u : 2u);
-        if(s.page==rogue_ui::Page::Party){
-            if(requested==rogue_sandbox::Edit::AllIV) puts("All 6 IVs => 31 (toy only)");
-            else if(requested==rogue_sandbox::Edit::OffensiveEV) puts("EVs 4/0/0/252/252/0 (toy)");
-            else puts("Move slot 1 => ID 85 (toy)");
-        } else puts("Money/item: separate SD draft.");
+        puts("Selected proposal (synthetic only):");
+        for(unsigned i=0;i<rogue_sandbox::fieldCount(requested);++i)
+            printf("%c %s: %lu\n", i==selectedField ? '>' : ' ',
+                rogue_sandbox::fieldName(requested,i),
+                static_cast<unsigned long>(rogue_sandbox::fieldValue(requested,values,i)));
+        if(requested==rogue_sandbox::Edit::OffensiveEV)
+            printf("Total EV: %u / 510\n",rogue_sandbox::evTotal(values));
+        if(!rogue_sandbox::valid(requested,values))
+            puts("INVALID INPUT - CHANGE VALUES");
+        if(s.mode==rogue_ui::Mode::ConfirmOne){
+            puts("Up/Down field; Left/Right +/-1");
+            puts("L/R +/-10 (money +/-10000)");
+            puts("A: review values; B: cancel");
+        }else puts("A: export SD draft; B: cancel");
     } else if (s.mode == rogue_ui::Mode::Blocked) {
         puts(status.empty() ? "BLOCKED - NO SAVE WRITTEN" : status.c_str());
         puts("Import SD copy remains untouched.");
@@ -136,6 +146,8 @@ int main() {
     bool attemptedExport = false;
     rogue_sandbox::Edit requested = rogue_sandbox::Edit::Money;
     std::string exportStatus;
+    rogue_sandbox::Values values{};
+    unsigned selectedField=0;
     bool dirty = true;
     while (aptMainLoop() && !state.exitRequested) {
         hidScanInput();
@@ -150,7 +162,16 @@ int main() {
             if(stageRequest){
                 if(previousPage==rogue_ui::Page::Summary) requested=rogue_sandbox::Edit::Money;
                 else if(previousPage==rogue_ui::Page::Bag) requested=rogue_sandbox::Edit::ExistingItem;
-                // Party requested mode set by X/Y/SELECT before pressKey.
+                values=rogue_sandbox::Values{};
+                selectedField=0;
+                exportStatus.clear();
+                // Party mode was selected by X/Y/SELECT before pressKey.
+            }
+            if(previousMode==rogue_ui::Mode::ConfirmOne &&
+               key==rogue_ui::Key::Open && !rogue_sandbox::valid(requested,values)){
+                exportStatus="Invalid values: adjust before confirmation.";
+                dirty=true;
+                return;
             }
             rogue_ui::press(state, key, info.party_count, info.occupied_bag_slots, supportedCopy);
             if(key == rogue_ui::Key::Open &&
@@ -164,7 +185,7 @@ int main() {
                     attemptedExport = true;
                     const auto result = rogue_sandbox::exportOne(
                         data.get(),importPath,"sdmc:/3ds/PKSM-Rogue",
-                        requested,previousSelection);
+                        requested,previousSelection,values);
                     exportStatus = result.message;
                 }
             }
@@ -172,6 +193,21 @@ int main() {
         };
         if (keys & KEY_START) pressKey(rogue_ui::Key::Exit);
         else if (keys & KEY_B) pressKey(rogue_ui::Key::Back);
+        else if(state.mode==rogue_ui::Mode::ConfirmOne &&
+                (keys & (KEY_UP|KEY_DOWN|KEY_LEFT|KEY_RIGHT|KEY_L|KEY_R))){
+            const unsigned count=rogue_sandbox::fieldCount(requested);
+            if((keys & KEY_UP) && selectedField>0) --selectedField;
+            else if((keys & KEY_DOWN) && selectedField+1<count) ++selectedField;
+            else if(keys & KEY_LEFT) rogue_sandbox::adjust(requested,values,selectedField,-1);
+            else if(keys & KEY_RIGHT) rogue_sandbox::adjust(requested,values,selectedField,1);
+            else if(keys & KEY_L)
+                rogue_sandbox::adjust(requested,values,selectedField,
+                    -rogue_sandbox::largeStep(requested));
+            else if(keys & KEY_R)
+                rogue_sandbox::adjust(requested,values,selectedField,
+                    rogue_sandbox::largeStep(requested));
+            dirty=true;
+        }
         else if (keys & KEY_A) pressKey(rogue_ui::Key::Open);
         else if (keys & KEY_X) {
             if(state.page==rogue_ui::Page::Party &&
@@ -198,7 +234,8 @@ int main() {
         else if (keys & KEY_DOWN) pressKey(rogue_ui::Key::Down);
         else if (keys & KEY_UP) pressKey(rogue_ui::Key::Up);
         if (dirty && !state.exitRequested) {
-            show(state, snap.get(), info, data != nullptr, syntheticLab, exportStatus, requested);
+            show(state, snap.get(), info, data != nullptr, syntheticLab, exportStatus,
+                 requested, values, selectedField);
             dirty = false;
         }
         gspWaitForVBlank();
