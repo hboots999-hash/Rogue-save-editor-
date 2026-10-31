@@ -18,6 +18,11 @@ struct Validation {
     unsigned changed=0;
     unsigned oldValue=0,newValue=0;
     unsigned targetItem=0;
+    Validation(bool v=false,std::string msg={},unsigned n=0,unsigned old=0,
+               unsigned next=0,unsigned id=0)
+        : ok(v),reason(std::move(msg)),changed(n),oldValue(old),
+          newValue(next),targetItem(id) {}
+
 };
 inline Validation validate(const uint8_t* before,const uint8_t* after,
                            Operation operation,unsigned itemIndex=0){
