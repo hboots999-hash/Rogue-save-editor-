@@ -40,7 +40,7 @@ jobs:
       - name: Install software-rendered X display for emulator
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils x11-apps xdotool imagemagick libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils x11-apps xdotool openbox imagemagick libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
       - name: Download official Azahar emulator release
         run: |
           set -euo pipefail
@@ -61,14 +61,21 @@ jobs:
           export QT_OPENGL=software
           xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
             set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            sleep 2
             ./azahar.AppImage --appimage-extract-and-run > evidence/emulator.log 2>&1 &
             PID=$!
             sleep 10
-            xdotool search --name "Azahar" windowactivate --sync 2>/dev/null || true
+            azahar_window=$(xdotool search --name "Azahar" | head -1)
+            echo "Azahar window id: $azahar_window" > evidence/focus-check.txt
+            xdotool windowactivate --sync "$azahar_window"
+            xdotool windowfocus --sync "$azahar_window"
+            xdotool getactivewindow getwindowname >> evidence/focus-check.txt 2>&1 || true
             # Use the GUI File > Load File shortcut. The AppImage command line
             # accepted the path yet left Azahar at its empty library screen.
             xdotool key --clearmodifiers ctrl+o
             sleep 2
+            xwd -root -silent -out evidence/dialog-screen.xwd 2>/dev/null || true
             xdotool key --clearmodifiers ctrl+l
             xdotool type --clearmodifiers --delay 4 "$1"
             xdotool key Return
@@ -86,6 +93,10 @@ jobs:
           if test -s evidence/screen.xwd; then
             convert evidence/screen.xwd -resize 1100x900\> evidence/screen.png || true
             rm -f evidence/screen.xwd
+          fi
+          if test -s evidence/dialog-screen.xwd; then
+            convert evidence/dialog-screen.xwd -resize 1100x900\> evidence/dialog-screen.png || true
+            rm -f evidence/dialog-screen.xwd
           fi
           cp binary-types.txt binary-sha256.txt azahar-sha256.txt evidence/
           ls -lh evidence/
