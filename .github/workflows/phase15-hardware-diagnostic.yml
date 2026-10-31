@@ -170,3 +170,62 @@ jobs:
           name: phase15-H168-experimental-CIA-READONLY
           path: experimental/
           retention-days: 7
+
+  install-cia:
+    name: Isolated Azahar installed-CIA launch smoke, no privileged access
+    needs: [package-cia]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase15-H168-experimental-CIA-READONLY
+          path: experimental
+      - name: Install separate CIA title, run installed content without Y/A
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence
+          export XDG_DATA_HOME="$PWD/installed-test" XDG_CONFIG_HOME="$PWD/installed-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          CIA="$(realpath experimental/PKSMRogue-Phase15-READONLY-NOT-RELEASE.cia)"
+          export CIA
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 timeout 55s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
+            pid=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$pid" || true
+            find installed-test -type f -name "*.app" -printf "%p %s bytes\n" > evidence/installed-files.txt || true
+            app=$(find installed-test -type f -name "*.app" -path "*0f73a400*" -print -quit)
+            if [ -z "$app" ]; then echo INSTALL_FAILED; exit 4; fi
+            app=$(realpath "$app")
+            printf "%s\n" "$app" > evidence/installed-path.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$app" > evidence/installed-guest.log 2>&1 &
+            guest=$!
+            sleep 20
+            import -window root evidence/installed-start.png || true
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+          '
+          test -s evidence/installed-path.txt
+          test -s evidence/installed-start.png
+          echo 'PASS: standalone Phase15 CIA installed and executed as isolated title'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase15-H168-installed-CIA-Azahar-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
