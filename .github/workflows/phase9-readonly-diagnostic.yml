@@ -112,6 +112,8 @@ jobs:
           mkdir -p evidence
           mkdir -p "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
           python3 phase7/create_synthetic_fixture.py "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          IMPORT="$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          BEFORE_SHA="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
           export XDG_DATA_HOME="$PWD/test-user-data"
           export XDG_CONFIG_HOME="$PWD/test-user-config"
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
@@ -139,11 +141,37 @@ jobs:
             xdotool keyup w
             sleep 5
             import -window root evidence/page2.png
+            # Expected default Azahar keys: A=a, B=s, X=z.
+            # Screenshots allow inspection; host tests prove the state transitions.
+            xdotool key --clearmodifiers a
+            sleep 2
+            import -window root evidence/detail.png
+            xdotool key --clearmodifiers s
+            sleep 1
+            xdotool key --clearmodifiers z
+            sleep 2
+            import -window root evidence/confirm1.png
+            xdotool key --clearmodifiers a
+            sleep 1
+            xdotool key --clearmodifiers a
+            sleep 2
+            import -window root evidence/blocked.png
+            xdotool key --clearmodifiers s
+            sleep 1
             kill "$PID" 2>/dev/null || true
             wait "$PID" 2>/dev/null || true
           '
           test -s evidence/page1.png
           test -s evidence/page2.png
+          test -s evidence/detail.png
+          test -s evidence/confirm1.png
+          test -s evidence/blocked.png
+          AFTER_SHA="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
+          printf '%s\n' "synthetic import sha256 before: $BEFORE_SHA" "synthetic import sha256 after: $AFTER_SHA" > evidence/no-write-check.txt
+          test "$BEFORE_SHA" = "$AFTER_SHA"
+          test ! -e "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts"
+          test ! -e "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups"
+          echo 'PASS: synthetic import unchanged and no draft/backup directory created' | tee -a evidence/no-write-check.txt
           compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
           echo 'Emulator screenshots require manual review; pixel difference is not guest-navigation proof.'
       - uses: actions/upload-artifact@v4
