@@ -168,13 +168,40 @@ inline Result exportOne(const uint8_t* expectedOriginal,const char* importPath,
             !=ROGUE_NUMERIC_OK)
             return {false,"Numeric editor rejected draft: BLOCKED",0};
     }else if(kind==Edit::InsertItem){
-        rogue_insert_item_request request{};
-        request.expected_money=before.money;
-        request.item_id=values.insertItemId;
-        request.quantity=values.quantity;
-        if(rogue_make_insert_item_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
-           !=ROGUE_EXT_OK)
-            return {false,"Insert-item editor rejected draft: BLOCKED",0};
+        // Existing entries are not inserted twice; the Phase 7 insertion API
+        // correctly refuses duplicates. Update the existing stack instead,
+        // otherwise use its conservatively validated pocket insertion path.
+        std::unique_ptr<rogue_snapshot,decltype(&rogue_snapshot_close)> bag(
+            rogue_snapshot_open(fresh.get(),Size),rogue_snapshot_close);
+        if(!bag)return {false,"Bag not readable: BLOCKED",0};
+        bool existing=false;
+        for(unsigned i=0;i<before.occupied_bag_slots;i++){
+            rogue_item_candidate item{};
+            if(!rogue_snapshot_item(bag.get(),i,&item))
+                return {false,"Bag decode failed: BLOCKED",0};
+            if(item.item_id==values.insertItemId){
+                rogue_numeric_request request{};
+                request.kind=ROGUE_EDIT_EXISTING_QUANTITY;
+                request.expected_money=before.money;
+                request.slot_index=item.slot_index;
+                request.expected_item_id=item.item_id;
+                request.new_quantity=values.quantity;
+                if(rogue_make_numeric_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
+                   !=ROGUE_NUMERIC_OK)
+                    return {false,"Existing item update rejected: BLOCKED",0};
+                existing=true;
+                break;
+            }
+        }
+        if(!existing){
+            rogue_insert_item_request request{};
+            request.expected_money=before.money;
+            request.item_id=values.insertItemId;
+            request.quantity=values.quantity;
+            if(rogue_make_insert_item_draft(fresh.get(),Size,&request,draft.get(),Size,&changed)
+               !=ROGUE_EXT_OK)
+                return {false,"Unknown bag pocket: new item BLOCKED",0};
+        }
     }else if(kind==Edit::AllIV || kind==Edit::OffensiveEV || kind==Edit::FirstMove){
         // The allowlisted test fixture has EXACTLY one toy Pokemon.
         // Do not extend this selection rule to a real save/profile.
