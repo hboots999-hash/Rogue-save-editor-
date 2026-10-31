@@ -1,7 +1,7 @@
 name: Phase 13 real live save -> safe SD edit draft
 on:
   push:
-    branches: [feature/phase7-native-ci]
+    branches: [feature/phase7-native-ci, feature/phase13-hardening]
     paths:
       - '.github/workflows/phase13-live-draft.yml'
       - 'phase13/**'
@@ -35,6 +35,8 @@ jobs:
           /tmp/restore_preflight_test /tmp/h168-one-bank.sav
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase10/preview -Iphase12 -Iphase13 phase13/test_live_draft.cpp -o /tmp/live_draft_test
           /tmp/live_draft_test /tmp/h168-one-bank.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase10/preview -Iphase12 -Iphase13 phase13/test_fail_closed.cpp -o /tmp/live_fail_closed_test
+          /tmp/live_fail_closed_test /tmp/h168-one-bank.sav
           if grep -E '^[[:space:]]*(rc|res)[[:space:]]*=[[:space:]]*FSPXI_(Write|Create|Delete)' phase11/live_read.hpp; then echo 'FORBIDDEN privileged writes'; exit 1; fi
           g++ -std=c++17 -O1 -g -fsanitize=address,undefined \
             -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror \
