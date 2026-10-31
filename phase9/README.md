@@ -1,26 +1,31 @@
-# Phase 9 — independent, extdata-free 3DS runtime (NOT A RELEASE)
+# PKSM Rogue Phase 9.2 — synthetic-only offline editor
 
-This is a separate diagnostic 3DSX built from the **same** candidate save bridge as the experimental PKSM fork. It deliberately avoids official PKSM's extdata startup path, installed title access, backup/restore APIs, and all output/save-writing functions. Do **not** install a GitHub CI CIA on physical hardware.
+**EMULATOR EXPERIMENT ONLY — DO NOT INSTALL CIA ON A PHYSICAL 3DS.**
 
-## Existing native evidence
+This extdata-free 3DS application is separate from full PKSM Rogue. It uses the previously tested Phase 7 candidate parser and numeric editor, without accessing an installed game save, restoring a game, or touching PKSM extdata.
 
-- The original 3DSX built and ran in Azahar 2126.2, reading a wholly synthetic 128-KiB SD-copy fixture and showing money 40000, party 1, bag 3, species ID 25, HP IV 10: [run 41158813605](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41158813605).
-- Phase 9.1 adds read-only details for selected party Pokémon (numeric species, held item, nature, ability slot, IVs/EVs, four moves) and bag items, with an isolated ui_state.hpp input model. Native 3DS compilation, ASan/UBSan host contract tests, and emulator launch workflow passed: [run 41159666627](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159666627).
-- The follow-up workflow [41159780175](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159780175) succeeded: it sent additional guest A/B/X keyboard events, captured detail/confirmation/blocked-labelled screenshots, verified the synthetic imported fixture SHA-256 was unchanged, and verified no backup or draft directory was created. The screenshot **contents still require human review** before we can claim individual guest modal controls were observed. These checks demonstrate no-write safety only.
+## Verified achievements
+
+- Phase 9 numerical party/bag read-only viewer launched with synthetic save: [41158813605](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41158813605).
+- Phase 9.1 navigation, details, host sanitizers, native build and Azahar: [41159666627](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159666627).
+- Phase 9.2 integrates the EXISTING Phase 7 numeric money / existing-item quantity editors with a separate native SD-copy backup-and-draft gate (phase9/offline_sandbox.hpp). It accepts ONLY the exact, deterministic, non-playable 131072-byte Phase 7 synthetic fixture. All real or unknown Emerald Rogue saves are READ-ONLY.
+- On synthetic data only, money can be staged at 999999 or a selected existing bag item quantity at 999. Import is reread, compared against the session original, backed up with exclusive create, byte-for-byte reverified and never overwritten. Drafts likewise use exclusive names and readback. Any failed step blocks export.
+- Synthetic host tests, including stale-source, blocked directories, existing filename collisions, re-verification and ASan/UBSan passed: [41160327093](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41160327093).
+- Native Azahar guest button sequence successfully created a synthetic 999999-money draft and untouched backup; the screenshot showed SYNTHETIC DRAFT: rogue_001.sav. Emulator test passed: [41160686927](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41160686927).
+- Experimental CIA packaging, native build, guest synthetic edit test and host tests all passed: [41160794180](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41160794180). The resulting emulator-only artifact is named PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia. Experimental Title ID: 000400000F73A300, distinct from Phase 7 full fork 000400000F73A200. This is NOT a tested console release. The separate isolated installed-CIA emulator guest test is pending.
 
 ## Controls
 
-- L/R: pages (summary / party / bag); D-pad up/down: select a party or bag entry; A: numeric detail screen; B: return/cancel; START: exit.
-- X: rehearse an edit request; A first and second confirmation; after both confirmations display **EDIT BLOCKED - NO SAVE WRITTEN**; B returns to viewer.
-- This is not a functioning money, bag, IV/EV, or move editor on 3DS. Phase 7/8 already contain offline candidate editors and the distinct verified SD-import backup gate, but they are **not integrated into this independent Phase 9 shell**. No installed game save is accessible here.
+L/R change summary, party and bag pages; Up/Down select; A opens details; B cancels or returns; START exits. On the exact synthetic fixture ONLY, Summary X then A then A stages a separate 999999 money draft, while Bag X then A then A stages the selected existing item's quantity at 999. At most one native draft export occurs per app launch; import and installed game save remain untouched.
 
-The optional input is a COPY at sdmc:/3ds/PKSM-Rogue/imports/00000001.sav, exactly 131072 bytes. The simulator's synthetic fixture is not playable. Unsupported/missing input is rejected; the UI should still allow page navigation and safe exit.
+All other save files remain read-only. Phase 7/8 move and IV/EV writers exist but are not yet connected to Phase 9.2. No species, nature, ability, held item, PC, hub area, upgrade or live-restore editor is available here.
 
-## What remains before MVP and any hardware use
+## Next steps before an installable release
 
-1. Integrate the already-tested Phase 7/8 candidate editing and byte-verified import-backup/draft mechanisms with a stable emulator-native UI, without weakening readback, O_EXCL, or stale-import rejection.
-2. Add a ROM-build-specific compatibility allowlist, validated against an exact disposable patched Emerald Rogue ROM and save. Fail closed for unknown versions, unsupported items/pockets or fields.
-3. Run guest emulator input sequences and negative I/O tests on entirely synthetic data; collect and inspect screenshots and on-disk before/after evidence.
-4. Validate disposable game save extraction/restore and recovery with the correct game build. Only thereafter consider a separate hardware-safe release candidate with distinct title ID/SD paths, hashes and rollback instructions.
+1. Verify isolated CIA install/launch and safe exit in Azahar. Packaging success is not proof of installed launch.
+2. Integrate existing offline move and IV/EV writers into this native UI with strict stale-data and failure tests.
+3. Validate exactly the user's patched Emerald Rogue ROM/build and disposable save; add build-specific compatibility allowlist only with positive evidence. Unverified saves remain read-only.
+4. Validate live-archive backup and disposable game-save restore with correct ROM, then console safety and rollback without touching the user's installed game until the release gates pass.
+5. Resolve the full PKSM UI's extdata startup setup and confirm isolated title and SD paths; only then consider a hardware release CIA.
 
-A successful host test, 3DS compiler job, or Azahar launch is **not proof** that a draft plays correctly in the user's Emerald Rogue build or that the CIA is safe to install.
+No personal ROM or .sav is in public GitHub; CI artifacts expire, but source and PROJECT_HANDOFF.md remain.
