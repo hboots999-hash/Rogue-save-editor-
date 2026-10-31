@@ -1,6 +1,6 @@
 # PKSM Rogue Edition — release gates (31 October 2026)
 
-**Current artifacts:** (1) Phase 9.4 full-feature *synthetic-only* lab, not for installation; (2) Phase 10 minimal H168 SD-copy-only preview CIA/3DSX with physical startup unverified and explicitly experimental.
+**Current artifacts:** (1) Phase 9.4 full-feature *synthetic-only* lab; (2) Phase 12 physical 3DS live read+backup test; (3) Phase 13 current-live-save-derived SD draft code, not yet tested on hardware. No direct live restoration yet.
 
 The branch has an extdata-free native 3DS editor that reads a copied 128-KiB SD import. Phase 9.4 links already-developed offline editors for money, quantities, party IVs/EVs, moves (ID/slot/PP), and permitted ball / Rare Candy stack updates or insertion. It supports range-limited on-device numerical controls and two A confirmations. A **full-file exact synthetic fixture match** is required before any draft export; any other file is view-only. Exports create unique untouched backup and unique separate draft on SD with byte readback. No installed-game archive is mounted or restored.
 
@@ -19,6 +19,8 @@ This is *not* release-equivalent to an installed game save editor, even if compi
 | G. Release approval | All above passing, checksummed release, installation and rollback guide, verified no personal saves/ROMs in artifacts | **NOT APPROVED** |
 
 **Phase 11 live GBA VC reader (read-only):** New `phase11/` native bridge triggers only with Y and uses Luma PxiFS0 read-only access to the exact installed H168 GBA VC title; title-ID, slot, and dual-bank validation are required. **No native direct writes/restores or CMAC handling are enabled.** Hardware compatibility of this reader remains unverified; Checkpoint's separate confirmed restore path requires title-specific CMAC signing. See `phase11/README.md`.
+
+**Phase 13 candidate preflight:** Strict H168 validation now checks only money +1 or existing item +1 edits from fresh real game snapshots and writes an immutable verified SD backup plus separate edited SD draft. It does NOT write live GBA VC archive. Remaining blockers: authenticated CMAC signed write/rollback, live gameplay re-save and full Pokémon editor port. See `phase13/README.md`.
 
 ## Allowed and forbidden work now
 
