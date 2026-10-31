@@ -1,0 +1,92 @@
+name: PKSM Rogue Phase 7 - native compile check
+
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-build:
+    name: Compile experimental PKSM Rogue source (not a release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - name: Checkout own source, without personal saves
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install GitPython and verify 3DS compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3-git python3-pip
+          echo "DEVKITPRO=${DEVKITPRO:-missing}"
+          echo "DEVKITARM=${DEVKITARM:-missing}"
+          arm-none-eabi-g++ --version | head -1
+          for tool in 3dstool tex3ds makerom bannertool arm-none-eabi-pkg-config; do
+            command -v "$tool" || echo "MISSING TOOL: $tool"
+          done
+      - name: Authenticate Phase 7 source using fixed SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find phase7/archive -name '*.b64' -type f | wc -l)" -eq 7
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 --decode > /tmp/pksm-rogue-phase7-source.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/pksm-rogue-phase7-source.tar.xz' | sha256sum --check
+          mkdir -p phase7-src
+          tar -xJf /tmp/pksm-rogue-phase7-source.tar.xz -C phase7-src --no-same-owner
+          test -f phase7-src/tools/native_preflight.py
+          test -f phase7-src/tools/apply_to_pksm.py
+          test -f phase7-src/pksm_overlay/RogueInspectScreen.cpp
+          if find phase7-src -type f \( -iname '*.sav' -o -iname '*.cia' \) | grep -q .; then
+            echo 'Unexpected save or executable in source archive' >&2
+            exit 1
+          fi
+      - name: Fetch pinned upstream PKSM and submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --recursive https://github.com/FlagBrew/PKSM.git disposable-PKSM
+          git -C disposable-PKSM checkout 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          git -C disposable-PKSM submodule update --init --recursive
+          git -C disposable-PKSM diff --exit-code
+          test "$(git -C disposable-PKSM rev-parse HEAD)" = '9cad15694c1e90cc058ddd285eb68d56c7ad9ac8'
+      - name: Preflight - no source edits on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase7-src/tools/native_preflight.py disposable-PKSM --json | tee native-preflight.json
+      - name: Integrate Phase 7 only into disposable PKSM tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase7-src/tools/apply_to_pksm.py disposable-PKSM
+      - name: Compile 3DS files and record errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C disposable-PKSM 3ds-debug 2>&1 | tee native-build.log
+      - name: Record artifacts as unsafe experimental outputs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-evidence
+          cp native-preflight.json ci-evidence/ 2>/dev/null || true
+          cp native-build.log ci-evidence/ 2>/dev/null || true
+          find disposable-PKSM/3ds -maxdepth 3 -type f \( -name '*.cia' -o -name '*.3dsx' -o -name '*.elf' \) -exec cp {} ci-evidence/ \; 2>/dev/null || true
+          printf '%s\n' 'EXPERIMENTAL; NOT DEVICE TESTED; DO NOT INSTALL OR RESTORE SAVES.' > ci-evidence/DO_NOT_INSTALL.txt
+          sha256sum ci-evidence/* > ci-evidence/SHA256SUMS.txt || true
+      - name: Upload build logs and experimental files (NOT a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 7
