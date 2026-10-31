@@ -17,7 +17,7 @@ Main development branch: `feature/phase7-native-ci` (untouched)
 ## Verified so far
 - Host normal and ASan/UBSan synthetic diagnostic tests, inherited Phase 14 and Phase 11–13 regressions: **PASS** in GitHub Actions latest build before this handoff update.
 - Native devkitPro 3DSX/ELF compile and explicit forbidden live-write symbol check: **PASS** in the same run.
-- Azahar launch and CIA packaging: see [Phase 15 Actions](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase15-hardware-diagnostic.yml); do not assume PASS without a completed successful run.
+- All **five GitHub Actions jobs PASS** at [Phase 15 CI run 41253909119](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41253909119): synthetic host (including Phase 14 regressions), native 3DS ELF/3DSX and no-privileged-write-symbol guard, Azahar 3DSX UI launch, isolated CIA packaging, and isolated **installed-CIA** Azahar UI launch. The separate physical Luma PxiFS0/CMAC path and SD scratch operation are not exercised by Azahar.
 - **NOT TESTED:** read-only full-container CMAC calls on the user's physical console, native SD scratch-file readback, real recovery journal lifecycle, durability under power loss, direct restore, rollback and gameplay resave. A deterministic host MAC DOUBLE is not Nintendo CMAC.
 
 ## Integration
