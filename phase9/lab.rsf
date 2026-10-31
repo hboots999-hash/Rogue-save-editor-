@@ -1,0 +1,15 @@
+BasicInfo:
+  Title: "PKSM Rogue Lab"
+  ProductCode: "CTR-P-PRLB"
+  Logo: Homebrew
+TitleInfo:
+  Category: Application
+  UniqueId: 0xF73A3
+Option:
+  UseOnSD: true
+  FreeProductCode: true
+  MediaFootPadding: false
+  EnableCrypt: false
+  EnableCompress: true
+AccessControlInfo:
+  UseExtSaveData: false
