@@ -1,6 +1,6 @@
 # PKSM Rogue Edition — release gates (31 October 2026)
 
-**Current artifact: SYNTHETIC-LAB / EMULATOR ONLY / DO NOT INSTALL ON PHYSICAL 3DS.**
+**Current artifacts:** (1) Phase 9.4 full-feature *synthetic-only* lab, not for installation; (2) Phase 10 minimal H168 SD-copy-only preview CIA/3DSX with physical startup unverified and explicitly experimental.
 
 The branch has an extdata-free native 3DS editor that reads a copied 128-KiB SD import. Phase 9.4 links already-developed offline editors for money, quantities, party IVs/EVs, moves (ID/slot/PP), and permitted ball / Rare Candy stack updates or insertion. It supports range-limited on-device numerical controls and two A confirmations. A **full-file exact synthetic fixture match** is required before any draft export; any other file is view-only. Exports create unique untouched backup and unique separate draft on SD with byte readback. No installed-game archive is mounted or restored.
 
@@ -15,7 +15,7 @@ This is *not* release-equivalent to an installed game save editor, even if compi
 | C. CIA installed-content test | Experimental isolated title installs in Azahar, loads synthetic copy and creates a verified offline draft without touching the original | **PASS emulator-only** [41194840094](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41194840094); not a hardware HOME Menu proof |
 | D. **Exact game build match** | CIA title/ROM fingerprint verified; matching GodMode9 128KiB save independently read-only validated across 28/28 sector checksums, dual bank counters, independent XOR keys, money/bag fields, decrypted Pokémon and 104-byte party stride. Full species/item/move semantics and ROM-specific hub/PC mapping still unverified | **PARTIAL: structural READ-ONLY mapping verified; actual-game write safety NOT verified** |
 | E. Disposable game-save restore | Two minimal privately tested in-memory edits and exact byte-perfect reversals passed structural and independent bank/Pokémon validation. A private emulator kit was built from user-supplied ROM and save, but **gameplay boot, in-game re-save and disposable title restoration/rollback are NOT tested** | **PARTIAL offline only: NO EMULATOR-GAME OR HARDWARE RESTORE PROOF** |
-| F. Physical device lifecycle | Distinct collision-checked title ID, app icon/banner/startup and shutdown, exception handling and recovery, testing on safe isolated hardware setup without changing existing installed game | **NOT DONE** |
+| F. Physical device lifecycle | Standalone preview CIA and 3DSX now compile; new isolated Title ID `000400000F73A400`, synthetic guest + installed-CIA Azahar load/draft passed [41208627175](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41208627175). Physical HOME Menu startup/exit, exception recovery and title collision on user's device still unknown. 3DSX first recommended | **PARTIAL: emulator-only CIA pass, HARDWARE LAUNCH UNVERIFIED** |
 | G. Release approval | All above passing, checksummed release, installation and rollback guide, verified no personal saves/ROMs in artifacts | **NOT APPROVED** |
 
 ## Allowed and forbidden work now
