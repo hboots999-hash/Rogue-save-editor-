@@ -105,10 +105,18 @@ jobs:
             sleep 18
             import -window root evidence/page1.png
             WIN=$(xdotool search --name Azahar | tail -1)
+            echo "Azahar win $WIN" > evidence/focus.txt
+            xdotool getwindowgeometry "$WIN" >> evidence/focus.txt || true
             timeout 3s xdotool windowactivate "$WIN" || true
             timeout 3s xdotool windowfocus "$WIN" || true
-            xdotool key --clearmodifiers w || true
-            sleep 4
+            # Set keyboard focus on the guest render screen, not the menu bar.
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool getactivewindow getwindowname >> evidence/focus.txt 2>&1 || true
+            xdotool getwindowfocus >> evidence/focus.txt 2>&1 || true
+            xdotool keydown --clearmodifiers w
+            sleep 0.5
+            xdotool keyup w
+            sleep 5
             import -window root evidence/page2.png
             kill "$PID" 2>/dev/null || true
             wait "$PID" 2>/dev/null || true
