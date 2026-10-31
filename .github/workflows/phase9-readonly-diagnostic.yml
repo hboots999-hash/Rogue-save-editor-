@@ -466,3 +466,116 @@ jobs:
           path: evidence/
           retention-days: 7
           if-no-files-found: warn
+
+
+  configurable-emulator:
+    name: Azahar adjusted values - ${{ matrix.edit }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        edit: [money, iv, ev, move]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Launch clean synthetic editor under Azahar
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+      - name: Adjust field with native buttons, confirm and verify draft
+        shell: bash
+        env:
+          EDIT: ${{ matrix.edit }}
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          case "$EDIT" in
+            money) PAGE=none; STAGE=z; FIELD=none; MODIFY=q ;;
+            iv) PAGE=w; STAGE=z; FIELD=none; MODIFY=q ;;
+            ev) PAGE=w; STAGE=x; FIELD=none; MODIFY=q ;;
+            move) PAGE=w; STAGE=n; FIELD=g; MODIFY=w ;;
+            *) exit 2 ;;
+          esac
+          export PAGE STAGE FIELD MODIFY
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            if [ "$PAGE" != none ]; then
+              xdotool keydown --clearmodifiers "$PAGE"; sleep 0.5; xdotool keyup "$PAGE"; sleep 1
+            fi
+            xdotool keydown --clearmodifiers "$STAGE"; sleep 0.5; xdotool keyup "$STAGE"; sleep 1
+            import -window root evidence/before-adjust.png
+            if [ "$FIELD" != none ]; then
+              xdotool keydown --clearmodifiers "$FIELD"; sleep 0.5; xdotool keyup "$FIELD"; sleep 1
+            fi
+            xdotool keydown --clearmodifiers "$MODIFY"; sleep 0.5; xdotool keyup "$MODIFY"; sleep 2
+            import -window root evidence/after-adjust.png
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 2
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 3
+            import -window root evidence/export.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          for f in before-adjust after-adjust export; do test -s "evidence/$f.png"; done
+          python3 - "$EDIT" "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue" <<'PY'
+          import struct,sys,hashlib
+          from pathlib import Path
+          kind,root=sys.argv[1],Path(sys.argv[2])
+          original=(root/"imports/00000001.sav").read_bytes()
+          backup=(root/"backups/import_001.sav").read_bytes()
+          draft=(root/"drafts/rogue_001.sav").read_bytes()
+          assert len(original)==len(backup)==len(draft)==131072
+          assert original==backup and draft!=original
+          assert hashlib.sha256(original).hexdigest()=="90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da"
+          if kind=="money":
+              assert struct.unpack_from("<I",draft,4096+0x4a8)[0]^0x1234abcd==989999
+          else:
+              raw=draft[4096+0x238:4096+0x238+104]
+              pid,ot=struct.unpack_from("<II",raw)
+              plain=bytearray(48)
+              for i in range(0,48,4):
+                  struct.pack_into("<I",plain,i,struct.unpack_from("<I",raw,32+i)[0]^(pid^ot))
+              if kind=="iv":
+                  iv=struct.unpack_from("<I",plain,40)[0]
+                  assert (iv&31)==21
+                  assert all(((iv>>(5*i))&31)==31 for i in range(1,6))
+              elif kind=="ev":
+                  assert plain[24:30]==bytes((0,0,0,252,252,0))
+              else:
+                  assert struct.unpack_from("<H",plain,12)[0]==95
+          assert not (root/"drafts/rogue_002.sav").exists()
+          print("PASS adjustable",kind,"native guest value + verified separate draft and immutable import")
+          PY
+          echo "PASS $EDIT custom guest field" > evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-adjusted-${{ matrix.edit }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
