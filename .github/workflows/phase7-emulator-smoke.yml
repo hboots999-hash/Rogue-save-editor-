@@ -53,7 +53,7 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p evidence
-          THREEDSX=$(find binary -type f -name '*.3dsx' -print -quit)
+          THREEDSX=$(realpath "$(find binary -type f -name '*.3dsx' -print -quit)")
           cp "$THREEDSX" evidence/PKSM_Rogue_Inspect_DO_NOT_INSTALL.3dsx
           export LIBGL_ALWAYS_SOFTWARE=1
           export QT_QPA_PLATFORM=xcb
@@ -61,14 +61,24 @@ jobs:
           export QT_OPENGL=software
           xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
             set -u
-            ./azahar.AppImage --appimage-extract-and-run "$1" > evidence/emulator.log 2>&1 &
+            ./azahar.AppImage --appimage-extract-and-run > evidence/emulator.log 2>&1 &
             PID=$!
-            sleep 30
+            sleep 10
+            xdotool search --name "Azahar" windowactivate --sync 2>/dev/null || true
+            # Use the GUI File > Load File shortcut. The AppImage command line
+            # accepted the path yet left Azahar at its empty library screen.
+            xdotool key --clearmodifiers ctrl+o
+            sleep 2
+            xdotool key --clearmodifiers ctrl+l
+            xdotool type --clearmodifiers --delay 4 "$1"
+            xdotool key Return
+            sleep 22
             if kill -0 "$PID" 2>/dev/null; then
-              echo "Emulator process alive after 30s (NOT proof of guest launch)" | tee evidence/process-status.txt
+              echo "Azahar process alive after GUI Load File attempt (NOT proof of guest launch)" | tee evidence/process-status.txt
             else
-              echo "Emulator process EXITED before 30s" | tee evidence/process-status.txt
+              echo "Azahar process EXITED after GUI Load File attempt" | tee evidence/process-status.txt
             fi
+            xdotool getactivewindow getwindowname > evidence/active-window.txt 2>/dev/null || true
             xwd -root -silent -out evidence/screen.xwd 2>/dev/null || true
             kill "$PID" 2>/dev/null || true
             wait "$PID" 2>/dev/null || true
