@@ -666,3 +666,89 @@ jobs:
           path: evidence/
           retention-days: 7
           if-no-files-found: warn
+
+
+  deny-write-emulator:
+    name: Azahar no-write guard - ${{ matrix.case }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [cancel, altered]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Launch isolated emulator and attempt forbidden export
+        shell: bash
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          IMPORT="$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          python3 phase7/create_synthetic_fixture.py "$IMPORT"
+          if [ "$CASE" = altered ]; then
+            python3 - "$IMPORT" <<'PY'
+          from pathlib import Path
+          import sys
+          path=Path(sys.argv[1])
+          b=bytearray(path.read_bytes())
+          b[-1]^=1
+          path.write_bytes(b)
+          PY
+          fi
+          BEFORE="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool keydown --clearmodifiers z; sleep 0.5; xdotool keyup z; sleep 1
+            import -window root evidence/staged.png
+            if [ "$CASE" = cancel ]; then
+              xdotool keydown --clearmodifiers s; sleep 0.5; xdotool keyup s
+            else
+              xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+              sleep 1
+              xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+            fi
+            sleep 3
+            import -window root evidence/final.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          test -s evidence/staged.png && test -s evidence/final.png
+          test "$(sha256sum "$IMPORT" | cut -d' ' -f1)" = "$BEFORE"
+          ROOT="$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          test ! -e "$ROOT/backups"
+          test ! -e "$ROOT/drafts"
+          echo "PASS $CASE: no game save touched; no backup/draft directory created" | tee evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-guard-${{ matrix.case }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
