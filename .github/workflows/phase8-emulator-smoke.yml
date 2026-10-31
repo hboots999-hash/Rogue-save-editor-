@@ -3,6 +3,7 @@ name: PKSM Rogue - emulator smoke (NOT A RELEASE)
 on:
   push:
     branches: [feature/phase7-native-ci]
+    paths: ['.github/workflows/phase8-emulator-smoke.yml', 'tools/verify_native_artifacts.py']
   workflow_dispatch:
 
 permissions:
