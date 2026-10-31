@@ -66,6 +66,8 @@ def patch_tree(target: Path) -> None:
         'bridge/rogue_pokemon_edit.cpp': '3ds/source/rogue/rogue_pokemon_edit.cpp',
         'bridge/rogue_ball_insert.h': '3ds/include/rogue/rogue_ball_insert.h',
         'bridge/rogue_ball_insert.cpp': '3ds/source/rogue/rogue_ball_insert.cpp',
+        'bridge/rogue_hub_probe.h': '3ds/include/rogue/rogue_hub_probe.h',
+        'bridge/rogue_hub_probe.cpp': '3ds/source/rogue/rogue_hub_probe.cpp',
         'roguesm_core/include/edit_draft.hpp': '3ds/include/rogue/edit_draft.hpp',
         'roguesm_core/source/edit_draft.cpp': '3ds/source/rogue/edit_draft.cpp',
         'roguesm_core/include/candidate_profile.hpp': '3ds/include/rogue/candidate_profile.hpp',
