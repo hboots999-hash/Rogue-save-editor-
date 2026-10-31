@@ -310,7 +310,8 @@ void RogueInspectScreen::drawBottom() const
         TextPosX::CENTER, TextPosY::TOP);
     Gui::text(page == Page::Party ? "X: IVs31  Y: 252Atk/252Spd" :
         (page == Page::Bag ? "X: item x999  Y: add Master Ball x999" :
-        "A: money 999999"), 160, 125, FONT_SIZE_11, COLOR_WHITE,
+        (page == Page::Hub ? "Hub view only - L/R pages, Up/Down scroll" :
+        "A: money 999999")), 160, 125, FONT_SIZE_11, COLOR_WHITE,
         TextPosX::CENTER, TextPosY::TOP);
     if (page == Page::Hub)
     {
@@ -354,14 +355,14 @@ void RogueInspectScreen::update(touchPosition*)
     }
     if (!snapshot || !originalRaw) return;
 
-    if (keys & KEY_START)
+    if ((keys & KEY_START) && page != Page::Hub)
     {
         if (awaitingExport) (void)exportVerified();
         else stageDraft();
         return;
     }
 
-    if (keys & KEY_A)
+    if ((keys & KEY_A) && page == Page::Summary)
     {
         pokemonEditActive = false;
         pokemonEdit = rogue_pokemon_stats_request{};
