@@ -6,7 +6,7 @@ This is a separate diagnostic 3DSX built from the **same** candidate save bridge
 
 - The original 3DSX built and ran in Azahar 2126.2, reading a wholly synthetic 128-KiB SD-copy fixture and showing money 40000, party 1, bag 3, species ID 25, HP IV 10: [run 41158813605](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41158813605).
 - Phase 9.1 adds read-only details for selected party Pokémon (numeric species, held item, nature, ability slot, IVs/EVs, four moves) and bag items, with an isolated ui_state.hpp input model. Native 3DS compilation, ASan/UBSan host contract tests, and emulator launch workflow passed: [run 41159666627](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159666627).
-- The follow-up workflow captures additional guest input screenshots (A details, B back, X request, A twice to a **blocked** result), checks imported fixture SHA-256 before and after, and asserts that no backups/drafts are created. See [Phase 9 workflow](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase9-readonly-diagnostic.yml) for the latest outcome. Keyboard maps and screenshots must be inspected before claiming guest modal controls were observed.
+- The follow-up workflow [41159780175](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41159780175) succeeded: it sent additional guest A/B/X keyboard events, captured detail/confirmation/blocked-labelled screenshots, verified the synthetic imported fixture SHA-256 was unchanged, and verified no backup or draft directory was created. The screenshot **contents still require human review** before we can claim individual guest modal controls were observed. These checks demonstrate no-write safety only.
 
 ## Controls
 
