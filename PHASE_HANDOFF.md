@@ -1,3 +1,38 @@
+# Phase 15 handoff — read-only H168 hardware CMAC diagnostic
+
+Date: 31 October 2026
+Branch: `feature/phase15-readonly-hardware-validation`
+Parent: `feature/phase14-authenticated-restore` at `6529b9bd531760a3ea5879a6f37eb995b5f47f2b`
+Draft PR: https://github.com/hboots999-hash/Rogue-save-editor-/pull/5
+Main development branch: `feature/phase7-native-ci` (untouched)
+
+## Delivered
+- `phase15/diagnostic.hpp`: two fresh full-container reads, byte-for-byte stable snapshots, strict two-slot structure/title/CID/counter/raw checks, stable file-bound console MAC verification for each slot; diagnosis only, no writes.
+- `phase15/main.cpp`: native 3DS text UI with Y-triggered diagnostics and no direct restore.
+- `phase15/sd_probe.hpp`: optional A→A SD-only 256-byte uniquely created flushed readback probe under `/3ds/PKSM-Rogue/phase15/`; no real saves, installed title writes, or recovery-journal mutation.
+- `phase15/test_diagnostic.cpp` and `run_tests.sh`: synthetic-only test MAC double, corruption, stale live reads, both headers, title, CID, counters, raw, unstable/failing console service, and Phase 14 regression.
+- `.github/workflows/phase15-hardware-diagnostic.yml`: strict-warning/sanitized host tests, devkitPro 3DSX/ELF, Azahar UI boot smoke and isolated experimental CIA packaging.
+- `phase15/README.md`: step-by-step 3DS instructions and proof boundaries.
+
+## Verified so far
+- Host normal and ASan/UBSan synthetic diagnostic tests, inherited Phase 14 and Phase 11–13 regressions: **PASS** in GitHub Actions latest build before this handoff update.
+- Native devkitPro 3DSX/ELF compile and explicit forbidden live-write symbol check: **PASS** in the same run.
+- Azahar launch and CIA packaging: see [Phase 15 Actions](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase15-hardware-diagnostic.yml); do not assume PASS without a completed successful run.
+- **NOT TESTED:** read-only full-container CMAC calls on the user's physical console, native SD scratch-file readback, real recovery journal lifecycle, durability under power loss, direct restore, rollback and gameplay resave. A deterministic host MAC DOUBLE is not Nintendo CMAC.
+
+## Integration
+1. Keep this PR draft and Phase 14 PR #3 draft. Phase 15 branches from Phase 14 so integration depends on Phase 14 reviewed first. Do not merge directly into `feature/phase7-native-ci` or overwrite Phase 13.
+2. Download ephemeral `phase15-H168-READONLY-3DSX-NOT-RELEASE` and `phase15-H168-experimental-CIA-READONLY` GitHub Action artifacts after CI completion. Prefer Homebrew Launcher 3DSX for initial hardware test. CIA title ID `000400000F73A400` replaces only earlier experimental preview, not target Emerald Rogue title `0004000007D7BA00`.
+3. With independent GodMode9 and Checkpoint backups, close game and press Y on Phase 15 to read/check current live container, screenshot slot statuses and native result. The optional A→A SD scratch test may follow. Never inject edited Phase 13 drafts as part of Phase 15.
+4. Investigate any failed/mismatched title/container/CMAC result rather than weakening validation to force success. The two-slot policy might reject legitimate old/uninitialised data.
+5. **Phase 16 release gate remains blocked**: console agreement is necessary but insufficient. Need independent raw/container backup, transactional journal recovery UI, exclusive write lifecycle, disposable live restore, authentic CMAC, rollback under injected failures and game re-save tests before any separate change permits live writes.
+
+No game ROM, console keys, personal save or recovery record included in repository.
+
+---
+
+## Previous Phase 14 handoff (preserved)
+
 # Phase 14 handoff — authenticated restore prototype
 
 Date: 31 October 2026
