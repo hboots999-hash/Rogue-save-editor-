@@ -98,7 +98,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          make -C disposable-PKSM 3ds-debug 2>&1 | tee native-build.log
+          # For compiler diagnostics omit optional mystery gift/script assets.
+          # This still uses the native 3DS compiler, linker and CIA rules.
+          make -j2 -C disposable-PKSM 3ds-no-deps 2>&1 | tee native-build.log
       - name: Record artifacts as unsafe experimental outputs
         if: always()
         shell: bash
