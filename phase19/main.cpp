@@ -38,6 +38,7 @@ void wrappedNotice(const char* text,unsigned width=31) {
         }
         while(text<cut)std::putchar(*text++);
         while(*text==' ')++text;
+        if(*text=='\n')++text; // avoid a second blank line
         std::putchar('\n');
     }
 }
