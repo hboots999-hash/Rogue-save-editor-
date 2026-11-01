@@ -7,6 +7,8 @@
 #include <array>
 #include <cstdint>
 #include <limits>
+#include <new>
+#include <exception>
 #include <vector>
 
 namespace rogue18 { namespace v3 {
@@ -91,7 +93,11 @@ inline bool append(const v2::ReadSnapshot& original,Batch& batch,
     Edit e{};
     if(!makeEdit(original,batch,kind,slot,field,value,e))return false;
     for(const auto& previous:batch.edits)if(sameField(previous,e))return false;
-    batch.edits.push_back(e);
+    try {
+        batch.edits.push_back(e);
+    } catch(const std::bad_alloc&) {
+        return false; // strong vector guarantee; no partial field appended
+    }
     return true;
 }
 inline uint32_t currentValue(const v2::ReadSnapshot& view,const Edit& e){
@@ -125,7 +131,7 @@ inline bool originalGuard(const v2::ReadSnapshot& view,const Batch& batch,const 
        (mon.moves[e.field]==0 || mon.moves[e.field]!=e.expectedMoveId))return false;
     return currentValue(view,e)==e.expectedValue;
 }
-inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
+inline Result previewUnchecked(const uint8_t* original,size_t n,const Batch& batch){
     if(!original || n!=raw_v1::Size || batch.version!=ContractVersion ||
        !hasDigest(batch.expectedDigest) || batch.edits.empty() ||
        batch.edits.size()>MaxEdits ||
@@ -265,6 +271,17 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
     if(result.changedOffsets.empty())return blocked("Aggregate no-op");
     result.ok=true;result.candidate=std::move(working);
     return result;
+}
+// Public Phase20 entrypoint must fail closed rather than unwinding across
+// native controller frames on allocation or standard-library failures.
+inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
+    try {
+        return previewUnchecked(original,n,batch);
+    } catch(const std::bad_alloc&) {
+        return blocked("Batch preview memory exhaustion: no candidate approved");
+    } catch(const std::exception&) {
+        return blocked("Batch preview exception: no candidate approved");
+    }
 }
 inline bool verify(const uint8_t* original,size_t n,const uint8_t* candidate,
                    size_t candidateSize,const Batch& batch){
