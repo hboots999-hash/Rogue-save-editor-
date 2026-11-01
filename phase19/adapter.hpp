@@ -8,7 +8,7 @@
 namespace phase19 {
 enum class Availability : uint8_t { Ready, Empty, Unsupported, Invalid, Unverified };
 struct Pokemon {
-    const char* name="";
+    char name[20]{};
     unsigned species=0,level=0;
     std::array<unsigned,6> iv{},ev{};
     std::array<unsigned,4> moves{},pp{};
@@ -28,7 +28,7 @@ struct Demo {
     unsigned activeCounter=0; // displayed only, no optimistic lock authorisation
     std::array<unsigned,2> pcCounts{{0,0}};
     std::array<Pokemon,6> party{};
-    std::array<std::array<Pokemon,6>,2> pc{};
+    std::array<std::array<Pokemon,30>,2> pc{};
     std::array<Item,8> bag{};
 };
 
@@ -77,6 +77,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
                    !validPokemon(out.party[i])) {
                     out.partyStatus=Availability::Invalid;out.partyCount=0;break;
                 }
+                out.party[i].name[19]='\0';
             }
             if(n==0 && out.partyStatus==Availability::Ready)
                 out.partyStatus=Availability::Empty;
@@ -94,6 +95,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
                    out.bag[i].quantity>999) {
                     out.bagStatus=Availability::Invalid;out.bagCount=0;break;
                 }
+                out.bag[i].name[19]='\0';
             }
             if(n==0 && out.bagStatus==Availability::Ready)
                 out.bagStatus=Availability::Empty;
@@ -117,6 +119,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
                        !validPokemon(out.pc[b][i])) {
                         out.pcStatus=Availability::Invalid;break;
                     }
+                    out.pc[b][i].name[19]='\0';
                 }
                 if(out.pcStatus!=Availability::Ready)break;
             }
