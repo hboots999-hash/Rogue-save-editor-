@@ -328,49 +328,31 @@ jobs:
             import -window root evidence/3dsx-import-menu.png
             tap3ds a
             import -window root evidence/3dsx-missing-copy.png
-            # Normal B/back and standalone START-release exit attempt.
-            tap3ds s
-            tap3ds s
-            tap3ds m
-            import -window root evidence/3dsx-exit-attempt.png
-            kill "$guest" 2>/dev/null || true
-            wait "$guest" 2>/dev/null || true
-            # New emulator process with a generated NON-PLAYABLE H168 copy.
-            # This is NOT a dump of a game, ROM or any personal save.
+            # Keep the SAME native 3DSX process running. Opening a new
+            # Azahar instance can show its library UI rather than the app,
+            # silently redirecting the keyboard events to its search filter.
+            # This fixture is synthesized from code, not a real save/ROM.
             outroot=demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue
             mkdir -p "$outroot/imports"
             cp synthetic-fixture/00000001.sav "$outroot/imports/00000001.sav"
             sha256sum "$outroot/imports/00000001.sav" > evidence/import-before.txt
-            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/3dsx-offline.log 2>&1 &
-            guest=$!
-            sleep 18
-            azwin=$(xdotool search --onlyvisible --name "Azahar" | head -n 1)
-            if test -n "$azwin"; then
-              xdotool windowactivate --sync "$azwin" || true
-              xdotool windowfocus --sync "$azwin" || true
-            fi
-            # Home -> seventh entry -> inspect imported copy -> return Home.
-            for i in 1 2 3 4 5 6; do tap3ds g; done
-            tap3ds a
-            tap3ds a
+            tap3ds s  # Dismiss missing-copy notice -> import menu
+            tap3ds a  # Validate the now-existing synthetic SD copy -> Home
             sleep 2
             import -window root evidence/3dsx-imported-home.png
-            # Home -> Money -> A opens the Phase20 offline editor.
+            # Home -> Money -> A enters the Phase20 native offline editor.
             for i in 1 2 3; do tap3ds g; done
             tap3ds a
             import -window root evidence/3dsx-money.png
             tap3ds a
             import -window root evidence/3dsx-offline-money-editor.png
-            # Azahar 2126.2 D-pad Up=t (Down=g).
-            tap3ds t
+            tap3ds t  # Azahar 2126.2 D-pad Up=t: synthetic money +1
             import -window root evidence/3dsx-money-plus-one.png
-            tap3ds a
-            tap3ds a
-            tap3ds a
+            tap3ds a  # Review
+            tap3ds a  # Confirm step 1
+            tap3ds a  # Confirm step 2 -> SD-only separate backup/draft
             sleep 3
             import -window root evidence/3dsx-draft-export-result.png
-            kill "$guest" 2>/dev/null || true
-            wait "$guest" 2>/dev/null || true
             # Hard evidence: the emulator produced TWO separately named
             # SD drafts, and the original import remains byte-exact.
             test -s "$outroot/backups/phase18_original_001.sav"
@@ -378,6 +360,13 @@ jobs:
             test "$(stat -c %s "$outroot/drafts/phase18_draft_001.sav")" -eq 131072
             sha256sum -c evidence/import-before.txt
             cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_001.sav"
+            # Return to HOME, then test standalone START release exit.
+            tap3ds s
+            tap3ds s
+            tap3ds m
+            import -window root evidence/3dsx-exit-attempt.png
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
             APPIMAGE_EXTRACT_AND_RUN=1 timeout 50s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
             installer=$!
             sleep 12
@@ -408,7 +397,7 @@ jobs:
           # An independent host compile of Phase18 v2 verifies the WHOLE
           # modified save against its original, not just a changed money field.
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
-            -I. -Idependencies/phase18/phase18 \
+            -I. -Idependencies/phase18 -Idependencies/phase18/phase18 \
             phase20/verify_emulator_draft.cpp -o /tmp/phase20-azahar-verify
           /tmp/phase20-azahar-verify \
             demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav \
