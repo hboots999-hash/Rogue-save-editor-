@@ -16,7 +16,7 @@
 | 01 | Home | A | Party: three sample Pokémon, status READABLE | PASS — navigated into party selection (photo of Volcarona subsequently selected) |
 | 02 | Party | A on Volcarona | Volcarona detail: IVs, EVs, four moves, ability slot and nature | PASS — hardware photo shows accurate synthetic Volcarona data |
 | 03 | Pokémon detail | A; select an IV; adjust; A three times | IV proposal reviewed twice, then BLOCKED; no save or backup changes in demo | PASS — proposal and final BLOCKED notice photographed; user confirmed return via B |
-| 04 | Pokémon edit | R, Down, A, Right, X, B | EV proposal clamps against 510 limit; X reset, B cancels | NOT RUN |
+| 04 | Pokémon edit | R, Down, A, Right, X, B | EV proposals, 510 cap, reset and cancel | PARTIAL PASS (user-confirmed): Volcarona HP EV +1 proposal reached final BLOCKED notice on physical 3DS. 510-cap boundary, X reset and B cancel not individually tested. |
 | 05 | Pokémon edit | R, A, Up, A | Changed move ID produces UNVERIFIED warning; no write | NOT RUN |
 | 06 | Pokémon edit | R (to PP), A, Up, A, B | Move PP proposal supported for demo; B cancels from confirmation to proposal | NOT RUN |
 | 07 | Pokémon edit | R to ability and nature; A on each | Unsupported edit notices | NOT RUN |
@@ -44,3 +44,5 @@ phase19/test_ui.cpp drives the same logical Key enum (Up/Down/Left/Right/A/B/X/L
 **Additional user-confirmed hardware results (1 Nov 2026):** Synthetic Money screen displayed 42,000 and the +1 proposal terminated with BLOCKED after confirmations. Backup menu showed NOT CHECKED IN APP and restoration disabled. Backup creation/cancellation controls, item quantity proposals, recovery notices and other edit categories are still pending physical testing. No actual game save or backup was opened by this build.
 
 **1 November 2026 physical testing continuation:** User reports Rare Candy item-quantity proposal reached the BLOCKED notice after confirmations. User also reports missing-save, checksum and disabled-restore recovery warnings displayed successfully. These are UI-level synthetic tests only: no real game data was opened, no authenticated restoration invoked. Other untested field-specific menus remain pending.
+
+**1 November 2026 user confirmation:** Volcarona HP EV +1 in the synthetic Effort Values menu advanced through confirmations and ended BLOCKED. This demonstrates EV proposal and safe refusal on physical hardware; cap boundary and reset/cancel controls remain pending.
