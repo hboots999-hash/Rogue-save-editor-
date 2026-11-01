@@ -44,3 +44,20 @@ Before any *separate* reversible, expendable hardware trial is authorised:
 - Prove authenticated edited slot acceptance, AGB_FIRM game load, save/relaunch, exact rollback on 3DS hardware and safe recovery on interruption. Never use a valuable unbacked save for destructive testing.
 
 Keep this PR draft until all relevant gates are verified. Do not merge Phase 14–19 branches blindly.
+
+
+## Versioned Phase20 status interface (read-only)
+
+Independent integration QA PR #10 identified incompatible duplicate `h168`
+declarations when the Phase17 and Phase18 implementation headers are included
+in the same translation unit. Phase17 now exports
+`readonly_status_v1.h` plus `readonly_status_v1.cpp`, a fixed 80-byte C
+value-only report with **no writer/plan/file handle/restore entrypoint**.
+`readonly_status_producer.hpp` must be compiled in a **Phase17-only**
+translation unit; Phase18 and Phase19 must include ONLY the public C header.
+Host C11/C++17/ASan/UBSan, pinned Phase18 separate compilation and ARM11 ABI
+build checks are implemented. See [PHASE20_READONLY_HANDOFF.md](PHASE20_READONLY_HANDOFF.md)
+for precise caller responsibilities, QA issues and residual risks. The
+`P17_RO_RAM_REHEARSAL_READABLE` code is strictly an observation for RAM
+testing and is **not** approval to edit or restore the installed game.
+
