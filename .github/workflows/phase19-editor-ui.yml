@@ -33,12 +33,16 @@ jobs:
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             -Iphase19 phase19/test_ui.cpp -o /tmp/phase19-sanitized
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-sanitized
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror             -Iphase19 phase19/test_adapter.cpp -o /tmp/phase19-adapter
+          /tmp/phase19-adapter
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror             -fsanitize=address,undefined -fno-omit-frame-pointer             -Iphase19 phase19/test_adapter.cpp -o /tmp/phase19-adapter-sanitized
+          ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-adapter-sanitized
       - name: Guard against native save/SD IO and sensitive committed files
         shell: bash
         run: |
           set -euo pipefail
           if grep -En 'FSUSER_|FSPXI_|ARCHIVE_|sdmc:|fopen[[:space:]]*\(|svc[[:space:]]|AGBSAVE|FSFILE_' \
-              phase19/main.cpp phase19/ui.hpp; then
+              phase19/main.cpp phase19/ui.hpp phase19/adapter.hpp; then
             echo 'Forbidden native save IO reference'; exit 1
           fi
           if git ls-files phase19 | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then
@@ -69,6 +73,7 @@ jobs:
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase 19 Demo\n' >> phase19-build/Makefile
           cp phase19/main.cpp phase19-build/source/main.cpp
           cp phase19/ui.hpp phase19-build/include/ui.hpp
+          cp phase19/adapter.hpp phase19-build/include/adapter.hpp
           make -C phase19-build -j2
           test -s phase19-build/PKSMRoguePhase19.3dsx
           test -s phase19-build/PKSMRoguePhase19.elf
