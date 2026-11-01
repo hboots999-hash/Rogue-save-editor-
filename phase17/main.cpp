@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Phase17 RESTRICTED READ-ONLY hardware diagnostic. RAM SHADOW writes only.
-// No native FSUSER_CreateFile, FSPXI_WriteFile, or live archive write handles.
+// This UI has no native create, privileged write, or game-save write handles.
 #include <3ds.h>
 #include <cstdio>
 #include <string>
