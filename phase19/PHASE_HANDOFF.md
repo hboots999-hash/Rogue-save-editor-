@@ -59,3 +59,11 @@ Downloaded and inspected the exact previous run's `PKSMRoguePhase19.elf` artifac
 Thus **the startup failure mechanism is confirmed as an out-of-bounds/unmapped stack write during gfxInit's prologue, following an oversized main stack frame**. This replaces the earlier qualified source-level hypothesis. The static snapshot/reference fix eliminates the oversized frame by design, subject to replacement build/emulator and a separate physical 3DS retest. It does NOT prove safety of unrelated code, actual backup integrity, or real device success.
 
 Never recommend the pre-fix CIA/3DSX artifact. Distinguish old and new GitHub Actions run IDs.
+
+## 1 November 2026 — Phase18 pinned copied-SD READ-ONLY bridge
+
+Added phase19/read_only_import.hpp and generated-fixture test_readonly.cpp; updated adapter.hpp (stack-safe captureInto, true EX-v2.1 2-bit ability slots), native main/UI (explicit seventh home-menu import option and permanent real-data edit gate), Phase19 workflow (pinned isolated checkout of Phase18), and READ_ONLY_IMPORT.md.
+
+The new entry accepts only exact 131072-byte H168 unwrapped copied input at sdmc:/3ds/PKSM-Rogue/imports/00000001.sav and rejects 263168-byte VC containers without truncation/unwrap. The Phase18 dual-bank parser validates both banks, counters, bag, party checksums before providing numeric species/moves/PP/IVs/EVs, accurate ability slot/effective nature, money and existing item values. Nicknames and level are intentionally unknown; no guessing. Real PC layout is unsupported; every real-data edit path returns READ ONLY. Existing synthetic UI mode remains intact.
+
+**Source dependency is PINNED** at Phase18 commit 596743d8eaa073759a736b5a8107db43f3a8c17b (read-only use from separate checkout; other branches unchanged). The PR is draft and isolated. CI and emulator startup are not evidence of successful on-device imported-save reading, and previous hardware validation covered the prior demo-only build. No live game archive, save writes, draft exporting, CMAC, restoration or authenticated container parsing is enabled. See READ_ONLY_IMPORT.md.
