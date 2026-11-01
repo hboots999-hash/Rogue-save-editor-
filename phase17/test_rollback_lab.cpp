@@ -87,6 +87,33 @@ int main(int argc,char**argv) {
             assert(okEvidence.backupSize==263168);
             assert(okEvidence.journalSize==526400);
             assert(okEvidence.sourceCounter==49);
+            // Sample damage across the entire 526400-byte journal, not
+            // just its trailing digest. No corrupted sample may pass the
+            // read-only evidence gate or reach the RAM rollback rehearsal.
+            for(size_t sample=0;sample<32;sample++) {
+                const size_t offset=(sample*record.size())/32;
+                auto damaged=record;
+                damaged[offset]^=static_cast<uint8_t>(1u<<(sample%8u));
+                auto badEvidence=evidence;
+                badEvidence.journal.bytes=&damaged;
+                const auto check=phase17::inspectRecoveryEvidence(badEvidence,signer);
+                assert(check.code==EvidenceCode::InvalidJournal);
+                assert(!check.canRunRamRehearsal());
+                assert(!check.mayWriteInstalledGame());
+                assert(phase17::rehearse(source,damaged,signer).code==
+                       phase17::ResultCode::BadJournal);
+            }
+            for(const size_t cut:{size_t(1),size_t(16),size_t(32),
+                                  size_t(64),size_t(4096)}) {
+                auto truncated=record;
+                truncated.resize(record.size()-cut);
+                auto badEvidence=evidence;
+                badEvidence.journal.bytes=&truncated;
+                assert(phase17::inspectRecoveryEvidence(badEvidence,signer).code==
+                       EvidenceCode::InvalidJournal);
+                assert(phase17::rehearse(source,truncated,signer).code==
+                       phase17::ResultCode::BadJournal);
+            }
             auto missing=evidence;
             missing.backup.state=RecordState::Missing;
             assert(phase17::inspectRecoveryEvidence(missing,signer).code==
