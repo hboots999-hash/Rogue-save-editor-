@@ -9,6 +9,8 @@
 #include <cstdint>
 #include <cstdio>
 #include <memory>
+#include <new>
+#include <exception>
 #include <string>
 
 namespace phase20 {
@@ -132,11 +134,21 @@ inline bool requestForCopy(const uint8_t* raw,size_t n,
 inline rogue18::ExportResult exportGuarded(const uint8_t* raw,size_t n,
     const phase19::Demo& display,const CopyObservation& captured,
     const EditChoice& choice,const char* sourcePath,const char* root) {
-    rogue18::Request request{};
-    std::string reason;
-    if(!requestForCopy(raw,n,display,captured,choice,request,reason))
-        return {false,reason};
-    return rogue18::exportCopied(raw,n,sourcePath,root,request);
+    // Full Phase18 model/preview/export uses heap vectors and std::string.
+    // The 3DS must not crash out of the UI if those allocations fail.
+    // Any partially created independent SD output is retained, never deleted
+    // or falsely treated as an approved export.
+    try {
+        rogue18::Request request{};
+        std::string reason;
+        if(!requestForCopy(raw,n,display,captured,choice,request,reason))
+            return {false,reason};
+        return rogue18::exportCopied(raw,n,sourcePath,root,request);
+    } catch (const std::bad_alloc&) {
+        return {false,"Out of 3DS memory; original import untouched. Check SD draft directory."};
+    } catch (const std::exception&) {
+        return {false,"Offline export exception; review separate SD files; original import untouched."};
+    }
 }
 
 inline rogue18::ExportResult exportFixedSDCopy(const phase19::Demo& display,
@@ -310,17 +322,30 @@ inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
         case EditStage::ConfirmTwo:
             if(key==Key::B)flow.stage=EditStage::Value;
             if(key==Key::A) {
-                const auto saved=submit ?
-                    submit(state.demo,observation,flow.choice,testContext) :
-                    exportFixedSDCopy(state.demo,observation,flow.choice);
-                flow.succeeded=saved.ok;
-                if(saved.ok)
+                // Native SDMC import, SHA-locked preview and immutable SD
+                // export can allocate multiple 128KiB vectors. Fail without
+                // unwinding through the 3DS render/event loop on exhaustion.
+                try {
+                    const auto saved=submit ?
+                        submit(state.demo,observation,flow.choice,testContext) :
+                        exportFixedSDCopy(state.demo,observation,flow.choice);
+                    flow.succeeded=saved.ok;
+                    if(saved.ok)
+                        std::snprintf(flow.result,sizeof(flow.result),
+                          "OFFLINE COPY ONLY: backups/%s drafts/%s. Import unchanged. Not game-tested.",
+                          saved.backupName.c_str(),saved.draftName.c_str());
+                    else
+                        std::snprintf(flow.result,sizeof(flow.result),
+                          "EXPORT BLOCKED: %.215s",saved.reason.c_str());
+                } catch (const std::bad_alloc&) {
+                    flow.succeeded=false;
                     std::snprintf(flow.result,sizeof(flow.result),
-                      "OFFLINE COPY ONLY: backups/%s drafts/%s. Import unchanged. Not game-tested.",
-                      saved.backupName.c_str(),saved.draftName.c_str());
-                else
+                      "OUT OF MEMORY: no approved draft. Check separate SD output files.");
+                } catch (const std::exception&) {
+                    flow.succeeded=false;
                     std::snprintf(flow.result,sizeof(flow.result),
-                      "EXPORT BLOCKED: %.215s",saved.reason.c_str());
+                      "EXPORT ERROR: no approved draft. Check separate SD output files.");
+                }
                 flow.stage=EditStage::Result;
             }
             break;
