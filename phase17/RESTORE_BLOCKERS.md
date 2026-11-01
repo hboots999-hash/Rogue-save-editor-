@@ -20,6 +20,14 @@
 
 New host regression cases cover good record, unreadable/missing files, terminal receipts, unchecked receipt lookup, stale raw bytes/after-image, different backup, corrupt/truncated journal, independently invalid candidate despite a valid journal digest, and unusable console signer. The RAM backend also now simulates a failed terminal receipt after a completed mock restore and a failed receipt during mock rollback; each must return `RecoveryRequired`, preserve the journal and recover the source exactly via an independent retry. These are host simulations, **not real durable filesystem receipts**. The existing Phase 17 hardware diagnostic stays unchanged. **Future production integration would require** native read-only record enumeration, exclusive journal creation, robust signed/hash-bound terminal receipts and durable chunked writes; none is claimed implemented or enabled by this addition.
 
+## QA-02 — conservative GBA VC wrapper counter policy (1 November 2026)
+
+Independent PR #10 identified that the Phase14 recovery `layout()` accepted any two unequal wrapper counters, whereas Phase18 requires adjacency for the **different** dual-bank counters inside its 131072-byte raw H168 image. The two counter domains must not be conflated.
+
+On the Phase17 branch, `phase14/authenticated_restore.hpp` now requires adjacent **non-wrapping** GBA VC *wrapper-slot* counters, verifies the chosen high counter is below `UINT32_MAX`, and rejects equal, skipped, stale and rollover/near-overflow pairs. The proven original wrapper pair **49/48** remains accepted in either slot order. Phase18's raw H168 bank rollover policy is not changed, imported or assumed to authenticate the GBA VC wrapper.
+
+Additional `phase14/test_restore.cpp` host regressions cover 49/48 in both orders, nonadjacent and equal counters, low 0/1, and unsafe `UINT32_MAX` and 0/`UINT32_MAX` cases. This change strengthens a previously permissive guard **without authorizing live writes**. The test is synthetic; a real console's behavior at rollover has not been established, so those inputs are conservatively **BLOCKED**. PR #10's original QA snapshot predates this fix and must be repinned/retested before its QA-02 status is changed.
+
 ## Immediate safe next hardware test
 
 Phase 17 standalone 3DSX/CIA reads the *existing* Phase 16 private SD files **read-only**, repeats current live slot CMAC, then simulates restore, torn writes, interrupted rollbacks and recoveries only on heap vectors. No SD file, live GBA VC or AGB_FIRM write function is called. Tests should stop and display an error if the live container changed since Phase 16.
