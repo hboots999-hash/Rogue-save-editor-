@@ -175,16 +175,13 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
         const bool ready=e.kind==Kind::Move?
             v2::beginMove(current,e.slot,e.field,req):
             v2::begin(current,e.kind,e.slot,req);
-        if(!ready || currentValue(current,e)!=e.expectedValue &&
-            // Different fields in the same mon are independent; duplicate
-            // scalar keys were rejected before reaching this line.
-            currentValue(current,e)!=currentValue(source,e))
+        if(!ready || currentValue(current,e)!=e.expectedValue)
             return blocked("Intermediate scalar changed unexpectedly");
         if(e.kind==Kind::Money)req.money=e.value;
         else if(e.kind==Kind::ExistingQuantity)req.quantity=uint16_t(e.value);
         else if(e.kind==Kind::IVs || e.kind==Kind::EVs)req.stats[e.field]=uint8_t(e.value);
         else req.pp=uint8_t(e.value);
-        const auto step=v2::preview(working.data(),working.size(),req);
+        auto step=v2::preview(working.data(),working.size(),req);
         if(!step.ok || step.candidate.size()!=n ||
            !v2::verify(working.data(),n,step.candidate.data(),n,req))
             return blocked("Individually guarded intermediate edit failed");
@@ -217,28 +214,24 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
         }else{
             const size_t at=s1+layout::PartyStart+e.slot*layout::PartyStride;
             auto mon=plaintext(expected.data(),at);
-            unsigned block=0,plain=0,width=0;
+            unsigned block=0;
             if(e.kind==Kind::IVs){
                 block=storedIndex(e.expectedPid,'M');
-                plain=40;
-                uint32_t v=raw_v1::r32(mon.data(),plain);
+                uint32_t v=raw_v1::r32(mon.data(),40);
                 const unsigned shift=e.field*5u;
                 v=(v & ~(uint32_t(31)<<shift)) | (e.value<<shift);
-                raw_v1::w32(mon.data(),plain,v);
-                width=4;
+                raw_v1::w32(mon.data(),40,v);
                 if(!mark(at+32+block*12+4,4))
                     return blocked("Invalid IV offset");
             }else if(e.kind==Kind::EVs){
                 block=storedIndex(e.expectedPid,'E');
                 mon[24+e.field]=uint8_t(e.value);
-                width=1;
-                if(!mark(at+32+block*12+e.field,width))
+                if(!mark(at+32+block*12+e.field,1))
                     return blocked("Invalid EV offset");
             }else{
                 block=storedIndex(e.expectedPid,'A');
                 mon[20+e.field]=uint8_t(e.value);
-                width=1;
-                if(!mark(at+32+block*12+8+e.field,width))
+                if(!mark(at+32+block*12+8+e.field,1))
                     return blocked("Invalid PP offset");
             }
             encode(expected.data(),at,mon);
