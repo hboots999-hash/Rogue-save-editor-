@@ -1,0 +1,754 @@
+name: PKSM Rogue Phase 9.4 — configurable synthetic edit controls
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase9-readonly-diagnostic.yml'
+      - 'phase9/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  ui-contract:
+    name: Host navigation and fail-closed confirmation tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Compile and run isolated UI state contract
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_test
+          /tmp/rogue_ui_test
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror phase9/test_ui_state.cpp -o /tmp/rogue_ui_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/rogue_ui_asan
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_test
+          /tmp/edit_values_test
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror -Iphase9 phase9/test_edit_values.cpp -o /tmp/edit_values_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/edit_values_asan
+  build:
+    name: Build extdata-free synthetic-only editor UI
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check toolchain, authenticate Phase 7 parser source
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/tools/bin" >> "$GITHUB_PATH"
+          dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 -d > /tmp/phase7-src.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/phase7-src.tar.xz' | sha256sum -c -
+          mkdir -p parser-src
+          tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
+      - name: Prepare disposable devkitPro standard application template
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p phase9-build/source phase9-build/include
+          curl -fLsS -o phase9-build/Makefile https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+          sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase9-build/Makefile
+          sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := RogueReadOnlyDiagnostic/g' phase9-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Read Only Test\n' >> phase9-build/Makefile
+          cp phase9/main.cpp phase9-build/source/main.cpp
+          cp phase9/ui_state.hpp phase9-build/include/ui_state.hpp
+          cp phase9/offline_sandbox.hpp phase9-build/include/offline_sandbox.hpp
+          cp phase9/edit_values.hpp phase9-build/include/edit_values.hpp
+          cp parser-src/editor/rogue_numeric_edit.h phase9-build/include/
+          cp parser-src/editor/rogue_numeric_edit.cpp phase9-build/source/
+          cp parser-src/editor/rogue_pokemon_edit.h parser-src/editor/rogue_moves_items_edit.h phase9-build/include/
+          cp parser-src/editor/rogue_pokemon_edit.cpp parser-src/editor/rogue_moves_items_edit.cpp phase9-build/source/
+          cp parser-src/bridge/rogue_bridge.cpp phase9-build/source/rogue_bridge.cpp
+          cp parser-src/roguesm_core/source/*.cpp phase9-build/source/
+          cp parser-src/bridge/rogue_bridge.h phase9-build/include/
+          cp parser-src/roguesm_core/include/*.hpp phase9-build/include/
+          find phase9-build/source -maxdepth 1 -type f -printf '%f\n'
+      - name: Compile independent 3DSX, no PKSM extdata or game save services
+        shell: bash
+        run: |
+          set -euo pipefail
+          make -C phase9-build -j2
+          test -s phase9-build/RogueReadOnlyDiagnostic.3dsx
+          test -s phase9-build/RogueReadOnlyDiagnostic.elf
+          sha256sum phase9-build/RogueReadOnlyDiagnostic.{3dsx,elf} > phase9-build/SHA256SUMS.txt
+          grep -aob 'PKSM ROGUE - 3DS RUNTIME TEST' phase9-build/RogueReadOnlyDiagnostic.elf
+      - name: Save emulator-only prototype, not a console release
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: |
+            phase9-build/RogueReadOnlyDiagnostic.3dsx
+            phase9-build/RogueReadOnlyDiagnostic.elf
+            phase9-build/SHA256SUMS.txt
+          retention-days: 7
+  emulator:
+    name: Azahar synthetic-only money export and recovery gate
+    needs: [build, ui-contract]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Verify test binary and install software rendering
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(head -c 4 binary/RogueReadOnlyDiagnostic.3dsx)" = 3DSX
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-apps xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+      - name: Emulate double-confirm export and verify untouched input, backup and draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          mkdir -p "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py "$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          IMPORT="$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          BEFORE_SHA="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
+          export XDG_DATA_HOME="$PWD/test-user-data"
+          export XDG_CONFIG_HOME="$PWD/test-user-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450
+          export QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            PID=$!
+            sleep 18
+            import -window root evidence/page1.png
+            WIN=$(xdotool search --name Azahar | tail -1)
+            echo "Azahar win $WIN" > evidence/focus.txt
+            xdotool getwindowgeometry "$WIN" >> evidence/focus.txt || true
+            timeout 3s xdotool windowactivate "$WIN" || true
+            timeout 3s xdotool windowfocus "$WIN" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool getactivewindow getwindowname >> evidence/focus.txt 2>&1 || true
+            xdotool getwindowfocus >> evidence/focus.txt 2>&1 || true
+            # Inject held keys (0.5s) so the emulated HID scan sees edges.
+            # Begin on SUMMARY: test X + two A confirmations before page changes.
+            xdotool keydown --clearmodifiers z
+            sleep 0.5
+            xdotool keyup z
+            sleep 2
+            import -window root evidence/confirm1.png
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 2
+            import -window root evidence/confirm2.png
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 3
+            import -window root evidence/export-result.png
+            xdotool keydown --clearmodifiers s
+            sleep 0.5
+            xdotool keyup s
+            sleep 1
+            xdotool keydown --clearmodifiers w
+            sleep 0.5
+            xdotool keyup w
+            sleep 2
+            import -window root evidence/page2.png
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 2
+            import -window root evidence/detail.png
+            kill "$PID" 2>/dev/null || true
+            wait "$PID" 2>/dev/null || true
+          '
+          test -s evidence/page1.png
+          test -s evidence/page2.png
+          test -s evidence/detail.png
+          test -s evidence/confirm1.png
+          test -s evidence/export-result.png
+          test -s evidence/confirm2.png
+          AFTER_SHA="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
+          printf '%s\n' "synthetic import sha256 before: $BEFORE_SHA" "synthetic import sha256 after: $AFTER_SHA" > evidence/no-write-check.txt
+          test "$BEFORE_SHA" = "$AFTER_SHA"
+          ROOT="$PWD/test-user-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          BACKUP="$ROOT/backups/import_001.sav"
+          DRAFT="$ROOT/drafts/rogue_001.sav"
+          test -s "$BACKUP"
+          test -s "$DRAFT"
+          cmp -s "$IMPORT" "$BACKUP"
+          python3 - "$DRAFT" "$IMPORT" <<'PY'
+          import pathlib, struct,sys
+          draft=pathlib.Path(sys.argv[1]).read_bytes()
+          original=pathlib.Path(sys.argv[2]).read_bytes()
+          assert len(draft)==len(original)==131072
+          assert draft != original
+          money=struct.unpack_from('<I',draft,4096+0x4a8)[0]^0x1234abcd
+          assert money==999999,(money,len(draft))
+          print('PASS: emulator created synthetic 999999-money draft and untouched backup')
+          PY
+          echo 'PASS: import unchanged; byte-exact untouched backup, synthetic draft created' | tee -a evidence/no-write-check.txt
+          compare -metric AE evidence/page1.png evidence/page2.png /tmp/difference.png 2> evidence/pixel-difference.txt || true
+          echo 'Synthetic money export is verified by on-disk fixture and backup bytes; screenshots still need visual review.'
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-sandbox-editor-3DS-emulator-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+  package-lab-cia:
+    name: Package emulator-only synthetic lab CIA — NOT FOR INSTALLATION
+    needs: [build]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Fetch pinned makerom and assemble standalone lab CIA
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          chmod +x /tmp/makerom-tools/makerom
+          mkdir -p experimental
+          /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia -target t -elf binary/RogueReadOnlyDiagnostic.elf -rsf phase9/lab.rsf -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
+          test -s experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia
+          python3 - <<'PY'
+          from pathlib import Path
+          cia=Path('experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia').read_bytes()
+          assert cia.count(bytes.fromhex('000400000f73a300')) >= 2, 'Unexpected Title ID'
+          assert bytes.fromhex('000400000f73a200') not in cia, 'Conflicts with full fork'
+          print('PASS: isolated lab title ID 000400000F73A300 appears in CIA metadata')
+          PY
+          printf 'EXPERIMENTAL 3DS CIA FOR EMULATOR RESEARCH ONLY.\nNOT A HARDWARE RELEASE.\nOnly the exact Phase 7 synthetic fixture is accepted for offline edits.\nNo installed-game save access or restore.\nTitle ID/collision and hardware testing still required.\n' > experimental/DO_NOT_INSTALL.txt
+          sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-NOT-FOR-INSTALL
+          path: experimental/
+          retention-days: 7
+
+  cia-install-probe:
+    name: Install and launch isolated synthetic lab CIA in Azahar
+    needs: [package-lab-cia]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-NOT-FOR-INSTALL
+          path: experimental
+      - name: Prepare isolated Azahar virtual SD
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports
+          python3 phase7/create_synthetic_fixture.py "$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+      - name: CIA installation then installed-title launch probe
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/isolated-data"
+          export XDG_CONFIG_HOME="$PWD/isolated-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450
+          export QT_QPA_PLATFORM=xcb
+          CIA="$(realpath experimental/PKSMRogue-SYNTHETIC-LAB-NOT-FOR-INSTALL.cia)"
+          test -s "$CIA"
+          export CIA
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 timeout 55s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
+            pid=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$pid" || true
+            find isolated-data -type f -name "*.app" -printf "%p %s bytes\n" > evidence/installed-files.txt || true
+            CONTENT=$(find isolated-data -type f -name "*.app" -path "*0f73a300*" -print -quit)
+            if [ -z "$CONTENT" ]; then
+              echo "EXPECTED_TITLE_NOT_INSTALLED" > evidence/guest-result.txt
+              exit 0
+            fi
+            CONTENT=$(realpath "$CONTENT")
+            echo "$CONTENT" > evidence/installed-content.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$CONTENT" > evidence/emulator.log 2>&1 &
+            guest=$!
+            sleep 20
+            import -window root evidence/installed-launch.png || true
+            xdotool keydown --clearmodifiers z
+            sleep 0.5
+            xdotool keyup z
+            sleep 1
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 1
+            xdotool keydown --clearmodifiers a
+            sleep 0.5
+            xdotool keyup a
+            sleep 3
+            import -window root evidence/installed-after-confirm.png || true
+            echo "INSTALLED_TITLE_LAUNCH_ATTEMPTED" > evidence/guest-result.txt
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+          '
+          test -s evidence/installed-content.txt
+          test -s evidence/installed-launch.png
+          test -s evidence/installed-after-confirm.png
+          ROOT="$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          IMPORT="$ROOT/imports/00000001.sav"
+          BACKUP="$ROOT/backups/import_001.sav"
+          DRAFT="$ROOT/drafts/rogue_001.sav"
+          test -s "$IMPORT" && test -s "$BACKUP" && test -s "$DRAFT"
+          cmp -s "$IMPORT" "$BACKUP"
+          python3 - "$IMPORT" "$DRAFT" <<'PY'
+          from pathlib import Path
+          import sys,struct,hashlib
+          orig=Path(sys.argv[1]).read_bytes()
+          draft=Path(sys.argv[2]).read_bytes()
+          assert len(orig)==len(draft)==131072
+          assert hashlib.sha256(orig).hexdigest()=='90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da'
+          money=struct.unpack_from('<I',draft,4096+0x4a8)[0]^0x1234abcd
+          assert money==999999 and draft!=orig
+          print('PASS: installed CIA guest wrote synthetic offline draft, untouched backup and no source change')
+          PY
+          echo 'PASS: isolated installed CIA launched and created a separate synthetic money draft' | tee -a evidence/guest-result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-SYNTHETIC-LAB-CIA-install-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+
+  pokemon-emulator:
+    name: Azahar party edit ${{ matrix.edit }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        edit: [iv, ev, move]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Prepare isolated Azahar
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+      - name: Verify two-confirmations write intended synthetic Pokémon draft
+        shell: bash
+        env:
+          EDIT: ${{ matrix.edit }}
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          case "$EDIT" in iv) KEY=z ;; ev) KEY=x ;; move) KEY=n ;; *) exit 2 ;; esac
+          export KEY
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool keydown --clearmodifiers w; sleep 0.5; xdotool keyup w
+            sleep 2
+            import -window root evidence/party.png
+            xdotool keydown --clearmodifiers "$KEY"; sleep 0.5; xdotool keyup "$KEY"
+            sleep 2
+            import -window root evidence/confirm1.png
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+            sleep 2
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+            sleep 3
+            import -window root evidence/result.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          test -s evidence/party.png
+          test -s evidence/confirm1.png
+          test -s evidence/result.png
+          python3 - "$EDIT" "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue" <<'PY'
+          import struct,sys,hashlib
+          from pathlib import Path
+          kind,root=sys.argv[1],Path(sys.argv[2])
+          orig=(root/"imports/00000001.sav").read_bytes()
+          backup=(root/"backups/import_001.sav").read_bytes()
+          draft=(root/"drafts/rogue_001.sav").read_bytes()
+          assert len(orig)==len(backup)==len(draft)==131072
+          assert orig==backup and orig!=draft
+          assert hashlib.sha256(orig).hexdigest()=="90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da"
+          def dec(data):
+              raw=data[4096+0x238:4096+0x238+104]
+              pid,ot=struct.unpack_from("<II",raw)
+              b=bytearray(48)
+              for i in range(0,48,4):
+                  struct.pack_into("<I",b,i,struct.unpack_from("<I",raw,32+i)[0]^(pid^ot))
+              return b
+          old,new=dec(orig),dec(draft)
+          assert struct.unpack_from("<H",new,0)[0]==25
+          assert (struct.unpack_from("<I",draft,4096+0x4a8)[0]^0x1234abcd)==40000
+          if kind=="iv":
+              ivs=struct.unpack_from("<I",new,40)[0]
+              assert all(((ivs>>(5*i))&31)==31 for i in range(6))
+              assert new[24:30]==old[24:30]
+          elif kind=="ev":
+              assert new[24:30]==bytes((4,0,0,252,252,0))
+              assert new[40:44]==old[40:44]
+          else:
+              assert struct.unpack_from("<H",new,12)[0]==85
+              assert new[40:44]==old[40:44]
+          print("PASS guest",kind,"verified edited Pokémon, exact original backup, no import changes")
+          PY
+          echo "PASS $EDIT" > evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-pokemon-${{ matrix.edit }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+
+  configurable-emulator:
+    name: Azahar adjusted values - ${{ matrix.edit }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        edit: [money, iv, ev, move]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Launch clean synthetic editor under Azahar
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+      - name: Adjust field with native buttons, confirm and verify draft
+        shell: bash
+        env:
+          EDIT: ${{ matrix.edit }}
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          case "$EDIT" in
+            money) PAGE=none; STAGE=z; FIELD=none; MODIFY=q ;;
+            iv) PAGE=w; STAGE=z; FIELD=none; MODIFY=q ;;
+            ev) PAGE=w; STAGE=x; FIELD=none; MODIFY=q ;;
+            move) PAGE=w; STAGE=n; FIELD=g; MODIFY=w ;;
+            *) exit 2 ;;
+          esac
+          export PAGE STAGE FIELD MODIFY
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            if [ "$PAGE" != none ]; then
+              xdotool keydown --clearmodifiers "$PAGE"; sleep 0.5; xdotool keyup "$PAGE"; sleep 1
+            fi
+            xdotool keydown --clearmodifiers "$STAGE"; sleep 0.5; xdotool keyup "$STAGE"; sleep 1
+            import -window root evidence/before-adjust.png
+            if [ "$FIELD" != none ]; then
+              xdotool keydown --clearmodifiers "$FIELD"; sleep 0.5; xdotool keyup "$FIELD"; sleep 1
+            fi
+            xdotool keydown --clearmodifiers "$MODIFY"; sleep 0.5; xdotool keyup "$MODIFY"; sleep 2
+            import -window root evidence/after-adjust.png
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 2
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 3
+            import -window root evidence/export.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          for f in before-adjust after-adjust export; do test -s "evidence/$f.png"; done
+          python3 - "$EDIT" "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue" <<'PY'
+          import struct,sys,hashlib
+          from pathlib import Path
+          kind,root=sys.argv[1],Path(sys.argv[2])
+          original=(root/"imports/00000001.sav").read_bytes()
+          backup=(root/"backups/import_001.sav").read_bytes()
+          draft=(root/"drafts/rogue_001.sav").read_bytes()
+          assert len(original)==len(backup)==len(draft)==131072
+          assert original==backup and draft!=original
+          assert hashlib.sha256(original).hexdigest()=="90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da"
+          if kind=="money":
+              assert struct.unpack_from("<I",draft,4096+0x4a8)[0]^0x1234abcd==989999
+          else:
+              raw=draft[4096+0x238:4096+0x238+104]
+              pid,ot=struct.unpack_from("<II",raw)
+              plain=bytearray(48)
+              for i in range(0,48,4):
+                  struct.pack_into("<I",plain,i,struct.unpack_from("<I",raw,32+i)[0]^(pid^ot))
+              if kind=="iv":
+                  iv=struct.unpack_from("<I",plain,40)[0]
+                  assert (iv&31)==21
+                  assert all(((iv>>(5*i))&31)==31 for i in range(1,6))
+              elif kind=="ev":
+                  assert plain[24:30]==bytes((0,0,0,252,252,0))
+              else:
+                  assert struct.unpack_from("<H",plain,12)[0]==95
+          assert not (root/"drafts/rogue_002.sav").exists()
+          print("PASS adjustable",kind,"native guest value + verified separate draft and immutable import")
+          PY
+          echo "PASS $EDIT custom guest field" > evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-adjusted-${{ matrix.edit }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+
+  bag-ensure-emulator:
+    name: Azahar bag ensure - ${{ matrix.item }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        item: [candy, masterball]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Run isolated toy bag update through Azahar
+        shell: bash
+        env:
+          ITEM: ${{ matrix.item }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          if [ "$ITEM" = candy ]; then KEY=x; else KEY=n; fi
+          export KEY
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool keydown --clearmodifiers w; sleep 0.5; xdotool keyup w; sleep 0.8
+            xdotool keydown --clearmodifiers w; sleep 0.5; xdotool keyup w; sleep 2
+            import -window root evidence/bag.png
+            xdotool keydown --clearmodifiers "$KEY"; sleep 0.5; xdotool keyup "$KEY"; sleep 2
+            import -window root evidence/confirm.png
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 2
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 3
+            import -window root evidence/result.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          for f in bag confirm result; do test -s "evidence/$f.png"; done
+          python3 - "$ITEM" "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue" <<'PY'
+          import struct,sys,hashlib
+          from pathlib import Path
+          kind,root=sys.argv[1],Path(sys.argv[2])
+          original=(root/"imports/00000001.sav").read_bytes()
+          backup=(root/"backups/import_001.sav").read_bytes()
+          draft=(root/"drafts/rogue_001.sav").read_bytes()
+          assert len(original)==len(backup)==len(draft)==131072
+          assert original==backup and draft!=original
+          assert hashlib.sha256(original).hexdigest()=="90c448925a00306cbd4c7ece37c1313a75d02c02170c515a722d8bf0f180e5da"
+          item=113 if kind=="candy" else 1
+          key=0x1234abcd&0xffff
+          items=[(struct.unpack_from("<H",draft,4096+0x578+4*i)[0],
+                  struct.unpack_from("<H",draft,4096+0x578+4*i+2)[0]^key)
+                  for i in range(3)]
+          assert (item,999) in items,items
+          print("PASS bag",kind,"999 quantity, unchanged source + byte-verified backup")
+          PY
+          echo "PASS $ITEM" > evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-bag-${{ matrix.item }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+
+  deny-write-emulator:
+    name: Azahar no-write guard - ${{ matrix.case }}
+    needs: [build]
+    strategy:
+      fail-fast: false
+      matrix:
+        case: [cancel, altered]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase9-READ-ONLY-emulator-diagnostic-NOT-A-RELEASE
+          path: binary
+      - name: Launch isolated emulator and attempt forbidden export
+        shell: bash
+        env:
+          CASE: ${{ matrix.case }}
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          IMPORT="$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          python3 phase7/create_synthetic_fixture.py "$IMPORT"
+          if [ "$CASE" = altered ]; then
+            python3 - "$IMPORT" <<'PY'
+          from pathlib import Path
+          import sys
+          path=Path(sys.argv[1])
+          b=bytearray(path.read_bytes())
+          b[-1]^=1
+          path.write_bytes(b)
+          PY
+          fi
+          BEFORE="$(sha256sum "$IMPORT" | cut -d' ' -f1)"
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/RogueReadOnlyDiagnostic.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            xdotool keydown --clearmodifiers z; sleep 0.5; xdotool keyup z; sleep 1
+            import -window root evidence/staged.png
+            if [ "$CASE" = cancel ]; then
+              xdotool keydown --clearmodifiers s; sleep 0.5; xdotool keyup s
+            else
+              xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+              sleep 1
+              xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a
+            fi
+            sleep 3
+            import -window root evidence/final.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          test -s evidence/staged.png && test -s evidence/final.png
+          test "$(sha256sum "$IMPORT" | cut -d' ' -f1)" = "$BEFORE"
+          ROOT="$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          test ! -e "$ROOT/backups"
+          test ! -e "$ROOT/drafts"
+          echo "PASS $CASE: no game save touched; no backup/draft directory created" | tee evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase9-guard-${{ matrix.case }}-guest-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn

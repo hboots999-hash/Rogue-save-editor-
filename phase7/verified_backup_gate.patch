@@ -1,0 +1,109 @@
+--- a/3ds/source/gui/screen/RogueInspectScreen.cpp
++++ b/3ds/source/gui/screen/RogueInspectScreen.cpp
+@@ -22,6 +22,7 @@
+     constexpr char kImportPath[] = "sdmc:/3ds/PKSM-Rogue/imports/00000001.sav";
+     constexpr char kAppDir[] = "sdmc:/3ds/PKSM-Rogue";
+     constexpr char kDraftDir[] = "sdmc:/3ds/PKSM-Rogue/drafts";
++    constexpr char kBackupDir[] = "sdmc:/3ds/PKSM-Rogue/backups";
+     constexpr unsigned kRowsPerPage = 8;
+     constexpr unsigned kMaxListItems = 450;
+     struct FileCloser { void operator()(FILE* p) const { if (p) std::fclose(p); } };
+@@ -42,20 +43,21 @@
+             TextPosX::LEFT, TextPosY::TOP, TextWidthAction::SQUISH, 376);
+     }
+
+-    // Deliberately never names an installed VC archive or PKSM live save path.
+-    // Existing drafts cannot be opened for writing. On any error, report failure
+-    // and retain partially created draft for manual inspection (never delete a
+-    // path we cannot prove we exclusively own).
+-    bool exportDistinctDraft(const uint8_t* bytes, std::string& exported)
++    // Only the imported SD copy and exported drafts are ever accessed.
++    // Exclusive creation ensures existing backups/drafts are never overwritten.
++    // A partial failed write is deliberately left at its own exclusive path,
++    // and may not be trusted or used for game restore.
++    bool exportVerifiedCopy(const uint8_t* bytes, const char* directory,
++                            const char* prefix, std::string& exported)
+     {
+-        // The app folder may not exist yet on a fresh SD. Never replace files.
++        if (!bytes) return false;
+         if (mkdir(kAppDir, 0777) != 0 && errno != EEXIST) return false;
+-        if (mkdir(kDraftDir, 0777) != 0 && errno != EEXIST) return false;
++        if (mkdir(directory, 0777) != 0 && errno != EEXIST) return false;
+         for (unsigned i = 1; i <= 99; ++i)
+         {
+-            char path[128];
+-            std::snprintf(path, sizeof(path), "%s/rogue_%03u.sav", kDraftDir, i);
+-            int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
++            char path[144];
++            std::snprintf(path, sizeof(path), "%s/%s%03u.sav", directory, prefix, i);
++            const int fd = open(path, O_WRONLY | O_CREAT | O_EXCL, 0666);
+             if (fd < 0)
+             {
+                 if (errno == EEXIST) continue;
+@@ -76,12 +78,10 @@
+             if (!verify) return false;
+             std::unique_ptr<uint8_t[]> readback(new (std::nothrow) uint8_t[ROGUE_RAW_SAVE_SIZE]);
+             if (!readback) return false;
+-            const bool match = std::fread(readback.get(), 1, ROGUE_RAW_SAVE_SIZE, verify.get()) == ROGUE_RAW_SAVE_SIZE &&
+-                std::fgetc(verify.get()) == EOF && !std::ferror(verify.get()) &&
+-                std::memcmp(bytes, readback.get(), ROGUE_RAW_SAVE_SIZE) == 0;
+-            if (!match) return false;
+-            exported = std::string("Draft exported: rogue_") +
+-                       (i < 10 ? "00" : i < 100 ? "0" : "") + std::to_string(i) + ".sav";
++            if (std::fread(readback.get(), 1, ROGUE_RAW_SAVE_SIZE, verify.get()) != ROGUE_RAW_SAVE_SIZE ||
++                std::fgetc(verify.get()) != EOF || std::ferror(verify.get()) ||
++                std::memcmp(bytes, readback.get(), ROGUE_RAW_SAVE_SIZE) != 0) return false;
++            exported = std::string(prefix) + (i < 10 ? "00" : "0") + std::to_string(i) + ".sav";
+             return true;
+         }
+         return false;
+@@ -137,6 +137,7 @@
+         drawRow("Save counter: " + std::to_string(preview.save_counter), 2);
+         drawRow("Party size: " + std::to_string(preview.party_count), 3);
+         drawRow("Occupied bag slots: " + std::to_string(preview.occupied_bag_slots), 4);
++        drawRow(importBackedUp ? "SD import backup: verified" : "SD import backup: required", 5);
+         drawRow("X: stage 999,999 money draft", 6);
+         drawRow("No game restore or live save writes", 7);
+     }
+@@ -335,10 +336,29 @@
+         rogue_preview nextPreview{};
+         if (!next || !rogue_snapshot_summary(next.get(), &nextPreview))
+             status = "Draft failed reload checks - nothing exported";
+-        else if (!exportDistinctDraft(draft.get(), exported))
+-            status = "SD export or readback FAILED - do not use draft";
+         else
+         {
++            // Backup gate: before the first modified draft, reread the SD import,
++            // confirm it is unchanged since this session began, then create and
++            // read back a distinct untouched backup. Never proceed on failure.
++            if (!importBackedUp)
++            {
++                auto original = readCopiedSave();
++                std::string backupName;
++                if (!original || std::memcmp(original.get(), working.get(), ROGUE_RAW_SAVE_SIZE) != 0)
++                    status = "SD import changed: draft BLOCKED";
++                else if (!exportVerifiedCopy(original.get(), kBackupDir, "import_", backupName))
++                    status = "Imported SD copy backup FAILED: draft BLOCKED";
++                else importBackedUp = true;
++            }
++            if (!importBackedUp) { confirmation = 0; action = Action::None; return; }
++            if (!exportVerifiedCopy(draft.get(), kDraftDir, "rogue_", exported))
++            {
++                status = "SD draft export/readback FAILED - do not use draft";
++                confirmation = 0; action = Action::None; return;
++            }
++            exported = "Draft exported: " + exported;
++
+             // Chain successful edits. The import file itself remains untouched;
+             // each exported draft includes earlier edits in this same session.
+             std::memcpy(working.get(), draft.get(), ROGUE_RAW_SAVE_SIZE);
+--- a/3ds/include/gui/screen/RogueInspectScreen.hpp
++++ b/3ds/include/gui/screen/RogueInspectScreen.hpp
+@@ -35,6 +35,7 @@
+     unsigned firstRow = 0;
+     unsigned selectedRow = 0;
+     unsigned confirmation = 0;
++    bool importBackedUp = false;
+     unsigned moveParty = 0;
+     unsigned moveSlot = 0;
+     uint16_t targetMove = 1;

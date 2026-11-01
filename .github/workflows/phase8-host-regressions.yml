@@ -1,0 +1,85 @@
+name: PKSM Rogue Phase 8 — synthetic host regressions
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase8-host-regressions.yml'
+      - 'phase7/verified_backup_gate.patch'
+      - 'phase7/backup_gate_host_test.patch'
+      - 'phase7/create_synthetic_fixture.py'
+      - 'phase7/host_backup_smoke.cpp'
+      - 'phase7/host_stubs/**'
+      - 'phase7/archive/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  synthetic-tests:
+    name: Verify backup gate without personal save data
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Check checksummed source archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 -d > /tmp/phase7-src.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/phase7-src.tar.xz' | sha256sum -c -
+          mkdir -p test-src
+          tar -xJf /tmp/phase7-src.tar.xz -C test-src --no-same-owner
+      - name: Apply exactly the same backup code patch to host screen
+        shell: bash
+        run: |
+          set -euo pipefail
+          sed -e 's#a/3ds/source/gui/screen/#a/pksm_overlay/#g' \
+              -e 's#b/3ds/source/gui/screen/#b/pksm_overlay/#g' \
+              -e 's#a/3ds/include/gui/screen/#a/pksm_overlay/#g' \
+              -e 's#b/3ds/include/gui/screen/#b/pksm_overlay/#g' \
+              phase7/verified_backup_gate.patch > /tmp/host-backup.patch
+          git -C test-src apply --check /tmp/host-backup.patch
+          git -C test-src apply /tmp/host-backup.patch
+      - name: Generate fake candidate save with no user data
+        run: python3 phase7/create_synthetic_fixture.py /tmp/synthetic_candidate_test.sav
+      - name: Compile and run synthetic editor backup-gate test
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=gnu++20 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase7/host_stubs -Itest-src/pksm_overlay -Itest-src/bridge \
+            -Itest-src/editor -Itest-src/roguesm_core/include \
+            phase7/host_backup_smoke.cpp test-src/pksm_overlay/RogueInspectScreen.cpp \
+            test-src/bridge/rogue_bridge.cpp \
+            test-src/editor/rogue_pokemon_edit.cpp test-src/editor/rogue_numeric_edit.cpp \
+            test-src/editor/rogue_moves_items_edit.cpp \
+            test-src/roguesm_core/source/sector.cpp \
+            test-src/roguesm_core/source/candidate_profile.cpp \
+            test-src/roguesm_core/source/observed_profile.cpp -o /tmp/host_backup_smoke
+          /tmp/host_backup_smoke /tmp/synthetic_candidate_test.sav
+      - name: Repeat host backup-gate test with sanitizers
+        shell: bash
+        run: |
+          set -euo pipefail
+          g++ -std=gnu++20 -O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Wall -Wextra -Wpedantic -Werror \
+            -Iphase7/host_stubs -Itest-src/pksm_overlay -Itest-src/bridge \
+            -Itest-src/editor -Itest-src/roguesm_core/include \
+            phase7/host_backup_smoke.cpp test-src/pksm_overlay/RogueInspectScreen.cpp \
+            test-src/bridge/rogue_bridge.cpp \
+            test-src/editor/rogue_pokemon_edit.cpp test-src/editor/rogue_numeric_edit.cpp \
+            test-src/editor/rogue_moves_items_edit.cpp \
+            test-src/roguesm_core/source/sector.cpp \
+            test-src/roguesm_core/source/candidate_profile.cpp \
+            test-src/roguesm_core/source/observed_profile.cpp -o /tmp/host_backup_smoke_asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/host_backup_smoke_asan /tmp/synthetic_candidate_test.sav
+      - name: Confirm no game saves, CIA, or ROMs were committed
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '\.(sav|cia|gba|3ds|3dsx|rom)$'; then
+            echo 'Unexpected game/save binary in public source repository' >&2
+            exit 1
+          fi
+          echo 'No personal saves or compiled game binaries committed.'

@@ -1,0 +1,123 @@
+name: PKSM Rogue - emulator launch smoke (diagnostic only)
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths: ['.github/workflows/phase7-emulator-smoke.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - name: Download the passing native build from GitHub Actions
+        uses: actions/download-artifact@v4
+        with:
+          name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
+          run-id: 41153365442
+          github-token: ${{ github.token }}
+          path: ./binary
+      - name: Confirm the compiled artifacts are present and well-formed
+        shell: bash
+        run: |
+          set -euo pipefail
+          find binary -type f -printf '%p %s bytes\\n'
+          SAVES=$(find binary -type f -name '*.sav' | wc -l)
+          test "$SAVES" = 0
+          CIA=$(find binary -type f -name '*.cia' -print -quit)
+          THREEDSX=$(find binary -type f -name '*.3dsx' -print -quit)
+          ELF=$(find binary -type f -name '*.elf' -print -quit)
+          test -n "$CIA" && test -s "$CIA"
+          test -n "$THREEDSX" && test -s "$THREEDSX"
+          test -n "$ELF" && test -s "$ELF"
+          test "$(head -c 4 "$THREEDSX")" = "3DSX"
+          file "$CIA" "$THREEDSX" "$ELF" | tee binary-types.txt
+          sha256sum "$CIA" "$THREEDSX" "$ELF" | tee binary-sha256.txt
+      - name: Install software-rendered X display for emulator
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth x11-utils x11-apps xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+      - name: Download official Azahar emulator release
+        run: |
+          set -euo pipefail
+          curl -fL --retry 3 --retry-delay 2 -o azahar.AppImage 'https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage'
+          test $(stat -c '%s' azahar.AppImage) -gt 100000000
+          sha256sum azahar.AppImage | tee azahar-sha256.txt
+          chmod +x azahar.AppImage
+      - name: Attempt 3DSX launch in virtual display and capture diagnostic screenshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          THREEDSX=$(realpath "$(find binary -type f -name '*.3dsx' -print -quit)")
+          cp "$THREEDSX" evidence/PKSM_Rogue_Inspect_DO_NOT_INSTALL.3dsx
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          export QT_QPA_PLATFORM=xcb
+          # Azahar requires OpenGL 4.3+; the previous 3.3 override blocked guest launch.
+          export MESA_GL_VERSION_OVERRIDE=4.5
+          export MESA_GLSL_VERSION_OVERRIDE=450
+          unset QT_OPENGL || true
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            sleep 2
+            glxinfo -B > evidence/graphics-driver.txt 2>&1 || true
+            ./azahar.AppImage --appimage-extract-and-run > evidence/emulator.log 2>&1 &
+            PID=$!
+            sleep 10
+            azahar_window=$(xdotool search --name "Azahar" | head -1)
+            echo "Azahar window id: $azahar_window" > evidence/focus-check.txt
+            timeout 5s xdotool windowactivate "$azahar_window" || true
+            timeout 5s xdotool windowfocus "$azahar_window" || true
+            xdotool getactivewindow getwindowname >> evidence/focus-check.txt 2>&1 || true
+            # Use the GUI File > Load File shortcut. The AppImage command line
+            # accepted the path yet left Azahar at its empty library screen.
+            xdotool key --clearmodifiers ctrl+o
+            sleep 2
+            xwd -root -silent -out evidence/dialog-screen.xwd 2>/dev/null || true
+            xdotool key --clearmodifiers ctrl+l
+            xdotool type --clearmodifiers --delay 4 "$1"
+            xdotool key Return
+            sleep 8
+            xwd -root -silent -out evidence/before-guest-input.xwd 2>/dev/null || true
+            # Azahar default virtual 3DS A button = Qt Key_A.
+            # This test has isolated emulator extdata, never a real SD save.
+            xdotool key --clearmodifiers a
+            sleep 17
+            if kill -0 "$PID" 2>/dev/null; then
+              echo "Azahar process alive after GUI Load File attempt (NOT proof of guest launch)" | tee evidence/process-status.txt
+            else
+              echo "Azahar process EXITED after GUI Load File attempt" | tee evidence/process-status.txt
+            fi
+            xdotool getactivewindow getwindowname > evidence/active-window.txt 2>/dev/null || true
+            xwd -root -silent -out evidence/screen.xwd 2>/dev/null || true
+            kill "$PID" 2>/dev/null || true
+            wait "$PID" 2>/dev/null || true
+          ' _ "$THREEDSX"
+          if test -s evidence/screen.xwd; then
+            convert evidence/screen.xwd -resize 1100x900\> evidence/screen.png || true
+            rm -f evidence/screen.xwd
+          fi
+          if test -s evidence/dialog-screen.xwd; then
+            convert evidence/dialog-screen.xwd -resize 1100x900\> evidence/dialog-screen.png || true
+            rm -f evidence/dialog-screen.xwd
+          fi
+          if test -s evidence/before-guest-input.xwd; then
+            convert evidence/before-guest-input.xwd -resize 1100x900\> evidence/before-guest-input.png || true
+            rm -f evidence/before-guest-input.xwd
+          fi
+          cp binary-types.txt binary-sha256.txt azahar-sha256.txt evidence/
+          ls -lh evidence/
+      - name: Upload launch evidence (not a verified game launch)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-emulator-smoke-evidence-DO-NOT-INSTALL
+          path: evidence/
+          if-no-files-found: warn
+          retention-days: 7
