@@ -9,7 +9,7 @@
 - The default 3DSX launch is fictional sample data. The **seventh** home-menu option, “Inspect SD copy (read-only),” explicitly reads only `sdmc:/3ds/PKSM-Rogue/imports/00000001.sav` using `fopen(...,"rb")`.
 - Only an **independently prepared, unwrapped 131072-byte H168 copied** file is accepted. The 263168-byte GBA VC authenticated backup container is **not** parsed here, and must never be truncated or substituted for the installed game's save.
 - `inspectReadOnlyStream(FILE*, Demo&, reason)` checks exact file size, complete read, EOF/read errors; `inspectCopiedBuffer(raw,len,Demo&,reason)` calls `rogue18::validate` and populates bounded `ReadOnlyProvider` values. Failed inspections leave the existing visible snapshot unchanged.
-- Phase18 source pinned in GitHub CI at commit **596743d8eaa073759a736b5a8107db43f3a8c17b**, checked out separately; PR #8 is not merged or changed. Structural validity is not proof of ROM identity or game-playability.
+- Phase18 source pinned in GitHub CI at commit **ea7303e3d04e9c409febd44ee3e1f834de02cdc6**, checked out separately; PR #8 is not merged or changed. Structural validity is not proof of ROM identity or game-playability.
 
 ## Available validated structure fields
 
@@ -44,3 +44,7 @@ Every real-data Pokémon, money or item interaction is **read-only**. PC edits, 
 Strict host and sanitizer tests cover all mock screens and proposal cancellations, read-only imported-data guards, synthetic/broken-L alternatives, Rosalina key chord, typed status/empty data, exact read-only stream canary, corrupt historical sectors, 450-stack paging, console line wrapping, and no oversized `State`. Native devkitPro build audits the ELF for project-specific writer functions; Azahar runs isolated boot/interaction attempts and unchanged SD canary, **not** physical 3DS verification.
 
 For Phase20, require the separately authored [contract](PHASE20_INTEGRATION_CONTRACT.md): actual ROM identity and correct move/item/ability mappings, independently established PC parser, reliable backup/recovery and authenticated container, verified immutable source fingerprint and exact byte-diff evidence, plus renewed physical hardware acceptance before **any** edit/restore capability is considered. Do not edit Phase17 or Phase18 branches or merge this draft without those gates.
+
+## Current QA #10 build boundary
+
+Pin: `ea7303e3d04e9c409febd44ee3e1f834de02cdc6`. Phase19 never imports Phase18's `editor_model.hpp` into the native image because the research PC code requires an oversized 37-KiB frame. Host tests compile it separately and cross-check version 1 against the native low-level reader. Native DTO carries `sourceSha256` and `sourceModelApi=1`, but this is provenance, **never editing permission**. All actual-PC and installed-game operations remain disabled. Separate translation units are required before any Phase17/18 header coexistence; duplicated `h168` definitions are an independent QA blocker.
