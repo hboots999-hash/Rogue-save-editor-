@@ -139,6 +139,25 @@ int main(){
     CopyObservation combinedCaptured{};
     assert(inspectCopy(combinedDraft.data(),combinedDraft.size(),
                        combinedDisplay,combinedCaptured,message));
+    // A queued EV decrease must make room for a later legal increase,
+    // even if the immutable original had almost exhausted its 510 budget.
+    BatchFlow evQueue{};
+    evQueue.collecting=true;
+    assert(rogue18::v3::start(v3Source,evQueue.pending));
+    assert(display.party[0].ev[1]==252);
+    assert(rogue18::v3::append(v3Source,evQueue.pending,rogue18::Kind::EVs,
+                                0,1,251));
+    EditChoice freed{OfflineKind::EV,0,2,3};
+    assert(phase20::maxValue(display,freed)==2); // original 508 EV used
+    assert(phase20::batchValueLimit(display,freed,&evQueue)==3);
+    assert(rogue18::v3::append(v3Source,evQueue.pending,rogue18::Kind::EVs,
+                                0,2,3));
+    const auto redistributed=rogue18::v3::preview(original.data(),
+                                                  original.size(),evQueue.pending);
+    assert(redistributed.ok);
+    assert(rogue18::v3::verify(original.data(),original.size(),
+                    redistributed.candidate.data(),redistributed.candidate.size(),
+                    evQueue.pending));
     assert(combinedDisplay.money==40002 &&
            combinedDisplay.bag[0].quantity==display.bag[0].quantity+1u &&
            combinedDisplay.party[0].iv[0]==(display.party[0].iv[0]+1u)%32u &&
