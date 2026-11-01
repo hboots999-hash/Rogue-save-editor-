@@ -1,4 +1,4 @@
-name: Phase 19 isolated synthetic editor UI - 3DSX and CIA
+name: Phase 19 copied-SD read-only H168 viewer - 3DSX and CIA
 on:
   push:
     branches: [feature/phase19-editor-ui]
@@ -22,6 +22,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Fetch PINNED Phase18 source dependency (never modify PR #8)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 596743d8eaa073759a736b5a8107db43f3a8c17b
+          path: phase18-dependency
       - name: Compile and exercise state transitions (strict warnings)
         shell: bash
         run: |
@@ -37,18 +43,27 @@ jobs:
           /tmp/phase19-adapter
           g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror             -fsanitize=address,undefined -fno-omit-frame-pointer             -Iphase19 phase19/test_adapter.cpp -o /tmp/phase19-adapter-sanitized
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-adapter-sanitized
-      - name: Guard against native save/SD IO and sensitive committed files
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase19 -Iphase18-dependency phase19/test_readonly.cpp -o /tmp/phase19-readcopy
+          /tmp/phase19-readcopy
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iphase19 -Iphase18-dependency phase19/test_readonly.cpp -o /tmp/phase19-readcopy-asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-readcopy-asan
+      - name: Guard against live save, SD writes and sensitive committed files
         shell: bash
         run: |
           set -euo pipefail
-          if grep -En 'FSUSER_|FSPXI_|ARCHIVE_|sdmc:|fopen[[:space:]]*\(|svc[[:space:]]|AGBSAVE|FSFILE_' \
-              phase19/main.cpp phase19/ui.hpp phase19/adapter.hpp; then
-            echo 'Forbidden native save IO reference'; exit 1
+          if grep -En 'FSUSER_|FSPXI_|ARCHIVE_|svc[[:space:]]|AGBSAVE|FSFILE_|rogue18::propose|exportCopied|fwrite[[:space:]]*\(|fopen[[:space:]]*\([^,]+,[[:space:]]*"[^r]' \
+              phase19/main.cpp phase19/ui.hpp phase19/adapter.hpp phase19/read_only_import.hpp; then
+            echo 'Forbidden native game archive or write interface'; exit 1
           fi
+          grep -Fq 'sdmc:/3ds/PKSM-Rogue/imports/00000001.sav' phase19/read_only_import.hpp
+          grep -Fq 'std::fopen(OfflineImportPath,"rb")' phase19/read_only_import.hpp
           if git ls-files phase19 | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then
             echo 'Private save, ROM or generated binary tracked'; exit 1
           fi
-          echo 'PASS: no native save/file service and no binary save assets'
+          echo 'PASS: fixed SD-import rb-only; no live game archives, writes or binary save assets'
   build:
     name: Native devkitPro 3DSX and ELF
     runs-on: ubuntu-latest
@@ -59,13 +74,19 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
+      - name: Fetch PINNED Phase18 source dependency (never modify PR #8)
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 596743d8eaa073759a736b5a8107db43f3a8c17b
+          path: phase18-dependency
       - name: Compile with standard devkitPro application template
         shell: bash
         run: |
           set -euo pipefail
           export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
           dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
-          mkdir -p phase19-build/source phase19-build/include
+          mkdir -p phase19-build/source phase19-build/include/phase18 phase19-build/include/phase10/preview
           curl -fLsS --retry 3 -o phase19-build/Makefile \
             https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
           sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase19-build/Makefile
@@ -74,6 +95,10 @@ jobs:
           cp phase19/main.cpp phase19-build/source/main.cpp
           cp phase19/ui.hpp phase19-build/include/ui.hpp
           cp phase19/adapter.hpp phase19-build/include/adapter.hpp
+          cp phase19/read_only_import.hpp phase19-build/include/read_only_import.hpp
+          cp phase18-dependency/phase18/offline_engine.hpp phase19-build/include/phase18/offline_engine.hpp
+          cp phase18-dependency/phase18/bag_rules.hpp phase19-build/include/phase18/bag_rules.hpp
+          cp phase18-dependency/phase10/preview/offline.hpp phase19-build/include/phase10/preview/offline.hpp
           make -C phase19-build -j2
           test -s phase19-build/PKSMRoguePhase19.3dsx
           test -s phase19-build/PKSMRoguePhase19.elf
@@ -128,10 +153,11 @@ jobs:
           printf '%s\n' \
             'PHASE 19 SYNTHETIC UI - EXPERIMENTAL, NOT A RELEASE' \
             'Separate Title ID: 000400000F73A500.' \
-            'Does not open or modify any imported or installed game save.' \
-            'Party/PC/items/money are immutable sample data.' \
+            'Only opens fixed unwrapped copied SD import in rb mode upon user request.' \
+            'Never opens the installed Emerald Rogue save, never writes files.' \
+            'Starts in synthetic demo mode; copied party/bag/money read-only.' \
             'Proposals and backup/restore confirmations end BLOCKED.' \
-            'No authentic H168 editor/restore capability is shipped here.' \
+            'Phase18 H168 copied-file parser only: no editor/export/restore wired.' \
             'Independent GodMode9 and Checkpoint backups are recommended.' \
             > experimental/READ_ME_FIRST.txt
       - uses: actions/upload-artifact@v4
