@@ -49,10 +49,38 @@
 
 The earlier Phase18 representation of the Gmax bit as an ability slot was **incorrect** for the public EX-v2.1 Pokémon layout and has been corrected. The original simple species-u16 interpretation was also unsafe when a held item occupies packed Growth bits. See `SOURCE_FINDINGS.md` for source links, the precise 11-bit species/11-bit split held item, 2-bit ability index, nature modifier, source-derived capacity and PC model.
 
-**Critical version mismatch:** EX-v2.1 public source reports money at SaveBlock1 +0x490 and bag +0x560, while the independently observed private H168 v2.1.2 has money +0x4A8 and bag +0x578. Matching-ROM source verification is still a release blocker. Do not infer the target bag-upgrade byte offset by simply adding +0x18.
+**Resolved stale source offset comments:** the EX-v2.1 source's 104-byte Pokemon stride means money is actually at `0x238 + 6*104 = 0x4A8`, and the 50 PC item slots shift the actual bag to `0x578`, matching the historical private H168 read-only observation. The older `0x490/0x560` comments were based on 100-byte party records. The candidate bag-upgrade byte is `0x4AD` by public-source geometry but is still **unverified on the exact private v2.1.2 ROM**; the insertion gate requires explicit verified evidence and a matching saved value.
 
 **Phase16 user hardware update:** GBA VC full container authentication, 263168-byte untouched backup, 526400-byte recovery journal and restart verification reportedly passed on physical hardware. This is valuable upstream recovery evidence but does NOT authorize Phase18 live writes or establish Pokémon/PC semantics.
 
 **Integration:** Phase19 should include `phase18/editor_model.hpp`, call `inspectReadOnly(...)` on a copied offline raw save, construct requests with `beginRequest(view,kind,slot,request)`, fill only requested new values after user confirmation, and call `propose`/byte-exact `verifyExact`. The `SaveView.capabilities` booleans distinguish default on-copy numeric edits from operations still requiring independent evidence. The optional PC status cannot be treated as verified. Only Phase18's separate offline SD import exporter can make immutable backups and drafts. No live file handles or game archive access are involved.
 
 **Final expanded source CI PASS (1 November 2026):** [GitHub Actions run 41259163807](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41259163807) on `f86ca56ddd329802c36860e0c05983c1af691caf`: all **three** jobs passed — strict C++17 host, ASan/UBSan host, and **devkitPro native ARM11 C++ header integration compile**. Tests include 24 permutations, different bank keys, 28-sector corruption, ciphertext integrity, key failure, exact forward/reverse edits, source-derived 80→450 bag rules, reserved-pockets sorting/insertion guards, PC section crossing and checksum rejection, Phase19 snapshot/request API, stale inputs, separate immutable backup/draft and independent Python inspector. Native compile is a **header integration check only**, not a launched 3DSX/CIA or hardware gameplay proof.
+
+
+## 1 Nov 2026 Phase18 additional hardening (for Phase20)
+
+- Reused existing PR #8 and branch; no merge, no live writer/restorer changes.
+- Added `layout_geometry.hpp` with checked party, money, bag and candidate
+  upgrade offsets; resolved source-comment discrepancy from 6 × 104-byte records.
+- Added `source_digest.hpp` portable SHA-256 with known-answer tests. Phase19
+  read-only `SaveView.sourceSha256` is pinned to `Request.expectedDigest` to
+  reject an edited input whose active counter and selected money/quantity/mon
+  values remain unchanged.
+- Fixed the 32-bit save counter rollover bug that inherited Phase10's
+  numerically-greatest-bank assumption. Synthetic tests cover both 0xFFFFFFFF→0
+  directions, invalid gaps, equal counters, and empty parties.
+- Source-backed item insertion now checks the candidate saved upgrade count
+  against explicit verified H168 offset evidence. Pocket map/ID mappings remain
+  unverified: normal insertion stays blocked.
+- Added `beginMoveRequest` to the Phase19 model, which safely preloads the
+  selected move slot's expected ID and PP, rejecting absent/invalid slots;
+  invalid three-slot ability values also fail validation.
+- Added `test_integrity.cpp` (stale same-counter saves, SHA-256 known vectors,
+  rollover, empty party) to the strict/sanitizer CI jobs. All data remains
+  generated/non-playable synthetic input only.
+- See `PHASE20_FEATURE_MATRIX.md` for the per-feature verified/source-derived/
+  experimental/blocked status and exact remaining ROM/emulator gates.
+
+**Phase16/17 progress is acknowledged but does not grant Phase18 permission
+to write installed saves. All Phase18 outputs are offline drafts only.**
