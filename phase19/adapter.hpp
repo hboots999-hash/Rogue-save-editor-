@@ -132,8 +132,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
     out.synthetic=false;
     return out;
 }
-inline Demo mockSnapshot() {
-    Demo d{};
+inline void populateMock(Demo& d) {
     d.synthetic=true;
     d.partyStatus=d.pcStatus=d.moneyStatus=d.bagStatus=Availability::Ready;
     d.partyCount=3;d.pcBoxes=2;d.pcCounts[0]=3;d.pcCounts[1]=3;d.bagCount=5;d.money=42000;
@@ -160,12 +159,20 @@ inline Demo mockSnapshot() {
     d.bag[2]={"Ultra Ball",2,30};
     d.bag[3]={"Potion",13,18};
     d.bag[4]={"Repel",86,12};
-    return d;
 }
-// Keep the large fixture in static storage, never in an ARM11 stack frame.
-// C++17 copy elision/NRVO constructs this process-lifetime const object once.
+// Historical value-return helper is retained for host fixtures only.
+// The native entry point never calls this large value-returning helper.
+inline Demo mockSnapshot() {
+    Demo snapshot{};
+    populateMock(snapshot);
+    return snapshot;
+}
+// Static in-place population: never create an enormous automatic local Demo
+// when initializing the ARM11 application. Returned reference is read-only.
 inline const Demo& mockSnapshotRef() {
-    static const Demo fixture=mockSnapshot();
+    static Demo fixture{};
+    static const bool loaded=[]() { populateMock(fixture);return true; }();
+    (void)loaded;
     return fixture;
 }
 inline const char* availabilityText(Availability v) {
