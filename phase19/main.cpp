@@ -23,6 +23,24 @@ const char* groupName(Group g) {
 void line(unsigned i,unsigned selected,const char* str) {
     std::printf("%c %s\n",i==selected?'>':' ',str);
 }
+// Wrap long status text at word boundaries so it remains readable on 3DS.
+// No heap allocation or large main-thread stack buffer.
+void wrappedNotice(const char* text,unsigned width=31) {
+    while(text && *text) {
+        if(*text=='\n'){std::putchar('\n');++text;continue;}
+        const char* end=text;
+        while(*end && *end!='\n' && static_cast<unsigned>(end-text)<width)++end;
+        const char* cut=end;
+        if(*end && *end!='\n') {
+            const char* word=end;
+            while(word>text && word[-1]!=' ')--word;
+            if(word>text)cut=word;
+        }
+        while(text<cut)std::putchar(*text++);
+        while(*text==' ')++text;
+        std::putchar('\n');
+    }
+}
 void top(const State& s) {
     consoleClear();
     std::puts("PKSM ROGUE - PHASE 19 COPY VIEW");
@@ -43,7 +61,7 @@ void top(const State& s) {
             std::puts(s.demo.synthetic?"\nFictional example data.":"\nValidated copy view (no edits).");
             break;
         case Screen::Party:
-            std::puts("PARTY - demonstration roster");
+            std::puts(s.demo.synthetic?"PARTY - DEMO":"PARTY - COPIED SAVE (READ ONLY)");
             std::printf("Status: %s\n",availabilityText(s.demo.partyStatus));
             for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.party[i];
@@ -52,8 +70,10 @@ void top(const State& s) {
             }
             break;
         case Screen::PC: {
-            std::printf("PC BOX %u/%u - %s\n",s.box+1u,s.demo.pcBoxes,
-                        availabilityText(s.demo.pcStatus));
+            if(s.demo.pcStatus==Availability::Ready)
+                std::printf("PC BOX %u/%u - READABLE\n",s.box+1u,s.demo.pcBoxes);
+            else
+                std::printf("PC BOXES - %s\n",availabilityText(s.demo.pcStatus));
             if(s.demo.pcStatus!=Availability::Ready) {
                 std::puts("Real PC layout not established.");
                 std::puts("No PC editing is permitted.");
@@ -65,7 +85,7 @@ void top(const State& s) {
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
             if(count(s))std::printf("Viewing %u-%u / %u\n",first+1u,stop,count(s));
-            std::puts("\nL/R: box; A: detail (read-only)");
+            std::puts("\nR: next box; A: details");
             break;
         }
         case Screen::Pokemon: {
@@ -78,8 +98,10 @@ void top(const State& s) {
             std::puts("\nStat       IV     EV");
             for(unsigned i=0;i<6;i++)
                 std::printf("%-7s   %2u    %3u\n",names[i],m.iv[i],m.ev[i]);
-            std::puts("\nMove IDs:");
-            for(unsigned i=0;i<4;i++) std::printf("%u: %u  ",i+1u,m.moves[i]);
+            std::puts("\nMove ID / PP:");
+            for(unsigned i=0;i<4;i+=2)
+                std::printf("%u:%u PP%u  %u:%u PP%u\n",
+                    i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
             std::puts(s.fromPC||!s.demo.synthetic?"\n\nREAD ONLY: editing disabled":"\n\nA: explore party edit demo");
             break;
         }
@@ -105,7 +127,7 @@ void top(const State& s) {
                 unsigned sum=0;for(auto v:m.ev) sum+=v;
                 std::printf("\nEV total: %u / 510\n",sum);
             }
-            std::puts("\nL/R category; A propose");
+            std::puts("\nR: next category; A: preview");
             if(s.group==Group::Nature)std::puts("PID nature changes: UNSUPPORTED");
             else if(s.group==Group::Ability)std::puts("Ability mapping: NOT VERIFIED");
             else if(s.group==Group::Moves)std::puts("New move IDs: NOT VERIFIED");
@@ -192,7 +214,7 @@ void top(const State& s) {
             break;
         case Screen::Notice:
             std::puts("STATUS / RECOVERY");
-            std::puts(s.notice);
+            wrappedNotice(s.notice);
             std::puts("\nNo save was changed.");
             std::puts("A/B: return");
             break;
@@ -204,7 +226,8 @@ void bottom(const State& s) {
     std::puts("----------------------------");
     std::puts("D-Pad: navigate/adjust");
     std::puts("A: select     B: cancel");
-    std::puts("L/R: PC box, bag page, edit group");
+    std::puts("R: next box / edit group");
+    std::puts("L: previous (optional)");
     std::puts("START: exit");
     std::puts("");
     if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
