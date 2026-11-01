@@ -24,3 +24,13 @@ Phase 19 preview Title ID **000400000F73A500**, separate from the installed Emer
 2. For a real editor, each field must have independent Phase 18 real-save mapping validation, valid species/item/move IDs, capability gating and Pokémon checksum verification. Synthetic limits alone are not enough.
 3. Authenticated GBA VC restore and rollback are a separate gate; leave installed-game writes impossible until that gate and physical gameplay persistence tests pass.
 4. Existing Phase 9–13 code, restoration modules and other branches were not modified. Do not merge this PR as evidence that real save editing works.
+
+## 1 November 2026 — Phase 19 adapter/UI integration iteration
+
+This continues draft PR #7. The UI now consumes the bounded, read-only snapshot model defined in phase19/adapter.hpp. It still instantiates ONLY mockSnapshot() in the native executable. Future read-only provider callbacks may supply Phase 18-validated data but cannot enable any edit. No live game save, SD export or restoration API is present.
+
+New features: explicit Ready/Empty/Unsupported/Invalid/Unverified states; sample PC browsing up to 30 slots per box, displayed six rows per page; Pokémon move PP display and mock proposals; clearer 3DS-facing ability-slot/nature/new-move-ID restrictions; item quantity 1–999; numeric edit clamping, no-op rejection, cancellation to a prior view, and two blocking confirmations. Unsupported PC edits, ability changes, nature mutation, unknown move IDs and bag item insertion are intentionally unavailable.
+
+Backup status says NOT CHECKED IN APP: Phase 16 hardware evidence does not mean this isolated preview can locate verified backups. Recovery has concise on-screen messages for missing saves, unknown layout, checksum failures, backup absence and disabled restoration. All actual-save snapshots are non-editable. Invalid input and missing provider data never fall back to fictional values.
+
+Host tests include every control route, cancel, invalid/no-op changes, an example read-only provider, unsupported status and PC pagination. CI uses strict C++17 and ASan/UBSan, native devkitPro, CIA packaging and optional Azahar smoke. These are not physical Nintendo 3DS hardware tests; those remain outstanding. Details: phase19/INTEGRATION_CONTRACT.md.
