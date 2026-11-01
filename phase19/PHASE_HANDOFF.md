@@ -24,3 +24,11 @@ Integration with real save parsers, ability/nature/move name mapping, PC/storage
 Use read-only snapshots with explicit provenance and target/profile validation, or display unavailable/unsupported state. Source party and PC counts from independently validated parser results, not from the synthetic demo. Keep all real editing actions behind per-field allow lists and fail closed if checksum/layout is uncertain. A final stage/export or live restore transition must require separate, audited backend capability checks and a human-confirmed recovery plan; this build exposes no such hooks.
 
 **Hardware caution:** If trying the experimental preview on a 3DS, first ensure independent verified GodMode9/Checkpoint backups and verify the install target is 000400000F73A500, never the game ID. A successful text screen does not prove a safe restore.
+
+## 1 November 2026 — integration continuation
+
+This PR was developed on the EXISTING feature/phase19-editor-ui branch. Added adapter.hpp, test_adapter.cpp, INTEGRATION_CONTRACT.md, improved ui.hpp/main.cpp/test_ui.cpp, and extended its existing GitHub Actions workflow. The Phase 18 draft PR #8 API was reviewed but not copied, linked, changed or merged. Phase 14–17 branches and restore sources were not modified.
+
+Key adapter contract: ReadOnlyProvider -> capture() -> immutable bounded snapshot. It can expose only independently validated party, bag and money data, or explicit unsupported/error states. PC remains unsupported on real data pending a verified PC map. Ability is a slot bit, not an arbitrary ability ID; nature is PID-derived and immutable; changed move IDs require an independent ROM allowlist; item insertion is not supported. Real view snapshots cannot activate proposals, while mock proposals are always blocked after two confirmations. The native app still only loads fictional data.
+
+See INTEGRATION_CONTRACT.md for Phase18 rogue18::validate, partyAt, Mon, Request, Evidence, and h168::item compatibility mapping. Verification of the actual installed title and full save edit/export, CMAC and rollback, game-load/re-save persistence and manual physical-console UI testing remain separate blockers. Keep the PR draft/unmerged.
