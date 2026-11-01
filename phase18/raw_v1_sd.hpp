@@ -46,6 +46,8 @@ inline std::unique_ptr<uint8_t[]> readExact(const char* path){
     std::unique_ptr<uint8_t[]> b(new(std::nothrow) uint8_t[Size]);
     if(!b || fread(b.get(),1,Size,in.get())!=Size || fgetc(in.get())!=EOF ||
        ferror(in.get()))return {};
+    // Failed close is an uncertain SD read; refuse to publish this snapshot.
+    if(fclose(in.release())!=0)return {};
     return b;
 }
 inline bool directory(const char* path){
@@ -111,6 +113,7 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
                         const uint8_t* bytes,std::string& filename,
                         std::string& error){
     error.clear();
+    filename.clear(); // Do not reuse a filename from a previous attempt.
     if(!bytes){error="Null source";return false;}
     for(unsigned i=1;i<=99;i++){
         char base[64];
@@ -121,6 +124,9 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
         // atomic in FSUSER_CreateFile; no saved file can be overwritten.
         struct stat existing{};
         if(::stat(full.c_str(),&existing)==0)continue;
+        // The native exclusive-create may leave a reserved/partial output.
+        // Report this attempted basename rather than silently losing it.
+        filename=base;
         if(!nativeSdmcCreateAndWrite(full,bytes,error)){
             // If another application created a file after stat, do not
             // delete/retry/overwrite that name. Fail closed.
@@ -142,6 +148,9 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
             if(e==EEXIST)continue;
             error=ioError("open",e);return false;
         }
+        // O_EXCL succeeded. Any failed write, flush or close retains this
+        // basename so the UI can identify an uncertain file on the SD card.
+        filename=base;
         size_t count=0;
         while(count<Size){
             errno=0;
