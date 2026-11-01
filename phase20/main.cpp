@@ -70,7 +70,7 @@ void offlineTop(const State& s,const phase20::OfflineFlow& f,
             std::printf("Party #%u field #%u\n",
               f.choice.slot+1u,f.choice.field+1u);
         std::printf("\nOriginal: %u\nNew value: %u\nMax: %u\n",
-                    f.original,f.proposed,phase20::maxValue(s.demo,f.choice));
+                    f.original,f.proposed,phase20::batchValueLimit(s.demo,f.choice,&batch));
         std::puts("\nUp/Down +/-1 Left/Right +/-10");
         std::puts("X reset; A review; B back");
     } else if(f.stage==EditStage::ConfirmOne ||
