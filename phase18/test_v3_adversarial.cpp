@@ -2,14 +2,49 @@
 // Non-playable synthetic fixture; no ROM data or installed save access.
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
-#define main phase18_v2_boundary_fixture_only
-#include "test_boundaries_v2.cpp"
+#define main phase18_fixture_v3_test_helper
+#include "test_offline_engine.cpp"
 #undef main
 #pragma GCC diagnostic pop
 #undef CHECK
 #include "multi_export_v3.hpp"
 #include <limits>
 #define CHECK(x) do{if(!(x)){std::cerr<<"V3 hostile failure "<<__LINE__<<": "<<#x<<"\n";return 1;}}while(0)
+static bool exactOffsets(const Bytes& original,const Result& result){
+    if(!result.ok || original.size()!=result.candidate.size())return false;
+    std::vector<size_t> changed;
+    for(size_t i=0;i<original.size();i++)
+        if(original[i]!=result.candidate[i])changed.push_back(i);
+    return !changed.empty() && changed==result.changedOffsets;
+}
+static Bytes sixPartyAndFullBag(unsigned permutation){
+    Bytes b=fixture();
+    for(unsigned bank=0;bank<2;bank++){
+        const unsigned rotation=bank?5u:3u;
+        const size_t s1=(bank*14u+(1u+rotation)%14u)*h168::Sector;
+        h168::w32(b.data(),s1+layout::PartyCount,6);
+        const auto growth=plaintext(b.data(),s1+layout::PartyStart);
+        for(unsigned slot=0;slot<6;slot++){
+            const size_t pos=s1+layout::PartyStart+slot*104u;
+            if(slot)std::memcpy(b.data()+pos,b.data()+s1+layout::PartyStart,104u);
+            h168::w32(b.data(),pos,permutation+slot*24u);
+            auto p=growth;
+            for(unsigned i=0;i<4;i++){
+                h168::w16(p.data(),12+i*2,uint16_t(33u+i*12u));
+                p[20+i]=uint8_t(10+i*10);
+            }
+            encode(b.data(),pos,p);
+        }
+        for(unsigned i=0;i<450;i++){
+            const auto off=s1+layout::BagArray+i*4u;
+            h168::w16(b.data(),off,uint16_t(100+i));
+            h168::w16(b.data(),off+2,uint16_t((i%998u+1u)^
+                                       uint16_t(bank?0xf00dbabeu:0xa5a5c33cu)));
+        }
+        h168::w16(b.data(),s1+0xff6,h168::checksum(b.data()+s1));
+    }
+    return b;
+}
 int main(){
     using namespace rogue18;
     using namespace rogue18::v3;
