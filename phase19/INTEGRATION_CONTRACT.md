@@ -4,7 +4,7 @@ Status: **READ-ONLY DTO AND MOCK DRIVER IMPLEMENTED. REAL SAVE ADAPTER NOT LINKE
 
 ## Interface boundary
 
-phase19/adapter.hpp provides ReadOnlyProvider (summary, partyCount, partyAt, bagCount, itemAt, pcBoxCount, pcBoxSize, pcAt), Availability (Ready/Empty/Unsupported/Invalid/Unverified), a bounded snapshot (up to 6 party, 8 visible bag items, 2 boxes x 30 records), capture() and mockSnapshot(). The native app only creates mockSnapshot(). It never requests a live save or calls the Phase 18 exporter.
+phase19/adapter.hpp provides ReadOnlyProvider (summary, partyCount, partyAt, bagCount, itemAt, pcBoxCount, pcBoxSize, pcAt), Availability (Ready/Empty/Unsupported/Invalid/Unverified), a bounded snapshot (up to 6 party, 450 existing bag stacks (6 per visible page), 14 boxes x 30 records), capture() and mockSnapshot(). The native app only creates mockSnapshot(). It never requests a live save or calls the Phase 18 exporter.
 
 A future independently audited provider may call capture() only on the result of Phase 18's strict H168 dual-bank validation, from an independently verified **read-only** copied input. capture() checks DTO counts, money ≤999999, item quantities 1–999, IVs 0–31, EVs 0–252 and sum ≤510, PP ≤64, binary ability slot and nature index ≤24. It fails closed when provider data is Invalid, Empty, Unsupported or Unverified. This DTO-level screening is **not** independent verification of the underlying ROM/save.
 
@@ -30,7 +30,7 @@ Captured snapshots always have synthetic=false: State::canPreview() rejects all 
 
 ## Controls and unsupported operations
 
-Up/Down selects entries, Left/Right changes proposal by ±10, Up/Down proposal ±1, X resets, A opens/reviews, B cancels, START exits, L/R cycles PC boxes or edit groups. PC boxes are paged six entries per view; menu shows no real save contents in this build.
+Up/Down selects entries, Left/Right changes proposal by ±10, Up/Down proposal ±1, X resets, A opens/reviews, B cancels, START exits, L/R cycles PC boxes or edit groups. PC boxes and bag stacks are paged six entries per view; L/R switches PC boxes or pages the bag. The native executable shows no real save contents.
 
 IVs, EVs, unchanged/read-only move IDs, PP, money and existing bag quantity each show a synthetic proposal where supported. The final A confirmation **always reports BLOCKED** and leaves the snapshot unchanged. New move IDs, ability slot mutation, PID-derived nature mutation, PC editing, bag item insertion and all actual real-data edits remain unsupported. No-op proposals show an invalid message rather than succeeding.
 
