@@ -35,6 +35,9 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Iphase19 phase19/test_ui.cpp -o /tmp/phase19-ui-tests
           /tmp/phase19-ui-tests
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase19 phase19/test_rosalina.cpp -o /tmp/phase19-rosalina-tests
+          /tmp/phase19-rosalina-tests
           g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             -Iphase19 phase19/test_ui.cpp -o /tmp/phase19-sanitized
@@ -96,6 +99,7 @@ jobs:
           cp phase19/ui.hpp phase19-build/include/ui.hpp
           cp phase19/adapter.hpp phase19-build/include/adapter.hpp
           cp phase19/read_only_import.hpp phase19-build/include/read_only_import.hpp
+          cp phase19/rosalina_input.hpp phase19-build/include/rosalina_input.hpp
           cp phase18-dependency/phase18/offline_engine.hpp phase19-build/include/phase18/offline_engine.hpp
           cp phase18-dependency/phase18/bag_rules.hpp phase19-build/include/phase18/bag_rules.hpp
           cp phase18-dependency/phase10/preview/offline.hpp phase19-build/include/phase10/preview/offline.hpp
