@@ -217,7 +217,9 @@ int main() {
     PrintConsole upper{},lower{};
     consoleInit(GFX_TOP,&upper);
     consoleInit(GFX_BOTTOM,&lower);
-    State state;
+    // Hardware finding: never allocate large UI sample snapshots on ARM11
+    // main-thread stack. The model references a process-lifetime static fixture.
+    static State state;
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
         hidScanInput();
