@@ -88,6 +88,23 @@ jobs:
               ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/unified-$mode-$attempt
             done
           done
+      - name: Generate deterministic NON-PLAYABLE H168 save for emulator integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p synthetic-fixture
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Idependencies/phase18/phase18 \
+            dependencies/phase18/phase18/test_offline_engine.cpp \
+            -o /tmp/phase20/phase18-fixture
+          /tmp/phase20/phase18-fixture synthetic-fixture/00000001.sav
+          test "$(stat -c '%s' synthetic-fixture/00000001.sav)" -eq 131072
+          sha256sum synthetic-fixture/00000001.sav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase20-NONPLAYABLE-H168-CI-FIXTURE
+          path: synthetic-fixture/00000001.sav
+          retention-days: 1
   native-3ds:
     name: Phase20 combined ARM11 3DSX/ELF (no hardware)
     needs: [combined-host]
@@ -248,7 +265,16 @@ jobs:
         with:
           name: phase20-CIA-OFFLINE-NOT-RELEASE
           path: experimental
-      - name: Isolated emulator launch and screenshot evidence (best effort)
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 59888cb7194e2a819602a58ddfa76829d060aa00
+          path: dependencies/phase18
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase20-NONPLAYABLE-H168-CI-FIXTURE
+          path: synthetic-fixture
+      - name: Synthetic save import, on-screen offline edit and draft verification in Azahar (best effort)
         continue-on-error: true
         shell: bash
         run: |
@@ -310,6 +336,49 @@ jobs:
             import -window root evidence/3dsx-exit-attempt.png
             kill "$guest" 2>/dev/null || true
             wait "$guest" 2>/dev/null || true
+            # New emulator process with a generated NON-PLAYABLE H168 copy.
+            # This is NOT a dump of a game, ROM or any user's save.
+            outroot=demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue
+            mkdir -p "$outroot/imports"
+            cp synthetic-fixture/00000001.sav "$outroot/imports/00000001.sav"
+            sha256sum "$outroot/imports/00000001.sav" > evidence/import-before.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/3dsx-offline.log 2>&1 &
+            guest=$!
+            sleep 18
+            azwin=$(xdotool search --onlyvisible --name "Azahar" | head -n 1)
+            if test -n "$azwin"; then
+              xdotool windowactivate --sync "$azwin" || true
+              xdotool windowfocus --sync "$azwin" || true
+            fi
+            # Home -> seventh entry -> inspect imported copy -> return Home.
+            for i in 1 2 3 4 5 6; do tap3ds g; done
+            tap3ds a
+            tap3ds a
+            sleep 2
+            import -window root evidence/3dsx-imported-home.png
+            # Home -> Money -> A opens the Phase20 offline editor.
+            for i in 1 2 3; do tap3ds g; done
+            tap3ds a
+            import -window root evidence/3dsx-money.png
+            tap3ds a
+            import -window root evidence/3dsx-offline-money-editor.png
+            # Azahar 2126.2 D-pad Up=t (Down=g).
+            tap3ds t
+            import -window root evidence/3dsx-money-plus-one.png
+            tap3ds a
+            tap3ds a
+            tap3ds a
+            sleep 3
+            import -window root evidence/3dsx-draft-export-result.png
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+            # Hard evidence: the emulator produced TWO separately named
+            # SD drafts, and the original import remains byte-exact.
+            test -s "$outroot/backups/phase18_original_001.sav"
+            test -s "$outroot/drafts/phase18_draft_001.sav"
+            test "$(stat -c %s "$outroot/drafts/phase18_draft_001.sav")" -eq 131072
+            sha256sum -c evidence/import-before.txt
+            cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_001.sav"
             APPIMAGE_EXTRACT_AND_RUN=1 timeout 50s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
             installer=$!
             sleep 12
@@ -333,8 +402,21 @@ jobs:
           test -s evidence/3dsx-missing-copy.png
           test -s evidence/3dsx-exit-attempt.png
           test -s evidence/cia-home.png
+          test -s evidence/3dsx-imported-home.png
+          test -s evidence/3dsx-draft-export-result.png
           sha256sum -c evidence/canary-before.txt
-          echo 'PASS: best-effort Azahar startup and canary preserved' | tee evidence/result.txt
+          sha256sum -c evidence/import-before.txt
+          # An independent host compile of Phase18 v2 verifies the WHOLE
+          # modified save against its original, not just a changed money field.
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -I. -Idependencies/phase18/phase18 \
+            phase20/verify_emulator_draft.cpp -o /tmp/phase20-azahar-verify
+          /tmp/phase20-azahar-verify \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups/phase18_original_001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts/phase18_draft_001.sav \
+            | tee evidence/offline-draft-verified.txt
+          echo 'PASS: Azahar starts 3DSX and CIA; actual 3DS UI produced verified offline draft; SD canary intact' | tee evidence/result.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
