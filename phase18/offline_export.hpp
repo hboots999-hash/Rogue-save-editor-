@@ -55,7 +55,9 @@ inline ExportResult exportCopied(const uint8_t* expectedCopy,size_t n,
     if(!h168::directory(backups.c_str()))return {false,"Backup directory unavailable"};
     std::string backup,reason;
     if(!h168::uniqueWrite(backups,"phase18_original_",expectedCopy,backup,reason))
-        return {false,"Immutable backup creation/readback failed: "+reason};
+        return {false,"Immutable backup creation/readback failed"+
+                (backup.empty()?std::string{}:std::string(" [attempted backups/")+backup+"]")+
+                ": "+reason,backup};
     read=h168::readExact(sourcePath);
     if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
         return {false,"Stale after backup: draft not created",backup};
@@ -66,7 +68,9 @@ inline ExportResult exportCopied(const uint8_t* expectedCopy,size_t n,
     std::string draft;
     if(!h168::uniqueWrite(drafts,"phase18_draft_",prepared.candidate.data(),
                            draft,reason))
-        return {false,"Draft creation/readback failed: "+reason,backup};
+        return {false,"Draft creation/readback failed"+
+                (draft.empty()?std::string{}:std::string(" [attempted drafts/")+draft+"]")+
+                ": "+reason,backup,draft};
     read=h168::readExact(sourcePath);
     if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
         return {false,"Source changed after export: do not use draft",backup,draft};
