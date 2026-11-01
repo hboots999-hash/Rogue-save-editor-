@@ -146,6 +146,7 @@ inline bool decodeMon(const uint8_t* raw,size_t n,size_t start,Mon& result){
     result.gigantamaxFactor=uint8_t(packed>>31); // NOT the ability!
     // EX v2.1 Misc+8 bitfield: abilityNum bits 29..30 (2-bit slot).
     result.abilitySlot=uint8_t((h168::r32(p.data(),44)>>29)&3u);
+    if(result.abilitySlot>2)return false; // EX defines only 3 ability slots
     result.natureFromPid=uint8_t(result.pid%25);
     result.rawNatureModifier=uint8_t(raw[start+18]>>3);
     result.effectiveNature=uint8_t(result.natureFromPid^result.rawNatureModifier);
@@ -301,6 +302,7 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
             if(req.moveSlot>=4 ||
                oldMon.moves[req.moveSlot]!=req.expectedMoveId ||
                oldMon.pp[req.moveSlot]!=req.expectedPP ||
+               oldMon.moves[req.moveSlot]==0 ||
                req.moveId==0 || req.pp>64)
                 return blocked("Move guard, ID, PP or slot invalid");
             if(req.moveId!=req.expectedMoveId &&
