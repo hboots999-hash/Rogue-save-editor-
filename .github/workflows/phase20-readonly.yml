@@ -163,7 +163,7 @@ jobs:
           if grep -E 'AGBSAVE|FSPXI_|ARCHIVE_USER_SAVEDATA|rogue_restore::execute' phase20-build/ELF_SYMBOLS.txt; then
             echo 'FAIL: unexpected installed-save restore symbol'; exit 1
           fi
-          grep -Fq 'phase20::exportFixedSDCopy' phase20/offline_edit_v1.hpp
+          grep -Fq 'exportFixedSDCopy(const phase19::Demo& display' phase20/offline_edit_v1.hpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
