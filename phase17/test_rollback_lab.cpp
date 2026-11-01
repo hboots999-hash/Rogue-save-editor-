@@ -3,6 +3,7 @@
 // NEVER contacts the installed game, SD card or privileged Nintendo services.
 #include "rollback_lab.hpp"
 #include "recovery_evidence_gate.hpp"
+#include "readonly_status_producer.hpp"
 #include <cassert>
 #include <fstream>
 #include <iterator>
@@ -87,6 +88,66 @@ int main(int argc,char**argv) {
             assert(okEvidence.backupSize==263168);
             assert(okEvidence.journalSize==526400);
             assert(okEvidence.sourceCounter==49);
+            // Phase20 public status is a value-only observation. It never
+            // exposes a Plan, write handle, privileged session or permission.
+            P17ReadOnlyStatusV1 status{};
+            assert(phase17::inspectToStatusV1(evidence,signer,status));
+            assert(p17_readonly_status_shape_valid_v1(&status));
+            assert(status.abi_version==1 && status.struct_size==80);
+            assert(status.code==P17_RO_RAM_REHEARSAL_READABLE);
+            assert(status.capability_bits==0);
+            assert(status.expected_title==rogue_live::ExpectedTitle);
+            assert(status.source_counter==49);
+            assert(status.container_bytes==263168 &&
+                   status.journal_bytes==526400);
+            const auto originalDigest=phase14::hash(source.data(),source.size());
+            assert(std::equal(originalDigest.begin(),originalDigest.end(),
+                              status.source_sha256));
+            status.capability_bits=1;
+            assert(!p17_readonly_status_shape_valid_v1(&status));
+            status.capability_bits=0;
+            status.reserved1[0]=1;
+            assert(!p17_readonly_status_shape_valid_v1(&status));
+            status.reserved1[0]=0;
+            auto invalidEvidence=evidence;
+            invalidEvidence.journal.state=RecordState::Missing;
+            assert(phase17::inspectToStatusV1(invalidEvidence,signer,status));
+            assert(status.code==P17_RO_JOURNAL_MISSING);
+            assert(status.container_bytes==0 && status.source_counter==0 &&
+                   status.expected_title==0 && status.capability_bits==0);
+            assert(std::all_of(std::begin(status.source_sha256),
+                               std::end(status.source_sha256),
+                               [](uint8_t x){return x==0;}));
+            invalidEvidence=evidence;
+            invalidEvidence.rolledbackReceipt=RecordState::Unreadable;
+            assert(phase17::inspectToStatusV1(invalidEvidence,signer,status));
+            assert(status.code==P17_RO_STORAGE_ERROR);
+            // Malformed wrapper fields must fail BEFORE a signed plan can
+            // be constructed (no guessing or partial-slot fallback).
+            phase14::Layout rejectedLayout{};
+            for(size_t off:{size_t(0),size_t(rogue_live::SlotSize)}) {
+                for(size_t field:{size_t(0),size_t(0x38),size_t(0x50),
+                                  size_t(0x54)}) {
+                    auto malformed=source;
+                    malformed[off+field]^=1;
+                    assert(!phase14::layout(malformed,rejectedLayout));
+                }
+            }
+            {
+                auto malformed=source;
+                h168::w32(malformed.data(),0x34,49);
+                h168::w32(malformed.data(),rogue_live::SlotSize+0x34,49);
+                assert(!phase14::layout(malformed,rejectedLayout));
+                h168::w32(malformed.data(),0x34,48);
+                h168::w32(malformed.data(),rogue_live::SlotSize+0x34,60);
+                assert(!phase14::layout(malformed,rejectedLayout));
+                h168::w32(malformed.data(),0x34,0);
+                h168::w32(malformed.data(),rogue_live::SlotSize+0x34,UINT32_MAX);
+                assert(!phase14::layout(malformed,rejectedLayout));
+                malformed=source;
+                malformed.pop_back(); // beyond both slots, but raw identity changed
+                assert(!phase14::authenticate(malformed,signer,rejectedLayout));
+            }
             // Sample damage across the entire 526400-byte journal, not
             // just its trailing digest. No corrupted sample may pass the
             // read-only evidence gate or reach the RAM rollback rehearsal.
@@ -161,6 +222,31 @@ int main(int argc,char**argv) {
             FakeSigner detachedSigner{};
             assert(phase17::inspectRecoveryEvidence(evidence,detachedSigner).code==
                    EvidenceCode::InvalidAuthentication);
+            // If an unexpected header byte changes DURING a staged RAM
+            // transaction, refusal is mandatory; never auto-undo unknown data.
+            {
+                phase17::Shadow tampered(source);
+                tampered.tamperOnFirstWrite=true;
+                assert(phase14::execute(tampered,signer,plan)==
+                       phase14::Status::RecoveryRequired);
+                assert(tampered.journalPresent && !tampered.receiptWritten);
+                const int writesBefore=tampered.writes;
+                assert(phase14::recover(tampered,signer,plan)==
+                       phase14::Status::RecoveryRequired);
+                assert(tampered.writes==writesBefore);
+            }
+            // RAM IO refuses out-of-bounds requests, including overflow
+            // arithmetic and a null data pointer, without touching state.
+            {
+                phase17::Shadow bounded(source);
+                bounded.journalPresent=true;
+                bounded.journal=record;
+                const auto originalBytes=bounded.live;
+                assert(!bounded.write(bounded.live.size(),nullptr,1));
+                assert(!bounded.write(bounded.live.size()+1,originalBytes.data(),1));
+                assert(!bounded.write(0,originalBytes.data(),bounded.live.size()+1));
+                assert(bounded.writes==0 && bounded.live==originalBytes);
+            }
             // A full shadow write with a FAILED completion receipt must be
             // reported unresolved, then recoverable on a new RAM backend.
             {
