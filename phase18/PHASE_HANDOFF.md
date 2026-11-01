@@ -103,3 +103,50 @@ to write installed saves. All Phase18 outputs are offline drafts only.**
 **Integration contract:** Phase19 should call `inspectReadOnly`, retain `SaveView.sourceSha256`, create requests through `beginRequest` or `beginMoveRequest` (for moves 0–3), and then call `propose` with that SHA-256 guard; `verifyExact` must validate the output before any offline export. Unsupported abilities, new move identifiers, nature, generic item insertion, and PC mutations remain blocked by default. This branch never interfaces with Phase16/17 restoration; PR #8 remains **draft**.
 
 The complete per-feature decision matrix and missing proof are in [PHASE20_FEATURE_MATRIX.md](PHASE20_FEATURE_MATRIX.md). The three-job CI run is a **synthetic/compile pass, not a real-ROM/gameplay test**.
+
+## Independent integration QA PR #10 — Phase18 remediation (1 Nov 2026)
+
+**QA-08 header collision — addressed in Phase18:** the Phase10 raw inspector has been
+isolated as `rogue18::raw_v1`, split into pure-memory
+`raw_v1.hpp` and separately included SD-only `raw_v1_sd.hpp`.
+The current Phase18 reader no longer exposes global `::h168`, allowing
+Phase17's unrelated global `::h168` definitions in the same TU.
+`test_unified_v2.cpp` compiles both headers with the pinned
+Phase17 commit `132ef904c453dd5e793f9069fd55b5ac045bdced`,
+three strict and three sanitizer repetitions, plus ARM11 compilation.
+This is not a combined Phase19 CIA compatibility test.
+
+**QA-09 preflight mismatch — explicitly blocked:** new
+`integration_v2.hpp` defines v2 read-only inspection, source-hash-locked
+requests, per-operation capability/evidence declarations, and a RAM-only
+preview/verify path. It classifies legacy money+1 and existing quantity+1
+**shapes** but has no bridge to Phase13/14, and
+`mayRestoreInstalledGame` is always false. Expanded IV/EV/move/other
+offline edits cannot pass Phase13/14's narrow preflight or be restored.
+
+**QA-04 untrusted Evidence gating — tightened:** the exported SD-only draft
+interface now calls `v2::preview`, rejects missing SHA-256 input seals,
+and has no caller-supplied `Evidence` parameter. Ability, nature,
+new move ID and insertion requests are blocked through the export path
+even when a research test manually turns on low-level evidence flags.
+The lower-level `rogue18::propose` remains a synthetic research tool,
+not a Phase19/20 production contract.
+
+**Memory safety:** the optional research PC parser's >36 KiB storage
+array was moved from stack to heap. No PC mutation is enabled. Complete
+synthetic regression sets cover both raw banks, all 24 Pokémon block
+permutations, checksum/tamper cases, source-lock failures and exact
+rollback, including tail bytes and a strict byte-change footprint.
+
+**Phase19 handoff caveat:** Phase19's currently pinned old header still
+refers to global `::h168` and is **not source-compatible** with the new
+v2 namespace without a separate adapter update in Phase19 or Phase20.
+This branch did not touch Phase19 or Phase17. Do not claim combined
+Phase19/Phase20 integration passed solely because the new strict
+Phase17+Phase18 unified probe compiles.
+
+See [PHASE20_INTEGRATION_CONTRACT_V2.md](PHASE20_INTEGRATION_CONTRACT_V2.md)
+for the precise supported API, capabilities, memory and release gates.
+
+**All live GBA VC writes, CMAC signing, restore and edit-to-container
+bridging remain out of scope and forbidden.**
