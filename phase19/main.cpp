@@ -5,10 +5,12 @@
 #include <cstdio>
 #include "ui.hpp"
 #include "screen_text.hpp"
+#include "offline_edit_presentation.hpp" // compile/size-audit shared UI-only Phase20 adapter
 #include "read_only_import.hpp"
 #include "rosalina_input.hpp"
 #include <string>
 using namespace phase19;
+static_assert(sizeof(OfflineApprovalGate)<16u,"ARM11 approval gate should stay tiny");
 namespace {
 const char* names[6]={"HP","Atk","Def","SpA","SpD","Spe"};
 const char* groupName(Group g) {
