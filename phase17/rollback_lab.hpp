@@ -54,6 +54,7 @@ public:
     Bytes live;
     Bytes journal;
     int writes=0, shortWriteAt=0, powerLossAt=0;
+    int reads=0, failReadAt=0; // RAM-only test double for failed fresh reads
     bool journalPresent=false;
     bool receiptWritten=false;
     bool failReceipt=false; // Simulate lost/failed terminal receipt in RAM only.
@@ -62,7 +63,13 @@ public:
     explicit Shadow(Bytes initial):live(std::move(initial)) {}
     bool writesAllowed()const{return true;} // ONLY this private vector
     bool unresolved()const{return journalPresent;}
-    bool read(Bytes& copy) {copy=live;return true;}
+    bool read(Bytes& copy) {
+        ++reads;
+        copy.clear();
+        if(failReadAt && reads==failReadAt)return false;
+        copy=live;
+        return true;
+    }
     bool persist(const Plan& p) {
         if(journalPresent)return false;
         journal=phase14::encodeJournal(p);
