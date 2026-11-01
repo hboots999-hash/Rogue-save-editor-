@@ -38,7 +38,14 @@ static void unchanged(const State& s,const Demo& original) {
         assert(s.demo.bag[i].quantity==original.bag[i].quantity);
 }
 int main(){
+    // Real 3DS installed CIA faulted with a write near its main stack.
+    // The previous State stored the >32KiB snapshot directly in a local.
+    static_assert(sizeof(Demo)>32768,"Fixture must remain large enough to exercise storage guard");
+    static_assert(sizeof(State)<256,"UI model must not embed the large fixture");
     State s;
+    State sameFixture;
+    assert(&s.demo==&sameFixture.demo); // process-lifetime mock, not a stack copy
+    assert(s.demo.synthetic);
     const Demo original=s.demo;
     assert(s.demo.synthetic && count(s)==6);
     home(s,0);
