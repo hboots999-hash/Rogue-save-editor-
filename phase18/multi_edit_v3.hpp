@@ -194,14 +194,18 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
     // v2 preview). This proves no aggregate mutation escaped the union
     // of allowed byte fields and the two checksums.
     Bytes expected(original,original+n);
-    std::vector<uint8_t> writable(n,0);
+    // Every permitted edit is confined to the currently active 4096-byte
+    // save section 1. Bound the footprint mask to that section to avoid
+    // allocating an unnecessary 128 KiB map on the 3DS.
+    std::vector<uint8_t> writable(raw_v1::Sector,0);
     raw_v1::Info info{};
     if(!validate(original,n,info))return blocked("Original H168 structural failure");
     const auto& bank=info.banks[info.active];
     const size_t s1=bank.sector[1];
     const auto mark=[&](size_t at,size_t length){
-        if(at>n || length>n-at)return false;
-        for(size_t i=0;i<length;i++)writable[at+i]=1;
+        if(at<s1 || at-s1>raw_v1::Sector ||
+           length>raw_v1::Sector-(at-s1))return false;
+        for(size_t i=0;i<length;i++)writable[at-s1+i]=1;
         return true;
     };
     for(const auto& e:batch.edits){
@@ -254,7 +258,8 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
     Result result{};
     result.reason="V3 RAM-only combined draft; never restore to installed game";
     for(size_t i=0;i<n;i++)if(working[i]!=original[i]){
-        if(!writable[i])return blocked("Aggregate footprint escaped allowed fields");
+        if(i<s1 || i-s1>=raw_v1::Sector || !writable[i-s1])
+            return blocked("Aggregate footprint escaped allowed fields");
         result.changedOffsets.push_back(i);
     }
     if(result.changedOffsets.empty())return blocked("Aggregate no-op");
