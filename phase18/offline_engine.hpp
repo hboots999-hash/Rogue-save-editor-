@@ -4,6 +4,7 @@
 // but structural validity is NOT proof that a draft is game-playable.
 #pragma once
 #include "../phase10/preview/offline.hpp"
+#include "bag_rules.hpp"
 #include <array>
 #include <algorithm>
 #include <cstddef>
@@ -24,6 +25,10 @@ struct Evidence {
     std::vector<uint16_t> verifiedMoveIds{};
     std::vector<uint16_t> verifiedInsertItemIds{};
     bool verifiedBagInsertion=false;
+    // Capacity-upgrade byte address is not yet confirmed for private H168.
+    // Explicit independent evidence is required; 255 means unverified.
+    unsigned verifiedUpgradeCount=255;
+    std::vector<std::pair<uint16_t,uint8_t>> verifiedItemPockets{};
     bool verifiedAbilitySlot=false;
     bool verifiedNatureModifier=false; // matching ROM's GetNature uses header byte +18
 };
@@ -229,6 +234,15 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
             if(!h168::item(raw,before,i,id,qty) || id==req.itemId)
                 return blocked("Duplicate/invalid item insertion");
         }
+        std::vector<uint16_t> existingIds;
+        for(unsigned i=0;i<before.items;i++){
+            unsigned id=0,qty=0;
+            if(!h168::item(raw,before,i,id,qty))return blocked("Unverified existing item");
+            existingIds.push_back(static_cast<uint16_t>(id));
+        }
+        if(!insertionCompatible(evidence.verifiedItemPockets,existingIds,
+                                req.itemId,evidence.verifiedUpgradeCount))
+            return blocked("Bag pocket ordering/capacity evidence missing or exceeded");
         field=s1+0x578+req.slot*4;width=4;
         h168::w16(draft.data(),field,req.itemId);
         h168::w16(draft.data(),field+2,uint16_t(req.quantity^uint16_t(bank.key)));
