@@ -45,6 +45,7 @@ jobs:
           g++ $FLAGS -Iphase18 phase18/test_integrity.cpp -o /tmp/pksm-phase18-integrity-test
           g++ $FLAGS -Iphase18 phase18/test_integration_v2.cpp -o /tmp/pksm-phase18-v2-test
           g++ $FLAGS -Iphase18 phase18/test_multi_v3.cpp -o /tmp/pksm-phase18-v3-test
+          g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_multi_v3_faults.cpp -o /tmp/pksm-phase18-v3-fault-test
           g++ $FLAGS -Iphase18 phase18/test_phase20_matrix.cpp -o /tmp/pksm-phase18-phase20-matrix-test
           g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_sd_faults.cpp -o /tmp/pksm-phase18-sd-fault-test
           g++ $FLAGS -Iphase18 phase18/test_boundaries_v2.cpp -o /tmp/pksm-phase18-boundaries-test
@@ -66,6 +67,7 @@ jobs:
           /tmp/pksm-phase18-integrity-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-v2-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-v3-test
+          /tmp/pksm-phase18-v3-fault-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-phase20-matrix-test
           /tmp/pksm-phase18-sd-fault-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-boundaries-test
