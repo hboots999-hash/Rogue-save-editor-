@@ -47,6 +47,10 @@ void draw(const Screen& state) {
                state.lab.shortWriteRollbacks);
         printf("Crash restart recoveries: %u / 4\n",
                state.lab.crashRestarts);
+        printf("Rollback short retries: %u / 4\n",
+               state.lab.failedRollbackRetries);
+        printf("Rollback crash retries: %u / 4\n",
+               state.lab.interruptedRollbackRetries);
         printf("Foreign-change refusals: %u / 1\n",
                state.lab.foreignChangeBlocks);
         printf("Bytes recovered exactly: %s\n",
