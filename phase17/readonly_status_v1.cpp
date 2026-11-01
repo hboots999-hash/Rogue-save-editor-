@@ -23,12 +23,13 @@ extern "C" int p17_readonly_status_shape_valid_v1(const P17ReadOnlyStatusV1* s) 
     for(auto c:s->reserved1)if(c)return 0;
     if(s->code==P17_RO_RAM_REHEARSAL_READABLE) {
         // Schema check, NOT a signature or proof that the sender is honest.
-        // The 263168-byte normal wrapper is the minimum; reject claimed
-        // records that could not possibly contain two H168 VC slots.
-        const uint32_t minimum=2u*(131072u+512u);
+        // Phase17 is an EXACT-size observed target profile. Reject invented
+        // larger/shorter wrappers even though Phase14's generic legacy
+        // layout parser can accept unrelated trailing bytes.
+        const uint32_t exact=2u*(131072u+512u);
         if(s->expected_title!=UINT64_C(0x0004000007D7BA00) ||
-           s->container_bytes<minimum || s->container_bytes>1024u*1024u ||
-           s->journal_bytes!=64u+2u*s->container_bytes ||
+           s->container_bytes!=exact ||
+           s->journal_bytes!=64u+2u*exact ||
            s->source_counter>=UINT32_MAX-1u)return 0;
     }
     if(s->code!=P17_RO_RAM_REHEARSAL_READABLE) {
