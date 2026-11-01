@@ -97,3 +97,16 @@ These changes were made without a physical 3DS:
 **Phase 20:** See [PHASE20_INTEGRATION_CONTRACT.md](PHASE20_INTEGRATION_CONTRACT.md) for current read-only APIs, unsupported real PC and identifier-name assumptions, required future edit intents, independent source fingerprints, hardware/recovery release gates and strict nonwriting policy.
 
 **Safe later testing:** Run only the new 3DSX through Homebrew Launcher. Without placing any actual file, open **Inspect SD copy (read-only)** and press A; expect a missing-import warning, B return, standalone START release exit. If accessing Rosalina, hold START+SELECT together; it should not exit the app. Do **not** test the previously crashing CIA, install new CIA, rewrite your Emerald Rogue save or truncate the 263168-byte authenticated VC container. Independent originals remain untouched. All new build tests are host/emulator only, **not** real-console passes; PR #7 stays DRAFT/unmerged.
+
+
+## 1 November 2026 — Phase19 accessibility/layout/stress completion
+
+This branch now additionally includes:
+- `screen_text.hpp` allocation-free, host-tested 31-column word wrapping, long-word splitting, blank/embedded hard-newline handling; `test_screen_text.cpp` covers page bounds including the final 450-stack page.
+- `test_accessibility.cpp` exercises every home entry using **no L shoulder**: R/Right advances, X/Left reverses for PC/Editing/Bag; cancel/back paths and both session transitions are tested. The extreme 450-stack bag case is included.
+- `test_state_stress.cpp` runs **40,000 deterministic no-L button events** over fictional and imported-data screen models under strict host builds and ASan/UBSan. It asserts unchanged source objects, valid selection/field/page bounds and that read-only imports never enter Edit/Proposal, including deliberate corruption of the `synthetic` display flag without lifting the independent session gate.
+- `populateMock` now wipes the complete previous snapshot **in-place** before repopulating fictional content, preventing stale imported records from persisting in unused slots without reintroducing a giant ARM11 stack object.
+- Current `INTEGRATION_CONTRACT.md` and README are updated to match the **live read-only parser integration** instead of the outdated pre-integration mock-only descriptions. The separate `PHASE20_INTEGRATION_CONTRACT.md` remains the canonical future interface contract.
+- Azahar CI collects best-effort screenshots for import-menu navigation, missing-copy error and exit attempts, **not hardware proof**. Native exit is standalone START **release**, with START+SELECT reserved for Rosalina; emulator key mappings are not guaranteed.
+
+No code has enabled actual save editing, installed-game archive writes, draft exporting, authentication, restoration or injection. Phase18 and Phase17 branch commits were not changed. The updated 3DSX **must be retested on hardware when available**; the previous successful hardware screenshots apply only to an earlier synthetic version. Keep PR #7 DRAFT and unmerged.
