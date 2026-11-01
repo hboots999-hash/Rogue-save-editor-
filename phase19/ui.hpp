@@ -88,11 +88,11 @@ inline unsigned maximum(const State& s) {
 }
 inline const char* recoveryMessage(unsigned code) {
     switch(code) {
-        case 0: return "No save: keep originals; verify game ID and use an external backup.";
-        case 1: return "Unsupported layout: do NOT edit; confirm exact Rogue version.";
-        case 2: return "Checksum failed: do NOT restore; use a known-good original.";
-        case 3: return "Backup missing: stop. Create a verified external backup first.";
-        default: return "Restore denied: CMAC and rollback are not approved.";
+        case 0: return "NO SAVE / WRONG GAME\nKeep original save safe.\nCheck the installed title ID.\nCheck a separate backup.";
+        case 1: return "UNKNOWN SAVE LAYOUT\nDo not edit or inject.\nVerify Emerald Rogue 2.1.2\nand the exact ROM build.";
+        case 2: return "CHECKSUM FAILED\nStop: no restore or edits.\nUse a known-good untouched\nexternal recovery backup.";
+        case 3: return "BACKUP NOT VERIFIED\nNo app backup was checked.\nVerify GodMode9 / Checkpoint\nbackups independently.";
+        default: return "RESTORE IS BLOCKED\nAuthenticated CMAC signing\nand rollback are NOT enabled\nin the Phase 19 preview.";
     }
 }
 inline bool canPreview(const State& s) {
