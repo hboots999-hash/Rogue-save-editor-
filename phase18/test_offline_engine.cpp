@@ -283,6 +283,7 @@ int main(int argc,char** argv){
     CHECK(!propose(b.data(),b.size(),q,insertion).ok);
 
 
+    const unsigned s1=info.banks[1].sector[1];
     auto corrupt=b;
     // Flip one protected byte in every physical sector of both banks.
     // All 28 must be rejected despite the active party being otherwise valid.
