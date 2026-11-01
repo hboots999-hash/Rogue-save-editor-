@@ -2,7 +2,7 @@
 // No installed title archives, save restoration, proposal calls or file writes.
 #pragma once
 #include "adapter.hpp"
-#include "phase18/offline_engine.hpp"
+#include "phase18/editor_model.hpp"
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -13,54 +13,56 @@
 
 namespace phase19 {
 constexpr const char* OfflineImportPath="sdmc:/3ds/PKSM-Rogue/imports/00000001.sav";
+// Only the versioned Phase18 read-only SaveView is admitted to this UI.
+// No Phase18 Request, propose, export, restoration or write API is called.
+static_assert(rogue18::ModelApiVersion==1u,
+              "Phase19 requires a reviewed Phase18 SaveView v1; audit before repinning");
 struct Phase18ReadView final : ReadOnlyProvider {
-    const uint8_t* data;
-    const size_t length;
-    const h168::Info info;
-    Phase18ReadView(const uint8_t* p,size_t n,const h168::Info& valid)
-       :data(p),length(n),info(valid){}
+    const rogue18::SaveView& view;
+    explicit Phase18ReadView(const rogue18::SaveView& v):view(v){}
     Availability summary(unsigned& money,unsigned& counter) const override {
-        money=info.money;
-        counter=info.banks[info.active].counter;
+        money=view.money;
+        counter=view.activeCounter;
         return Availability::Ready;
     }
     Availability partyCount(unsigned& size) const override {
-        size=info.partyCount;return size?Availability::Ready:Availability::Empty;
+        size=static_cast<unsigned>(view.party.size());
+        return size?Availability::Ready:Availability::Empty;
     }
     Availability partyAt(unsigned index,Pokemon& p) const override {
-        rogue18::Mon m{};
-        if(!rogue18::partyAt(data,length,info,index,m))
+        if(index>=view.party.size() || view.party[index].slot!=index)
             return Availability::Invalid;
+        const rogue18::Mon& m=view.party[index].value;
         p=Pokemon{};
         p.species=m.species;
-        p.level=0; // Phase18 Mon does not expose verified level or nickname.
+        p.level=0; // Not verified by Phase18 numeric read-only contract.
         std::snprintf(p.name,sizeof(p.name),"Species %u",p.species);
         for(unsigned i=0;i<6;i++){
             p.iv[i]=m.ivs[i];p.ev[i]=m.evs[i];
         }
-        for(unsigned i=0;i<4;i++) {
+        for(unsigned i=0;i<4;i++){
             p.moves[i]=m.moves[i];p.pp[i]=m.pp[i];
         }
-        p.ability=m.abilitySlot; // Phase18 EX v2.1 Misc+8 bits 29-30, NOT Gmax bit.
-        p.nature=m.effectiveNature; // already range-validated in Phase18.
+        p.ability=m.abilitySlot; // 0,1,2; explicitly NOT the Gmax flag
+        p.nature=m.effectiveNature;
         p.egg=m.egg;
         return Availability::Ready;
     }
     Availability bagCount(unsigned& size) const override {
-        size=info.items;return size?Availability::Ready:Availability::Empty;
+        size=static_cast<unsigned>(view.items.size());
+        return size?Availability::Ready:Availability::Empty;
     }
     Availability itemAt(unsigned index,Item& item) const override {
-        unsigned id=0,qty=0;
-        if(!h168::item(data,info,index,id,qty))
+        if(index>=view.items.size() || view.items[index].slot!=index)
             return Availability::Invalid;
+        const auto& i=view.items[index];
         item=Item{};
-        item.id=id;item.quantity=qty;
-        // No independently verified Emerald Rogue 2.1.2 item-ID name database.
-        std::snprintf(item.name,sizeof(item.name),"Item %u",id);
+        item.id=i.itemId;item.quantity=i.quantity;
+        std::snprintf(item.name,sizeof(item.name),"Item %u",item.id);
         return Availability::Ready;
     }
     Availability pcBoxCount(unsigned& n) const override {
-        n=0;return Availability::Unsupported; // no verified PC parser in PR #8.
+        n=0;return Availability::Unsupported;
     }
     Availability pcBoxSize(unsigned,unsigned& n) const override {
         n=0;return Availability::Unsupported;
@@ -69,7 +71,6 @@ struct Phase18ReadView final : ReadOnlyProvider {
         return Availability::Unsupported;
     }
 };
-
 // Processes a caller-provided exact 128-KiB *copy*. Never writes or persists it.
 // On validation error, leaves the currently visible snapshot unchanged.
 inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
@@ -78,12 +79,28 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
         reason="Exact 128 KiB unwrapped H168 copy required.";
         return false;
     }
-    h168::Info info{};
-    if(!rogue18::validate(raw,n,info)) {
-        reason="Unsupported H168 copy or checksum/counter failure.";
+    rogue18::SaveView model{};
+    try {
+        model=rogue18::inspectReadOnly(raw,n,false); // No PC candidate inference.
+    }catch(const std::bad_alloc&) {
+        reason="Not enough memory to validate copied save.";
         return false;
     }
-    Phase18ReadView view(raw,n,info);
+    if(!model.valid || model.apiVersion!=rogue18::ModelApiVersion ||
+       model.confidence!=rogue18::DataConfidence::StructurallyValidated ||
+       !rogue18::hasDigest(model.sourceSha256) ||
+       !model.capabilities.copiedSaveOnly ||
+       model.capabilities.liveWrite || model.capabilities.restore ||
+       model.capabilities.pcEdit) {
+        reason="Unsupported H168 copy, counter, checksum or model version.";
+        return false;
+    }
+    if(model.party.size()>6u || model.items.size()>450u ||
+       model.money>999999u) {
+        reason="Validated copy exceeds read-only viewer bounds.";
+        return false;
+    }
+    Phase18ReadView view(model);
     // Stage in static storage: invalid input never changes current UI.
     // Never allocate a ~64 KiB Demo inside the 3DS main-thread stack.
     static Demo checked{};
@@ -101,6 +118,8 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
     checked.pcStatus=Availability::Unsupported;
     checked.backupStatus=Availability::Unverified;
     checked.synthetic=false; // No real-data edit proposals, ever.
+    checked.sourceModelApi=model.apiVersion;
+    checked.sourceSha256=model.sourceSha256;
     destination=checked;
     reason="H168 structure checked; ROM identity unverified. READ ONLY.";
     return true;
