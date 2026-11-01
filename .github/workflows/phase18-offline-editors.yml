@@ -112,6 +112,7 @@ jobs:
         run: |
           set -eu
           "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -Wframe-larger-than=4096 -fstack-usage \
             -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -Werror=frame-larger-than=4096 -fstack-usage \
             -I"${DEVKITPRO}/libctru/include" -Iphase18 -D__3DS__ \
             -c phase18/native_compile.cpp -o /tmp/phase18-native.o
@@ -126,5 +127,22 @@ jobs:
             -I"${DEVKITPRO}/libctru/include" $P17 -Iphase18 -D__3DS__ \
             -c phase18/test_unified_v2.cpp -o /tmp/phase18-unified-native.o
           test -s /tmp/phase18-unified-native.o
+          # GCC emits .su files for actually generated ARM code, including
+          # v2 exportCopied, not only the lightweight read-only model.
+          ls -l /tmp/phase18-native.su /tmp/phase18-unified-native.su
+          python3 - <<'PY'
+          import glob
+          frames=[]
+          for file in glob.glob('/tmp/phase18-*-native.su')+['/tmp/phase18-native.su']:
+              for line in open(file):
+                  parts=line.rstrip().split('\\t')
+                  if len(parts)>=3:
+                      try: frames.append((int(parts[1]),parts[2],parts[0]))
+                      except ValueError: pass
+          assert frames, "No ARM11 stack-frame evidence emitted"
+          frames.sort(reverse=True)
+          print("Largest compiled ARM11 frames:",frames[:10])
+          assert frames[0][0]<=4096, "Large ARM11 stack frame"
+          PY
           echo "Phase18 ARM11 stack-usage report (compiler estimates, not hardware measurement):"
           find /tmp -maxdepth 1 -name 'phase18-*.su' -print -exec cat {} \;
