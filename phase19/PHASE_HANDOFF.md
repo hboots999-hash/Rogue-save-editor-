@@ -32,3 +32,17 @@ This PR was developed on the EXISTING feature/phase19-editor-ui branch. Added ad
 Key adapter contract: ReadOnlyProvider -> capture() -> immutable bounded snapshot. It can expose only independently validated party, bag and money data, or explicit unsupported/error states. PC remains unsupported on real data pending a verified PC map. Ability is a slot bit, not an arbitrary ability ID; nature is PID-derived and immutable; changed move IDs require an independent ROM allowlist; item insertion is not supported. Real view snapshots cannot activate proposals, while mock proposals are always blocked after two confirmations. The native app still only loads fictional data.
 
 See INTEGRATION_CONTRACT.md for Phase18 rogue18::validate, partyAt, Mon, Request, Evidence, and h168::item compatibility mapping. Verification of the actual installed title and full save edit/export, CMAC and rollback, game-load/re-save persistence and manual physical-console UI testing remain separate blockers. Keep the PR draft/unmerged.
+
+
+## 1 November 2026 — real Nintendo 3DS hardware crash report (OPEN RETEST)
+
+The user supplied a photo of an ARM11 core 0 **data abort** screen showing:
+- `Current process: PKSM Rog (000400000F73A500)` — the isolated experimental Phase 19 CIA process, **not** Emerald Rogue.
+- Fault `Translation - Section`, access type `Write`. Fault address on screen near `0x07FF85D8`, in the region normally used for the ARM11 application stack.
+- **Hardware outcome of that experimental build: FAIL.** Emulator launch successes before this photograph are not a substitute. No evidence of changed game save bytes; the demo has no save writer, but live-game integrity still must be checked independently.
+
+Potential root cause identified on source inspection: expanded adapter `Demo` embeds 14 x 30 Pokémon records plus 450 bag stacks (significantly over 32 KiB). Previously, `State` owned `const Demo demo` and main created a local `State state`, risking oversized thread-stack allocation. The 3DS executable now uses a **small State holding a const reference**, a single **static in-place populated** fixture, and a static native `State`. Compile-time and host test guards require `sizeof(State) < 256` and demonstrate the fixture remains large enough for the regression to matter. No actual root-cause symbolication or corrected physical-console test has yet been recorded; stack exhaustion is a strong hypothesis, **not proof**.
+
+**Retest gate:** check HOME Menu and Emerald Rogue independently first; retain original saves/backups. Do not relaunch the crashing CIA. After replacement build CI passes, prefer testing corrected standalone 3DSX only. Stop on another exception and record the screen; keep CIA retest separate. A successful replacement emulator job does **not** close this hardware incident.
+
+The Phase19 PR must remain **DRAFT/unmerged** and must not claim physical hardware pass until manually retested.
