@@ -62,10 +62,10 @@ inline unsigned editFieldCount(Group g) {
 inline unsigned count(const State& s) {
     switch(s.screen) {
         case Screen::Home: return 7;
-        case Screen::Party: return s.demo.partyStatus==Availability::Ready?s.demo.partyCount:0;
-        case Screen::PC: return s.demo.pcStatus==Availability::Ready && s.box<s.demo.pcBoxes ?
-                                 s.demo.pcCounts[s.box]:0;
-        case Screen::Bag: return s.demo.bagStatus==Availability::Ready?s.demo.bagCount:0;
+        case Screen::Party: return s.demo.partyStatus==Availability::Ready?std::min(s.demo.partyCount,static_cast<unsigned>(s.demo.party.size())):0;
+        case Screen::PC: return s.demo.pcStatus==Availability::Ready && s.box<s.demo.pcBoxes && s.box<s.demo.pc.size() ?
+                                 std::min(s.demo.pcCounts[s.box],static_cast<unsigned>(s.demo.pc[s.box].size())):0;
+        case Screen::Bag: return s.demo.bagStatus==Availability::Ready?std::min(s.demo.bagCount,static_cast<unsigned>(s.demo.bag.size())):0;
         case Screen::Backups: return 3;
         case Screen::Recovery: return 5;
         case Screen::Edit: return editFieldCount(s.group);
@@ -90,7 +90,7 @@ inline const Pokemon& pokemon(const State& s) {
 inline unsigned original(const State& s) {
     if(s.proposalFrom == Screen::Money) return s.demo.money;
     if(s.proposalFrom == Screen::Bag)
-        return s.selected<s.demo.bagCount && s.selected<s.demo.bag.size()?s.demo.bag[s.selected].quantity:0u;
+        return s.demo.bagStatus==Availability::Ready && s.selected<s.demo.bagCount && s.selected<s.demo.bag.size()?s.demo.bag[s.selected].quantity:0u;
     if(s.proposalFrom == Screen::Edit) {
         if(!selectedPokemonValid(s) || s.field>=editFieldCount(s.group))return 0u;
         const auto& m=pokemon(s);
