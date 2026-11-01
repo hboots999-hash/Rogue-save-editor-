@@ -162,6 +162,12 @@ inline Demo mockSnapshot() {
     d.bag[4]={"Repel",86,12};
     return d;
 }
+// Keep the large fixture in static storage, never in an ARM11 stack frame.
+// C++17 copy elision/NRVO constructs this process-lifetime const object once.
+inline const Demo& mockSnapshotRef() {
+    static const Demo fixture=mockSnapshot();
+    return fixture;
+}
 inline const char* availabilityText(Availability v) {
     switch(v) {
         case Availability::Ready: return "READABLE";
