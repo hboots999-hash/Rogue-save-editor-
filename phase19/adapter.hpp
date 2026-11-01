@@ -46,6 +46,18 @@ struct ReadOnlyProvider {
     virtual Availability pcBoxSize(unsigned box,unsigned& count) const=0;
 };
 
+inline bool validPokemon(const Pokemon& m) {
+    if(!m.species || m.level>100 || m.ability>1 || m.nature>24)return false;
+    unsigned evsum=0;
+    for(unsigned i=0;i<6;i++){
+        if(m.iv[i]>31 || m.ev[i]>252)return false;
+        evsum+=m.ev[i];
+    }
+    if(evsum>510)return false;
+    for(unsigned i=0;i<4;i++)
+        if(m.pp[i]>64)return false;
+    return true;
+}
 // Fail closed. Unsupported or invalid provider data must not leak mock values.
 // Hard limits intentionally small until storage layout and paging are proven.
 inline Demo capture(const ReadOnlyProvider& p) {
@@ -62,7 +74,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
             out.partyCount=n;
             for(unsigned i=0;i<n;i++){
                 if(p.partyAt(i,out.party[i])!=Availability::Ready ||
-                   !out.party[i].species || out.party[i].level>100) {
+                   !validPokemon(out.party[i])) {
                     out.partyStatus=Availability::Invalid;out.partyCount=0;break;
                 }
             }
@@ -102,7 +114,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
                 out.pcCounts[b]=slots;
                 for(unsigned i=0;i<slots;i++) {
                     if(p.pcAt(b,i,out.pc[b][i])!=Availability::Ready ||
-                       !out.pc[b][i].species) {
+                       !validPokemon(out.pc[b][i])) {
                         out.pcStatus=Availability::Invalid;break;
                     }
                 }
