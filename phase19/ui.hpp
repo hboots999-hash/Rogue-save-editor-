@@ -23,11 +23,13 @@ struct State {
     unsigned field = 0;
     unsigned proposal = 0;
     const char* notice = "";
-    // Synthetic sample is immutable throughout every transition. No real save is loaded.
-    const Demo demo;
-    State():demo(mockSnapshot()){}
+    // Non-owning read-only snapshot view: no 64-KiB demo in the 3DS thread stack.
+    // Caller keeps externally supplied provider snapshot alive during UI use.
+    const Demo& demo;
+    State():demo(mockSnapshotRef()){}
     explicit State(const Demo& source):demo(source){}
 };
+static_assert(sizeof(State)<256,"Phase19 State must remain stack-safe on 3DS");
 
 inline unsigned count(const State& s) {
     switch(s.screen) {
