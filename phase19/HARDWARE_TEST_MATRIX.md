@@ -19,7 +19,7 @@
 | 04 | Pokémon edit | R, Down, A, Right, X, B | EV proposals, 510 cap, reset and cancel | PARTIAL PASS (user-confirmed): Volcarona HP EV +1 proposal reached final BLOCKED notice on physical 3DS. 510-cap boundary, X reset and B cancel not individually tested. |
 | 05 | Pokémon edit | R, A, Up, A | Changed move ID produces UNVERIFIED warning; no write | PASS (user-confirmed): Volcarona first move ID +1 proposal refused as INVALID/UNVERIFIED on real 3DS. |
 | 06 | Pokémon edit | R (to PP), A, Up, A, B | Move PP proposal supported for demo; B cancels from confirmation to proposal | PASS (user-confirmed): increased synthetic move PP, opened confirmation and pressed B to return to proposal; no write. |
-| 07 | Pokémon edit | R to ability and nature; A on each | Unsupported edit notices | NOT RUN |
+| 07 | Pokémon edit | R to ability and nature; A on each | Unsupported edit notices | PASS (user-confirmed): both Ability and Nature editing correctly showed UNSUPPORTED on physical 3DS. |
 | 08 | Home | Down, A, R, Down, A, A | PC box switch, sample Pokémon detail, PC edit UNSUPPORTED | PASS (user-confirmed): R switched to Box 2 showing Garchomp, Milotic and Breloom; selecting Garchomp then A showed PC edit UNSUPPORTED. Prior Box 1 and Gengar read-only detail were photographed. |
 | 09 | Home | Down twice, A, Down, A, Up, A, A, A | Item quantity proposal blocked after two reviews | PASS (user-confirmed): Rare Candy proposal and two confirmations ended with BLOCKED; prior bag inventory screen photo captured. |
 | 10 | Home | Down three times, A, A, Up, A, A, A | Money proposal blocked after two reviews; sample amount 42000 | PASS (user-confirmed): displayed 42000, raised proposal by 1 and final confirmation showed BLOCKED; no separate photo for this step. |
@@ -50,3 +50,5 @@ phase19/test_ui.cpp drives the same logical Key enum (Up/Down/Left/Right/A/B/X/L
 **1 November 2026 user confirmation:** Volcarona's first synthetic Move ID was incremented in the proposal screen; A returned INVALID/UNVERIFIED as expected. This verifies the unsupported-move ID guard on hardware, not any save-writing capability.
 
 **1 November 2026 PP hardware check:** User confirms the move PP +1 proposal reached the first confirmation, and pressing B returned to the proposal screen without applying a change. The Phase 19 preview remains synthetic-only.
+
+**1 November 2026 ability/nature hardware test:** User reports that opening the Ability and Nature categories and pressing A showed UNSUPPORTED for both. This completes physical-console confirmation of the six Pokémon editor category behaviors (IV, EV, Move ID, PP, Ability, Nature), although some edge conditions such as EV 510 limit and X reset remain untested. The separate CIA that previously crashed has not been re-tested; only corrected standalone 3DSX is hardware-verified. All real game-save operations stay disabled.
