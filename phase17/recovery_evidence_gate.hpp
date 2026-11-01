@@ -58,8 +58,17 @@ struct EvidenceReport {
 template<class Signer>
 EvidenceReport inspectRecoveryEvidence(const RecoveryEvidence& files,Signer& signer) {
     EvidenceReport result{};
+    // Never interpret a corrupted/forged state value as an absent receipt.
+    // In particular, a receipt read-probe failure cannot be equivalent to
+    // RecordState::Missing. This gate does not read or write any file itself.
     const auto badState=[](RecordState state) {
-        return state==RecordState::NotChecked || state==RecordState::Unreadable;
+        switch(state) {
+            case RecordState::Missing: return false;
+            case RecordState::Readable: return false;
+            case RecordState::NotChecked: return true;
+            case RecordState::Unreadable: return true;
+        }
+        return true; // Out-of-range enum, even from a corrupt caller.
     };
     if(badState(files.backup.state) || badState(files.journal.state) ||
        badState(files.live.state) || badState(files.restoredReceipt) ||
@@ -85,6 +94,18 @@ EvidenceReport inspectRecoveryEvidence(const RecoveryEvidence& files,Signer& sig
     const auto& live=*files.live.bytes;
     result.backupSize=backup.size();
     result.journalSize=journal.size();
+    // Bound untrusted on-disk records before decoding or allocating the
+    // two complete copies carried by the journal. A valid journal has an
+    // exact 64-byte envelope around TWO equal-size container images.
+    if(backup.size()<rogue_live::ContainerMin ||
+       backup.size()>phase14::MaxContainer ||
+       journal.size()<64u ||
+       journal.size()!=64u+2u*backup.size()) {
+        result.code=EvidenceCode::InvalidJournal;return result;
+    }
+    if(live.size()!=backup.size()) {
+        result.code=EvidenceCode::LiveChanged;return result;
+    }
     phase14::Plan candidate{};
     if(!phase14::decodeJournal(journal,candidate)) {
         result.code=EvidenceCode::InvalidJournal;return result;
