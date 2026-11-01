@@ -203,6 +203,14 @@ inline void press(State& s, Key k) {
             s.box=(s.box+(k==Key::R?1u:s.demo.pcBoxes-1u))%s.demo.pcBoxes;
             s.selected=0; return;
         }
+    } else if(s.screen==Screen::Bag) {
+        if(k==Key::L || k==Key::R) {
+            const unsigned n=count(s);
+            if(!n)return;
+            if(k==Key::R)s.selected=std::min(n-1u,s.selected+6u);
+            else s.selected=s.selected>=6u?s.selected-6u:0u;
+            return;
+        }
     }
     if(k==Key::B) { s.screen=Screen::Home; s.selected=0; return; }
     if(k==Key::Up) {
