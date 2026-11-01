@@ -3,7 +3,7 @@
 // No installed games, no external ROM, no private save, no write service.
 #include "phase20/read_only_v1.hpp"
 // Full research model stays HOST-ONLY, never in the Phase20 ARM11 entry point.
-#include "phase18/editor_model.hpp"
+#include "phase18/integration_v2.hpp"
 #define main phase18_test_fixture_main
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
@@ -68,6 +68,38 @@ int main() {
     phase19::press(ui,phase19::Key::A); // first Pokémon
     phase19::press(ui,phase19::Key::A); // edit attempt
     assert(ui.screen==phase19::Screen::Notice);
+
+    // Host-only Phase18 V2 offline experimental RAM proposal: never link
+    // this API into the 3DS native UI or any installed-title save writer.
+    static_assert(rogue18::v2::ContractVersion==2u,"Phase18 v2 version changed");
+    const auto previewSource=rogue18::v2::inspect(source.data(),source.size());
+    assert(previewSource.data.valid && previewSource.data.sourceSha256==summary.sourceSha256);
+    rogue18::Request moneyIntent{};
+    assert(rogue18::v2::begin(previewSource,rogue18::Kind::Money,0,moneyIntent));
+    assert(!rogue18::v2::mayRestoreInstalledGame(moneyIntent));
+    moneyIntent.money=moneyIntent.expectedMoney+1u;
+    const auto candidate=rogue18::v2::preview(source.data(),source.size(),moneyIntent);
+    assert(candidate.ok && candidate.candidate.size()==source.size());
+    assert(rogue18::v2::verify(source.data(),source.size(),
+                              candidate.candidate.data(),candidate.candidate.size(),moneyIntent));
+    static phase19::Demo candidateDisplay{};
+    phase20::CopyObservation candidateSummary{};
+    assert(phase20::inspectCopy(candidate.candidate.data(),candidate.candidate.size(),
+                                candidateDisplay,candidateSummary,reason));
+    assert(candidateSummary.money==summary.money+1u);
+    assert(!candidateSummary.canRestore && !candidateSummary.canModifyInstalledGame);
+    assert(source.size()==phase20::CopiedRawBytes && summary.money==40001);
+    for(auto kind: {rogue18::Kind::Nature,rogue18::Kind::AbilitySlot,
+                    rogue18::Kind::InsertItem}) {
+        const auto cap=rogue18::v2::capability(kind);
+        assert(!cap.canCreateOfflineDraft && !cap.canRestoreInstalledGame);
+    }
+    // A changed move ID remains unsupported in V2 even when it looks numeric.
+    rogue18::Request moveIntent{};
+    assert(rogue18::v2::beginMove(previewSource,0,0,moveIntent));
+    moveIntent.moveId=uint16_t(moveIntent.expectedMoveId+1u);
+    assert(!rogue18::v2::preview(source.data(),source.size(),moveIntent).ok);
+    assert(!rogue18::v2::mayRestoreInstalledGame(moveIntent));
 
     // Every malformed size and all 28 checksummed sectors must fail closed:
     // previous UI snapshot AND summary remain bit-for-bit unchanged.
