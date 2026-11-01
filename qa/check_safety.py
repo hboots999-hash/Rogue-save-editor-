@@ -31,9 +31,9 @@ require(all(x in engine for x in
             ("verifiedBagInsertion","verifiedH168BagUpgradeOffset",
              "verifiedNatureModifier","verifiedAbilitySlot","verifiedMoveIds")),
         "Phase18 strict evidence fields exist")
-require("if(!s.demo.synthetic) return false" in p19 and
-        "if(!s.demo.synthetic)" in p19,
-        "Phase19 imported data never previews editing")
+require("!s.demo.synthetic || !s.demoPreviewEnabled" in p19 and
+        "demoPreviewEnabled" in p19 and "switchView(" in p19,
+        "Phase19 imported data requires independent synthetic-mode permission")
 require("std::fopen(OfflineImportPath,\"rb\")" in importer and
         "n!=h168::Size" in importer and
         "sdmc:/3ds/PKSM-Rogue/imports/00000001.sav" in importer,
