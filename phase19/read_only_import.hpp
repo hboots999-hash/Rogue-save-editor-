@@ -102,7 +102,7 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
     checked.backupStatus=Availability::Unverified;
     checked.synthetic=false; // No real-data edit proposals, ever.
     destination=checked;
-    reason="VALID COPY: party/bag/money READ ONLY. PC unsupported.";
+    reason="H168 structure checked; ROM identity unverified. READ ONLY.";
     return true;
 }
 
