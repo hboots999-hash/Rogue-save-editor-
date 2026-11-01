@@ -38,6 +38,15 @@ int main(int argc,char** argv){
     CHECK(req.expectedMoveId==33 && req.moveId==33 && req.pp==15);
     req.pp=14;
     CHECK(propose(raw.data(),raw.size(),req).ok);
+    CHECK(beginMoveRequest(view,0,1,req));
+    CHECK(req.moveSlot==1 && req.expectedMoveId==45 && req.expectedPP==25);
+    CHECK(req.expectedDigest==view.sourceSha256);
+    req.pp=24;
+    CHECK(propose(raw.data(),raw.size(),req).ok);
+    CHECK(!beginMoveRequest(view,0,2,req)); // empty move slot
+    CHECK(!beginMoveRequest(view,0,4,req));
+    CHECK(!beginMoveRequest(view,10,0,req));
+
     CHECK(beginRequest(view,Kind::Nature,0,req));
     req.nature=11;
     CHECK(!propose(raw.data(),raw.size(),req).ok);
