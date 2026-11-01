@@ -77,7 +77,7 @@ A valid batch has **1–128 edits**, with **no duplicate (`Kind`, `slot`, `field
 
 `test_multi_v3_faults.cpp` uses host-only simulated storage faults: six failure modes each at the backup and draft stage, followed by a restart/re-export checking that original/previous outputs remain intact. This does **not** validate native filesystem crash consistency on a real 3DS.
 
-Native ARM11 compile forces code generation of `v3::preview` and `v3::exportCopiedBatch`, enforces `-Werror=frame-larger-than=4096` and parses `-fstack-usage` outputs. Representative compiled frames: **792 bytes** for v3 preview and **552 bytes** for v3 exporter, from run 41344444236; results apply to toolchain and commit of that run. Heap pressure can exceed several 128 KiB buffers plus 128 KiB temporary byte masks during long batches, and execution latency scales with the number of repeated v2 validations. Cap is 128 until physical-device free-heap/latency and SD reliability are measured.
+Native ARM11 compile forces code generation of `v3::preview` and `v3::exportCopiedBatch`, enforces `-Werror=frame-larger-than=4096` and parses `-fstack-usage` outputs. Representative compiled frames: **792 bytes** for v3 preview and **552 bytes** for v3 exporter, from run 41344444236; results apply to toolchain and commit of that run. Heap pressure can exceed several 128 KiB buffers plus a 4 KiB active-section byte-footprint mask during long batches, and execution latency scales with the number of repeated v2 validations. Cap is 128 until physical-device free-heap/latency and SD reliability are measured.
 
 **Outstanding:** exact private Emerald Rogue 2.1.2 ROM metadata; recalculation of cached party battle stats after IV/EV edits; native 3DS heap high-water marks, repeated exports, actual power-loss fault behavior, gameplay and save/reload; release gate authorization. Keep offline-only and PR #8 draft.
 
@@ -87,3 +87,5 @@ Native ARM11 compile forces code generation of `v3::preview` and `v3::exportCopi
 2. Preserve its existing single-edit journey and two-confirmation gate; v3 is an additive optional path, **not** an automatic chain of previous drafts.
 3. Display batch edit count, exact summary, source digest prefix, original backup and distinct draft; on failure display all attempted/uncertain file names and refuse to open them as approved data.
 4. Never enable a live title writer or restoration based on v3 checks alone.
+
+**Further ARM11 memory hardening:** the independent expected-diff footprint now uses only a 4096-byte active-sector bitmap, because every supported scalar resides in H168 logical sector 1. Any change outside that sector is rejected. This reduces temporary heap use by approximately 124 KiB versus the initial implementation; the full 131072-byte final expected-data comparison is retained.
