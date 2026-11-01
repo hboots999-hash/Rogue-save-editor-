@@ -153,7 +153,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             for(unsigned i=0;i<4;i+=2)
                 std::printf("%u:%u PP%u  %u:%u PP%u\n",
                     i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
-            std::puts(s.fromPC||!s.demo.synthetic?"\n\nREAD ONLY: editing disabled":"\n\nA: explore party edit demo");
+            std::puts(s.fromPC?"\n\nPC editing unsupported":!s.demo.synthetic?"\n\nA: OFFLINE IV / EV / PP":"\n\nA: explore party edit demo");
             break;
         }
         case Screen::Edit: {
@@ -211,7 +211,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             if(s.demo.moneyStatus==Availability::Ready)
                 std::printf("\nCurrent amount: %u\n",s.demo.money);
             else std::puts("\nNo verified value to display.");
-            std::puts(s.demo.synthetic?"\nA: demo proposal":"\nImported balance is READ ONLY");
+            std::puts(s.demo.synthetic?"\nA: demo proposal":"\nA: OFFLINE money draft");
             break;
         case Screen::Backups:
             std::puts("BACKUPS / SAFE MODE");
