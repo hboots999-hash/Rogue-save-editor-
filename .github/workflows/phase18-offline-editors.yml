@@ -37,6 +37,7 @@ jobs:
           g++ $FLAGS -Iphase18 phase18/test_offline_export.cpp -o /tmp/pksm-phase18-export-test
           g++ $FLAGS -Iphase18 phase18/test_pc_readonly.cpp -o /tmp/pksm-phase18-pc-test
           g++ $FLAGS -Iphase18 phase18/test_editor_model.cpp -o /tmp/pksm-phase18-model-test
+          g++ $FLAGS -Iphase18 phase18/test_integrity.cpp -o /tmp/pksm-phase18-integrity-test
       - name: Run deterministic structural, editing and rollback regressions
         shell: bash
         run: |
@@ -45,6 +46,7 @@ jobs:
           /tmp/pksm-phase18-export-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-pc-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-model-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-integrity-test /tmp/phase18_nonplayable.sav
       - name: Cross-check test fixture with independent read-only Python decoder
         shell: bash
         run: |
@@ -66,7 +68,7 @@ jobs:
       - name: Reject privileged save services in offline module
         run: |
           set -euo pipefail
-          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/offline_export.hpp phase18/pc_readonly.hpp phase18/editor_model.hpp phase18/test_offline_engine.cpp phase18/test_offline_export.cpp phase18/test_pc_readonly.cpp phase18/test_editor_model.cpp; then
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/offline_export.hpp phase18/pc_readonly.hpp phase18/editor_model.hpp phase18/test_offline_engine.cpp phase18/test_offline_export.cpp phase18/test_pc_readonly.cpp phase18/test_editor_model.cpp phase18/test_integrity.cpp phase18/source_digest.hpp phase18/layout_geometry.hpp phase18/bag_rules.hpp; then
             echo "Phase18 pure-memory code must contain no privileged filesystem APIs"
             exit 1
           fi
