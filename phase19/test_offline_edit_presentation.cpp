@@ -175,5 +175,34 @@ int main() {
     assert(g.poll(true,false,false,false)==ApprovalEvent::Next);
     assert(g.poll(false,false,true,false)==ApprovalEvent::Cancelled);
 
+    OfflineReviewSession session{};
+    assert(session.begin(d,money));
+    assert(session.poll(d,true,false,false,false)==ApprovalEvent::Next);
+    assert(session.gate.stage==ApprovalStage::FinalReview);
+    // The same bank counter but changed source digest blocks approval.
+    d.sourceSha256[1]^=0x80;
+    assert(session.poll(d,false,false,false,false)==ApprovalEvent::Cancelled);
+    assert(!session.active);
+    d=base;
+    // A repeated import with a changed visible money amount is also stale.
+    assert(session.begin(d,money));
+    d.money++;
+    assert(session.poll(d,false,false,false,false)==ApprovalEvent::Cancelled);
+    assert(!session.active);
+    d=base;
+    // Reimport of the exact source still requires fresh approval from stage 1.
+    for(unsigned i=0;i<300u;i++){
+        assert(session.begin(d,money));
+        assert(session.poll(d,true,false,false,false)==ApprovalEvent::Next);
+        session.cancel(); // native Import-A success or Import-X reset
+        assert(!session.active);
+        assert(session.poll(d,false,true,false,false)==ApprovalEvent::None);
+    }
+    assert(session.begin(d,money));
+    assert(session.poll(d,true,false,false,false)==ApprovalEvent::Next);
+    assert(session.poll(d,false,false,false,false)==ApprovalEvent::None);
+    assert(session.poll(d,false,true,false,false)==ApprovalEvent::Approved);
+    session.cancel();
+    assert(!session.active);
     std::cout<<"PASS shared Phase19 field highlighting, all five offline reviews, two-key edge gate, filenames and stale/invalid state\n";
 }
