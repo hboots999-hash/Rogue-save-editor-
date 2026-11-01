@@ -21,11 +21,11 @@
 | 06 | Pokémon edit | R (to PP), A, Up, A, B | Move PP proposal supported for demo; B cancels from confirmation to proposal | NOT RUN |
 | 07 | Pokémon edit | R to ability and nature; A on each | Unsupported edit notices | NOT RUN |
 | 08 | Home | Down, A, R, Down, A, A | PC box switch, sample Pokémon detail, PC edit UNSUPPORTED | PASS (user-confirmed): R switched to Box 2 showing Garchomp, Milotic and Breloom; selecting Garchomp then A showed PC edit UNSUPPORTED. Prior Box 1 and Gengar read-only detail were photographed. |
-| 09 | Home | Down twice, A, Down, A, Up, A, A, A | Item quantity proposal blocked after two reviews | PARTIAL PASS — photo: five item stacks and quantities render correctly; quantity proposal and final block not yet observed |
+| 09 | Home | Down twice, A, Down, A, Up, A, A, A | Item quantity proposal blocked after two reviews | PASS (user-confirmed): Rare Candy proposal and two confirmations ended with BLOCKED; prior bag inventory screen photo captured. |
 | 10 | Home | Down three times, A, A, Up, A, A, A | Money proposal blocked after two reviews; sample amount 42000 | PASS (user-confirmed): displayed 42000, raised proposal by 1 and final confirmation showed BLOCKED; no separate photo for this step. |
 | 11 | Home | Down four times, A, A, B | Backup confirmation cancels; no file created | NOT RUN |
 | 12 | Backups | Down, A, B, Down, A | Backup status not checked in this app; restore disabled | PARTIAL PASS (user-confirmed): backup menu reports NOT CHECKED IN APP and restore disabled; deeper status/restore notice button paths not separately established. |
-| 13 | Home | Down five times, A; select each row and A | Five short recovery explanations visible and readable | NOT RUN |
+| 13 | Home | Down five times, A; select each row and A | Five short recovery explanations visible and readable | PARTIAL PASS (user-confirmed): missing-save, checksum-failure and restore-disabled warnings displayed; remaining recovery cases not individually verified. |
 | 14 | Any view | START | Clean app exit; no crash on return | PASS — user confirms normal exit following B return; real-save byte comparison not performed |
 | 15 | Relaunch | Check original mock money/party/items | Original fictional values unchanged, no writes performed | NOT RUN |
 
@@ -42,3 +42,5 @@ phase19/test_ui.cpp drives the same logical Key enum (Up/Down/Left/Right/A/B/X/L
 **Hardware PASS for all screens requires individual recorded observations.** Keep full release and real-save integration gates pending.
 
 **Additional user-confirmed hardware results (1 Nov 2026):** Synthetic Money screen displayed 42,000 and the +1 proposal terminated with BLOCKED after confirmations. Backup menu showed NOT CHECKED IN APP and restoration disabled. Backup creation/cancellation controls, item quantity proposals, recovery notices and other edit categories are still pending physical testing. No actual game save or backup was opened by this build.
+
+**1 November 2026 physical testing continuation:** User reports Rare Candy item-quantity proposal reached the BLOCKED notice after confirmations. User also reports missing-save, checksum and disabled-restore recovery warnings displayed successfully. These are UI-level synthetic tests only: no real game data was opened, no authenticated restoration invoked. Other untested field-specific menus remain pending.
