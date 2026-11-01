@@ -65,3 +65,24 @@ The source geometry reconciliation and strict feature status are recorded in
 [PHASE20_FEATURE_MATRIX.md](PHASE20_FEATURE_MATRIX.md).
 Synthetic C++ and ARM11 compile tests do not establish real ROM compatibility
 or gameplay-correct recalculation of cached IV/EV/nature-dependent party stats.
+
+## Independent QA integration hardening
+
+The supported next integration entrypoint is
+[`integration_v2.hpp`](integration_v2.hpp), not the historical low-level
+`propose` with synthetic research `Evidence` flags.
+The internal reader now uses the scoped `rogue18::raw_v1` namespace;
+the global `::h168` of Phase17 is not defined by this branch.
+The SD exporter is restricted to an SHA-256-pinned v2-allowed offline
+candidate, backed up separately and never written to installed storage.
+See [PHASE20_INTEGRATION_CONTRACT_V2.md](PHASE20_INTEGRATION_CONTRACT_V2.md)
+for exact phase ownership, integration code and capability matrix.
+The existing PR #7 Phase19 header needs its own adapter/re-pin to v2;
+this branch does not modify other feature branches.
+
+QA PR #10 identified that Phase13/14 permits only money+1 and existing
+item quantity+1; wider Phase18 proposals remain separate and cannot
+be used to request an installed restore, even if their RAM checksums
+validate. The Phase18 PC scratch array was also moved to heap to avoid
+large 3DS stack frames. The host and ARM11 CI now compile a pinned
+Phase17/Phase18 unified translation unit.
