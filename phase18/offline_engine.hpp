@@ -3,7 +3,7 @@
 // Layout is observed for the private GBA-P-H168 Emerald Rogue 2.1.2 save,
 // but structural validity is NOT proof that a draft is game-playable.
 #pragma once
-#include "../phase10/preview/offline.hpp"
+#include "raw_copy_v1.hpp"
 #include "bag_rules.hpp"
 #include "layout_geometry.hpp"
 #include "source_digest.hpp"
@@ -16,6 +16,7 @@
 #include <vector>
 
 namespace rogue18 {
+namespace h168 = raw_v1; // Internal compatibility alias ONLY; never ::h168
 using Bytes=std::vector<uint8_t>;
 enum class Kind : uint8_t {
     Money, ExistingQuantity, InsertItem, IVs, EVs, Move, AbilitySlot, Nature
