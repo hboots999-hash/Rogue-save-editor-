@@ -2,6 +2,8 @@
 // Purely synthetic, non-playable SD-copy editor integration test.
 // Only uses temporary host files; NEVER writes an installed title.
 #include "phase20/offline_edit_v1.hpp"
+// Host-only v3 contract verification; Phase20 native UI remains single-edit.
+#include "phase18/multi_export_v3.hpp"
 #define main phase18_fixture_entry_for_phase20
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
@@ -90,6 +92,53 @@ int main(){
         completed++;
     }
     assert(completed==5u); // every supported class gets a real distinct draft
+    // The Phase18 v3 transaction is an ADDITIVE offline contract. Prove that
+    // the existing Phase20 imported snapshot can generate one combined draft
+    // without entering any installed-game API or replacing the v2 UI.
+    static_assert(rogue18::v3::ContractVersion==3u,"v3 API changed");
+    const auto v3Source=rogue18::v2::inspect(original.data(),original.size());
+    assert(v3Source.data.valid && v3Source.data.sourceSha256==captured.sourceSha256);
+    rogue18::v3::Batch batch{};
+    assert(rogue18::v3::start(v3Source,batch));
+    assert(!rogue18::v3::mayWriteInstalledGame(batch));
+    assert(rogue18::v3::append(v3Source,batch,rogue18::Kind::Money,
+                                0,0,40002));
+    assert(rogue18::v3::append(v3Source,batch,rogue18::Kind::ExistingQuantity,
+                                0,0,display.bag[0].quantity+1u));
+    assert(rogue18::v3::append(v3Source,batch,rogue18::Kind::IVs,
+                                0,0,(display.party[0].iv[0]+1u)%32u));
+    assert(rogue18::v3::append(v3Source,batch,rogue18::Kind::EVs,
+                                0,3,display.party[0].ev[3]-1u));
+    assert(rogue18::v3::append(v3Source,batch,rogue18::Kind::Move,
+                                0,0,display.party[0].pp[0]+1u));
+    assert(batch.edits.size()==5u);
+    assert(!rogue18::v3::append(v3Source,batch,rogue18::Kind::Money,
+                                 0,0,40003)); // duplicate logical field
+    const auto v3Candidate=rogue18::v3::preview(original.data(),original.size(),batch);
+    assert(v3Candidate.ok && v3Candidate.candidate.size()==original.size());
+    assert(rogue18::v3::verify(original.data(),original.size(),
+                              v3Candidate.candidate.data(),v3Candidate.candidate.size(),
+                              batch));
+    const auto batchExport=rogue18::v3::exportCopiedBatch(
+        original.data(),original.size(),input.c_str(),root.c_str(),batch);
+    assert(batchExport.ok && batchExport.changed>0);
+    assert(readBytes(input)==original);
+    assert(readBytes(root/"backups"/batchExport.backupName)==original);
+    const auto combinedDraft=readBytes(root/"drafts"/batchExport.draftName);
+    assert(combinedDraft==v3Candidate.candidate);
+    assert(rogue18::v3::verify(original.data(),original.size(),
+                              combinedDraft.data(),combinedDraft.size(),batch));
+    static phase19::Demo combinedDisplay{};
+    CopyObservation combinedCaptured{};
+    assert(inspectCopy(combinedDraft.data(),combinedDraft.size(),
+                       combinedDisplay,combinedCaptured,message));
+    assert(combinedDisplay.money==40002 &&
+           combinedDisplay.bag[0].quantity==display.bag[0].quantity+1u &&
+           combinedDisplay.party[0].iv[0]==(display.party[0].iv[0]+1u)%32u &&
+           combinedDisplay.party[0].ev[3]==display.party[0].ev[3]-1u &&
+           combinedDisplay.party[0].pp[0]==display.party[0].pp[0]+1u);
+    assert(!combinedCaptured.canModifyInstalledGame && !combinedCaptured.canRestore);
+
     // Every request is fingerprint pinned to the first displayed import.
     auto stale=original;
     stale.back()^=0x20; // normally unchecksummed trailing sector
