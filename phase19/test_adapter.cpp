@@ -76,9 +76,23 @@ int main(){
     real=capture(f);
     assert(real.partyStatus==Availability::Invalid && real.partyCount==0);
     f.sample=mockSnapshot();
-    f.rawBag=9;
+    f.rawBag=451;
     real=capture(f);
     assert(real.bagStatus==Availability::Unsupported && real.bagCount==0);
+    // A full copied-save bag view can enumerate hundreds of existing stacks.
+    f.sample=mockSnapshot();
+    f.rawBag=245;f.sample.bagCount=245;
+    for(unsigned i=5;i<245;i++)f.sample.bag[i]={"Item",1000+i,1};
+    real=capture(f);
+    assert(real.bagStatus==Availability::Ready && real.bagCount==245);
+    State inventory(real);
+    inventory.homeRow=2;press(inventory,Key::A);
+    assert(count(inventory)==245);
+    press(inventory,Key::R);assert(inventory.selected==6);
+    press(inventory,Key::L);assert(inventory.selected==0);
+    press(inventory,Key::A);
+    assert(inventory.screen==Screen::Notice); // actual-data view cannot propose
+    f.sample=mockSnapshot();
     f.rawBag=5;f.sample.bag[0].quantity=0;
     real=capture(f);
     assert(real.bagStatus==Availability::Invalid && real.bagCount==0);
