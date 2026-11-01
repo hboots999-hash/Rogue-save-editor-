@@ -48,7 +48,9 @@ inline unsigned firstVisible(unsigned selected) {
     return (selected/PageRows)*PageRows;
 }
 inline unsigned lastVisible(unsigned selected,unsigned total) {
-    return std::min(total,firstVisible(selected)+PageRows);
+    const unsigned first=firstVisible(selected);
+    // Subtract before adding PageRows: UINT_MAX selection must never wrap.
+    return first>=total?total:first+std::min(PageRows,total-first);
 }
 
 inline unsigned editFieldCount(Group g) {
