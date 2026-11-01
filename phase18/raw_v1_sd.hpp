@@ -16,9 +16,31 @@
 #include <3ds.h>
 #endif
 namespace rogue18 { namespace raw_v1 {
+// Host-test-only fault injector. Never compiled into a native 3DS build.
+// Simulates failures of the *real* exclusive-name/SD-copy write path,
+// preserving partially created files and enforcing fail-closed results.
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+enum class IoFault : uint8_t {
+    None, OpenNoSpace, WriteNoSpace, PartialThenNoSpace,
+    FlushFailure, CloseFailure, ReadbackFailure
+};
+struct IoFaultConfig {
+    IoFault stage=IoFault::None;
+    std::string nameContains{};
+    unsigned writes=0;
+};
+inline IoFaultConfig ioFault{};
+inline bool targetFault(const std::string& name) {
+    return ioFault.stage!=IoFault::None &&
+           name.find(ioFault.nameContains)!=std::string::npos;
+}
+#endif
 struct FreeFILE{void operator()(FILE* f) const {if(f)fclose(f);}};
 inline std::unique_ptr<uint8_t[]> readExact(const char* path){
     if(!path)return {};
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+    if(ioFault.stage==IoFault::ReadbackFailure && targetFault(path))return {};
+#endif
     std::unique_ptr<FILE,FreeFILE> in(fopen(path,"rb"));
     if(!in)return {};
     std::unique_ptr<uint8_t[]> b(new(std::nothrow) uint8_t[Size]);
@@ -106,7 +128,15 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
         }
 #else
         errno=0;
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+        const bool inject=targetFault(full);
+        if(inject)ioFault.writes=0;
+        const bool rejectCreate=inject && ioFault.stage==IoFault::OpenNoSpace;
+        if(rejectCreate)errno=ENOSPC;
+        int fd=rejectCreate?-1:::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
+#else
         int fd=::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
+#endif
         if(fd<0){
             const int e=errno;
             if(e==EEXIST)continue;
@@ -115,7 +145,17 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
         size_t count=0;
         while(count<Size){
             errno=0;
-            const ssize_t n=::write(fd,bytes+count,Size-count);
+            ssize_t n=0;
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+            if(inject && (ioFault.stage==IoFault::WriteNoSpace ||
+                (ioFault.stage==IoFault::PartialThenNoSpace && ioFault.writes++>0))) {
+                errno=ENOSPC;n=-1;
+            } else if(inject && ioFault.stage==IoFault::PartialThenNoSpace) {
+                n=::write(fd,bytes+count,(Size-count)/2u);
+            } else n=::write(fd,bytes+count,Size-count);
+#else
+            n=::write(fd,bytes+count,Size-count);
+#endif
             if(n<=0){
                 const int e=errno;
                 error=ioError("write",e);
@@ -124,10 +164,20 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
             count+=size_t(n);
         }
         errno=0;
-        const int synced=::fsync(fd);
+        int synced=::fsync(fd);
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+        if(inject && ioFault.stage==IoFault::FlushFailure){
+            errno=EIO;synced=-1;
+        }
+#endif
         const int syncError=errno;
         errno=0;
-        const int closed=::close(fd);
+        int closed=::close(fd);
+#if defined(ROGUE18_TEST_IO_FAULTS) && !defined(__3DS__)
+        if(inject && ioFault.stage==IoFault::CloseFailure){
+            errno=EIO;closed=-1;
+        }
+#endif
         const int closeError=errno;
         if(synced!=0){
             error=ioError("fsync",syncError);return false;
