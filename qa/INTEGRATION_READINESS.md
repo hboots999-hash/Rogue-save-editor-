@@ -5,7 +5,7 @@
 **Audited, immutable QA inputs:**
 - Phase17: c78b26ef51ba1511792c4362883b1f77cd7ed861 (PR #9).
 - Phase18: ea7303e3d04e9c409febd44ee3e1f834de02cdc6 (PR #8).
-- Phase19: dad287678e46909771957c9d2cfb0c99aadf70dd (PR #7).
+- Phase19: 4e4d2a8dabe7d40ce2f78dc5b1c4dcf46a3b7c8e (PR #7).
 New commits on those concurrently developed branches are OUTSIDE these pinned test results.
 
 ## Verified evidence (do not broaden its scope)
