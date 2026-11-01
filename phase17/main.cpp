@@ -16,6 +16,10 @@ struct Screen {
     bool verified=false,labRan=false;
     ::Result nativeLast=0;
 };
+// Protect against reintroducing the oversized native stack frame that
+// previously crashed an unrelated experimental Phase19 app.
+static_assert(sizeof(Screen)<512,
+              "Phase17 native screen state must remain stack-small");
 void draw(const Screen& state) {
     consoleClear();
     puts("PKSM ROGUE - PHASE17 RAM ROLLBACK");
