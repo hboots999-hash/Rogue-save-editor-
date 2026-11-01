@@ -3,6 +3,7 @@
 // GPL-3.0-or-later. Reuses Phase10 exclusive no-overwrite SDMC functions.
 #pragma once
 #include "offline_engine.hpp"
+#include "raw_v1_sd.hpp"
 #include <cstring>
 #include <memory>
 #include <string>
