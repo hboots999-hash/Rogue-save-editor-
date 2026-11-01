@@ -27,7 +27,8 @@ void line(unsigned i,unsigned selected,const char* str) {
 }
 // Keep long guidance inside 3DS console width without heap allocations.
 void wrappedNotice(const char* message) {
-    forEachWrappedLine(message,31u,[](const char* line,unsigned chars) {
+    // Reserve return/navigation text; long SD errors must not scroll it away.
+    forEachBoundedLine(message,31u,11u,[](const char* line,unsigned chars) {
         std::printf("%.*s\n",static_cast<int>(chars),line);
     });
 }
