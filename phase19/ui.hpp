@@ -51,6 +51,14 @@ inline unsigned lastVisible(unsigned selected,unsigned total) {
     return std::min(total,firstVisible(selected)+PageRows);
 }
 
+inline unsigned editFieldCount(Group g) {
+    switch(g){
+        case Group::IV:case Group::EV:return 6u;
+        case Group::Moves:case Group::PP:return 4u;
+        case Group::Ability:case Group::Nature:return 1u;
+    }
+    return 0u;
+}
 inline unsigned count(const State& s) {
     switch(s.screen) {
         case Screen::Home: return 7;
@@ -60,18 +68,31 @@ inline unsigned count(const State& s) {
         case Screen::Bag: return s.demo.bagStatus==Availability::Ready?s.demo.bagCount:0;
         case Screen::Backups: return 3;
         case Screen::Recovery: return 5;
-        case Screen::Edit: return s.group == Group::IV || s.group == Group::EV ? 6u :
-                                  (s.group == Group::Moves || s.group == Group::PP) ? 4u : 1u;
+        case Screen::Edit: return editFieldCount(s.group);
         default: return 0;
     }
 }
+// Defensive selectors: rendering must never dereference stale indices when
+// a new SD copy is imported or a corrupted UI state is recovered.
+inline bool selectedPokemonValid(const State& s) {
+    if(s.fromPC)
+        return s.demo.pcStatus==Availability::Ready &&
+               s.box<s.demo.pcBoxes && s.box<s.demo.pc.size() &&
+               s.mon<s.demo.pcCounts[s.box] && s.mon<s.demo.pc[s.box].size();
+    return s.demo.partyStatus==Availability::Ready &&
+           s.mon<s.demo.partyCount && s.mon<s.demo.party.size();
+}
 inline const Pokemon& pokemon(const State& s) {
-    return s.fromPC ? s.demo.pc[s.box][s.mon] : s.demo.party[s.mon];
+    static const Pokemon unavailable{};
+    if(!selectedPokemonValid(s))return unavailable;
+    return s.fromPC?s.demo.pc[s.box][s.mon]:s.demo.party[s.mon];
 }
 inline unsigned original(const State& s) {
     if(s.proposalFrom == Screen::Money) return s.demo.money;
-    if(s.proposalFrom == Screen::Bag) return s.demo.bag[s.selected].quantity;
+    if(s.proposalFrom == Screen::Bag)
+        return s.selected<s.demo.bagCount && s.selected<s.demo.bag.size()?s.demo.bag[s.selected].quantity:0u;
     if(s.proposalFrom == Screen::Edit) {
+        if(!selectedPokemonValid(s) || s.field>=editFieldCount(s.group))return 0u;
         const auto& m=pokemon(s);
         switch(s.group) {
             case Group::IV: return m.iv[s.field];
@@ -92,6 +113,7 @@ inline unsigned maximum(const State& s) {
     if(s.proposalFrom == Screen::Money) return 999999;
     if(s.proposalFrom == Screen::Bag) return 999;
     if(s.proposalFrom == Screen::Edit) {
+        if(!selectedPokemonValid(s) || s.field>=editFieldCount(s.group))return 0u;
         switch(s.group) {
             case Group::IV: return 31;
             case Group::EV: {
@@ -123,10 +145,10 @@ inline bool canPreview(const State& s) {
         return s.demo.moneyStatus==Availability::Ready;
     if(s.proposalFrom==Screen::Bag)
         return s.demo.bagStatus==Availability::Ready &&
-               s.selected<s.demo.bagCount;
+               s.selected<s.demo.bagCount && s.selected<s.demo.bag.size();
     if(s.proposalFrom==Screen::Edit)
-        return !s.fromPC && s.demo.partyStatus==Availability::Ready &&
-               s.mon<s.demo.partyCount && !pokemon(s).egg &&
+        return !s.fromPC && selectedPokemonValid(s) &&
+               s.field<editFieldCount(s.group) && !pokemon(s).egg &&
                s.group!=Group::Ability && s.group!=Group::Nature;
     return false;
 }
@@ -197,6 +219,12 @@ inline void press(State& s, Key k) {
         return;
     }
     if(s.screen==Screen::Pokemon) {
+        if(!selectedPokemonValid(s)) {
+            if(k==Key::B)s.screen=s.fromPC?Screen::PC:Screen::Party;
+            else if(k==Key::A||k==Key::X)
+                openNotice(s,Screen::Home,"Selection changed; reopen a valid Pokemon.");
+            return;
+        }
         if(k==Key::B) s.screen=s.fromPC?Screen::PC:Screen::Party;
         else if(k==Key::A || k==Key::X) {
             if(s.fromPC)openNotice(s,Screen::Pokemon,
