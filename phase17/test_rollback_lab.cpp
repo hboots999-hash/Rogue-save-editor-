@@ -88,6 +88,100 @@ int main(int argc,char**argv) {
             assert(okEvidence.backupSize==263168);
             assert(okEvidence.journalSize==526400);
             assert(okEvidence.sourceCounter==49);
+            // Fail every externally observed read probe independently.
+            // An SD failed-read, partial-read or unknown receipt state must
+            // NEVER be interpreted as "file missing" or reused as PASS.
+            for(unsigned which=0;which<5;which++) {
+                auto failedProbe=evidence;
+                if(which==0)failedProbe.backup.state=RecordState::Unreadable;
+                if(which==1)failedProbe.journal.state=RecordState::Unreadable;
+                if(which==2)failedProbe.live.state=RecordState::Unreadable;
+                if(which==3)failedProbe.restoredReceipt=RecordState::Unreadable;
+                if(which==4)failedProbe.rolledbackReceipt=RecordState::Unreadable;
+                const auto blocked=phase17::inspectRecoveryEvidence(failedProbe,signer);
+                assert(blocked.code==EvidenceCode::StorageError);
+                assert(!blocked.canRunRamRehearsal());
+                assert(!blocked.mayWriteInstalledGame());
+                assert(!blocked.mayOverwriteJournal());
+            }
+            for(unsigned which=0;which<5;which++) {
+                auto impossible=evidence;
+                const auto forged=static_cast<RecordState>(0x7fu);
+                if(which==0)impossible.backup.state=forged;
+                if(which==1)impossible.journal.state=forged;
+                if(which==2)impossible.live.state=forged;
+                if(which==3)impossible.restoredReceipt=forged;
+                if(which==4)impossible.rolledbackReceipt=forged;
+                const auto blocked=phase17::inspectRecoveryEvidence(impossible,signer);
+                assert(blocked.code==EvidenceCode::StorageError);
+            }
+            {
+                auto malformed=evidence;
+                Bytes tooShortBackup(rogue_live::ContainerMin-1u,0);
+                malformed.backup.bytes=&tooShortBackup;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+                Bytes tooLargeBackup(phase14::MaxContainer+1u,0);
+                malformed.backup.bytes=&tooLargeBackup;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+                malformed=evidence;
+                auto overlong=record;overlong.push_back(0);
+                malformed.journal.bytes=&overlong;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+                malformed=evidence;
+                auto shortLive=source;shortLive.pop_back();
+                malformed.live.bytes=&shortLive;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::LiveChanged);
+                malformed=evidence;
+                auto shortJournal=record;shortJournal.resize(32768);
+                malformed.journal.bytes=&shortJournal;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+                // No fallback from a short "successful" SD read, even when
+                // the caller labels its state Readable.
+                malformed=evidence;
+                Bytes partialBackup(source.begin(),source.begin()+32768);
+                malformed.backup.bytes=&partialBackup;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+            }
+            {
+                // A fake caller can fabricate a *plausible* public report.
+                // ABI validity proves shape only; it has no write authority
+                // even when claiming an authenticated RAM rehearsal.
+                P17ReadOnlyStatusV1 invented{};
+                assert(p17_readonly_status_init_blocked_v1(&invented));
+                invented.code=P17_RO_RAM_REHEARSAL_READABLE;
+                invented.expected_title=rogue_live::ExpectedTitle;
+                invented.source_counter=49;
+                invented.container_bytes=263168;
+                invented.journal_bytes=526400;
+                invented.source_sha256[0]=0x42;
+                assert(p17_readonly_status_shape_valid_v1(&invented));
+                assert(invented.capability_bits==0);
+                for(unsigned bit=0;bit<32;bit++) {
+                    auto attempt=invented;
+                    attempt.capability_bits=(uint32_t(1)<<bit);
+                    assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                }
+                auto attempt=invented;attempt.struct_size=0;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.abi_version=99;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.expected_title^=1;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.journal_bytes++;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.container_bytes=0;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.source_counter=UINT32_MAX;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+                attempt=invented;attempt.reserved1[0]=1;
+                assert(!p17_readonly_status_shape_valid_v1(&attempt));
+            }
             // Phase20 public status is a value-only observation. It never
             // exposes a Plan, write handle, privileged session or permission.
             P17ReadOnlyStatusV1 status{};
@@ -247,6 +341,26 @@ int main(int argc,char**argv) {
                 assert(!bounded.write(bounded.live.size()+1,originalBytes.data(),1));
                 assert(!bounded.write(0,originalBytes.data(),bounded.live.size()+1));
                 assert(bounded.writes==0 && bounded.live==originalBytes);
+            }
+            // A failed fresh read on a recovery retry leaves the journal
+            // unresolved and neither touches the RAM source nor claims DONE.
+            {
+                phase17::Shadow failedRead(plan.after);
+                failedRead.journalPresent=true;
+                failedRead.journal=record;
+                failedRead.failReadAt=1;
+                assert(phase14::recover(failedRead,signer,plan)==
+                       phase14::Status::RecoveryRequired);
+                assert(failedRead.writes==0);
+                assert(failedRead.live==plan.after && !failedRead.receiptWritten);
+                // Reopening read-only storage in a fresh simulated process
+                // must verify the same journal and restore original bytes.
+                phase17::Shadow recovered(failedRead.live);
+                recovered.journalPresent=true;
+                recovered.journal=record;
+                assert(phase14::recover(recovered,signer,plan)==
+                       phase14::Status::RolledBack);
+                assert(recovered.live==source && recovered.receiptWritten);
             }
             // A full shadow write with a FAILED completion receipt must be
             // reported unresolved, then recoverable on a new RAM backend.
