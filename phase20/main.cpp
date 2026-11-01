@@ -34,7 +34,8 @@ void wrappedNotice(const char* message) {
         std::printf("%.*s\n",static_cast<int>(chars),line);
     });
 }
-void offlineTop(const State& s,const phase20::OfflineFlow& f) {
+void offlineTop(const State& s,const phase20::OfflineFlow& f,
+                const phase20::BatchFlow& batch) {
     using phase20::EditStage;
     std::puts("OFFLINE COPY EDITOR - NO GAME IO");
     std::puts("===============================");
@@ -74,17 +75,21 @@ void offlineTop(const State& s,const phase20::OfflineFlow& f) {
         std::puts("X reset; A review; B back");
     } else if(f.stage==EditStage::ConfirmOne ||
               f.stage==EditStage::ConfirmTwo) {
-        std::puts("EXPORT AN OFFLINE DRAFT");
+        std::puts(batch.collecting?"STAGE TO RAM QUEUE":"EXPORT AN OFFLINE DRAFT");
         std::printf("\n%s: %u -> %u\n",
            phase20::kindName(f.choice.kind),f.original,f.proposed);
-        std::printf("\nConfirmation %u of 2\n",
-           f.stage==EditStage::ConfirmOne?1u:2u);
+        if(batch.collecting)
+            std::puts("\nA stage edit (NO SD write)");
+        else std::printf("\nConfirmation %u of 2\n",
+                        f.stage==EditStage::ConfirmOne?1u:2u);
         std::puts("\nA: confirm  B: return");
         std::puts("\nONLY SD copies/backup/drafts");
         std::puts("NEVER the installed game save.");
         std::puts("Draft is NOT game-verified.");
     } else if(f.stage==EditStage::Result) {
-        std::puts(f.succeeded?"OFFLINE DRAFT CREATED":"OFFLINE EXPORT REFUSED");
+        std::puts(batch.collecting?
+                (f.succeeded?"EDIT ADDED TO RAM QUEUE":"EDIT NOT QUEUED"):
+                (f.succeeded?"OFFLINE DRAFT CREATED":"OFFLINE EXPORT REFUSED"));
         wrappedNotice(f.result);
         std::puts("\nA/B: return to imported view");
         std::puts("\nOriginal is never overwritten.");
@@ -136,7 +141,7 @@ void top(const State& s,const phase20::OfflineFlow& edit,
         consoleClear();batchTop(batch);return;
     }
     if(edit.stage!=phase20::EditStage::Idle){
-        consoleClear();offlineTop(s,edit);return;
+        consoleClear();offlineTop(s,edit,batch);return;
     }
     consoleClear();
     std::puts("PKSM ROGUE - PHASE20 SAFE VIEW");
