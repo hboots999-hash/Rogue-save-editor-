@@ -32,6 +32,8 @@ jobs:
           done
           grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
           grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
+          python3 -m py_compile phase18/tools/extract_2_1_2_move_catalog.py
+          python3 phase18/tools/test_exact_rom_catalog.py
           test ! -f phase18/*.sav
           test ! -f phase18/*.gba
   native:
