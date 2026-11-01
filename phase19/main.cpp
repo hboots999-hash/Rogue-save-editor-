@@ -5,6 +5,7 @@
 #include <cstdio>
 #include "ui.hpp"
 #include "read_only_import.hpp"
+#include "rosalina_input.hpp"
 #include <string>
 using namespace phase19;
 namespace {
@@ -230,7 +231,8 @@ void bottom(const State& s) {
     std::puts("A: select     B: cancel");
     std::puts("R: next box / edit group");
     std::puts("L: previous (optional)");
-    std::puts("START: exit");
+    std::puts("START release: exit");
+    std::puts("START+SELECT: Rosalina");
     std::puts("");
     if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
        s.screen==Screen::ConfirmTwo)
@@ -241,8 +243,7 @@ void bottom(const State& s) {
     std::puts("\nEXPERIMENTAL - NOT A RELEASE");
 }
 bool toKey(u32 keys,Key& key) {
-    if(keys&KEY_START) key=Key::Start;
-    else if(keys&KEY_B) key=Key::B;
+    if(keys&KEY_B) key=Key::B;
     else if(keys&KEY_A) key=Key::A;
     else if(keys&KEY_UP) key=Key::Up;
     else if(keys&KEY_DOWN) key=Key::Down;
@@ -266,24 +267,33 @@ int main() {
     populateMock(active);
     static State state(active);
     static char importStatus[200]{};
+    StartExitGate startGate{};
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
         hidScanInput();
+        const u32 down=hidKeysDown();
+        const u32 held=hidKeysHeld();
+        const u32 up=hidKeysUp();
+        // Do not steal START+SELECT from Rosalina in either press order.
+        // A standalone START exits only when released.
+        if(startGate.tick((down&KEY_START)!=0,(up&KEY_START)!=0,
+                          (down&KEY_SELECT)!=0,(held&KEY_SELECT)!=0)) {
+            press(state,Key::Start);
+            redraw=true;
+        }
         Key k=Key::X;
-        if(toKey(hidKeysDown(),k)) {
+        if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
                 std::string reason;
                 if(inspectFixedSDCopy(active,reason)) {
-                    state.selected=0;
-                    state.homeRow=0;
-                    state.screen=Screen::Home;
+                    switchView(state,false);
                 } else {
                     std::snprintf(importStatus,sizeof(importStatus),"%s",reason.c_str());
                     openNotice(state,Screen::Import,importStatus);
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
-                state.selected=0;state.homeRow=0;state.screen=Screen::Home;
+                switchView(state,true);
             } else press(state,k);
             redraw=true;
         }
