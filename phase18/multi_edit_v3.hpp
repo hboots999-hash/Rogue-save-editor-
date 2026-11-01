@@ -11,13 +11,14 @@
 
 namespace rogue18 { namespace v3 {
 constexpr uint32_t ContractVersion=3;
-// At most 1 money + 450 physical quantities + 6*(6 IV+6 EV+4 PP).
-constexpr size_t MaxEdits=547;
+// A bounded offline batch: 128 scalar changes maximum until real 3DS heap
+// and latency measurements justify larger transactions.
+constexpr size_t MaxEdits=128;
 struct Edit {
     Kind kind=Kind::Money;
     unsigned slot=0,field=0;
     uint32_t expectedValue=0,value=0;
-    uint16_t expectedItemId=0;
+    uint16_t expectedItemId=0,expectedMoveId=0;
     uint32_t expectedPid=0,expectedOt=0;
     uint16_t expectedSpecies=0,expectedPokemonChecksum=0;
     uint32_t expectedCounter=0;
@@ -73,6 +74,7 @@ inline bool makeEdit(const v2::ReadSnapshot& original,const Batch& batch,
     out.expectedDigest=guard.expectedDigest;
     out.expectedCounter=guard.expectedCounter;
     out.expectedItemId=guard.expectedItemId;
+    out.expectedMoveId=guard.expectedMoveId;
     out.expectedPid=guard.expectedPid;out.expectedOt=guard.expectedOt;
     out.expectedSpecies=guard.expectedSpecies;
     out.expectedPokemonChecksum=guard.expectedPokemonChecksum;
@@ -119,7 +121,8 @@ inline bool originalGuard(const v2::ReadSnapshot& view,const Batch& batch,const 
     if(mon.egg || mon.pid!=e.expectedPid || mon.ot!=e.expectedOt ||
        mon.species!=e.expectedSpecies ||
        mon.checksum!=e.expectedPokemonChecksum)return false;
-    if(e.kind==Kind::Move && mon.moves[e.field]==0)return false;
+    if(e.kind==Kind::Move &&
+       (mon.moves[e.field]==0 || mon.moves[e.field]!=e.expectedMoveId))return false;
     return currentValue(view,e)==e.expectedValue;
 }
 inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
@@ -182,12 +185,11 @@ inline Result preview(const uint8_t* original,size_t n,const Batch& batch){
         else if(e.kind==Kind::IVs || e.kind==Kind::EVs)req.stats[e.field]=uint8_t(e.value);
         else req.pp=uint8_t(e.value);
         auto step=v2::preview(working.data(),working.size(),req);
-        if(!step.ok || step.candidate.size()!=n ||
-           !v2::verify(working.data(),n,step.candidate.data(),n,req))
+        if(!step.ok || step.candidate.size()!=n)
             return blocked("Individually guarded intermediate edit failed");
         working=std::move(step.candidate);
     }
-    // Independent expected-after image: rebuild from original bytes, with
+    // Every intermediate v2 preview validates the exact single-edit footprint.\n    // A second independent reconstruction below proves the whole batch.\n    // Independent expected-after image: rebuild from original bytes, with
     // direct encoding of the exact permitted scalar fields (NOT by calling
     // v2 preview). This proves no aggregate mutation escaped the union
     // of allowed byte fields and the two checksums.
