@@ -97,10 +97,12 @@ EvidenceReport inspectRecoveryEvidence(const RecoveryEvidence& files,Signer& sig
     // Bound untrusted on-disk records before decoding or allocating the
     // two complete copies carried by the journal. A valid journal has an
     // exact 64-byte envelope around TWO equal-size container images.
-    if(backup.size()<rogue_live::ContainerMin ||
-       backup.size()>phase14::MaxContainer ||
-       journal.size()<64u ||
-       journal.size()!=64u+2u*backup.size()) {
+    // Phase17's observed target is the EXACT 263168-byte wrapper with
+    // two 131584-byte slots. The older Phase14 generic memory parser also
+    // accepts trailing bytes for legacy synthetic fixtures; Phase17's
+    // recovery evidence MUST NOT silently reinterpret a different size.
+    if(backup.size()!=rogue_live::ContainerMin ||
+       journal.size()!=64u+2u*rogue_live::ContainerMin) {
         result.code=EvidenceCode::InvalidJournal;return result;
     }
     if(live.size()!=backup.size()) {
