@@ -21,17 +21,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: e3fd4971071de91285a4c42b3717b1d1f70999e9
+          ref: 9908eab15a79c5b64126335d746b140028d05af1
           path: dependencies/phase17
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 9569c2ac3f7693ee9d9bed5b30a84f79cb8c2d91
+          ref: 59888cb7194e2a819602a58ddfa76829d060aa00
           path: dependencies/phase18
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
+          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
           path: dependencies/phase19
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
@@ -79,17 +79,17 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: e3fd4971071de91285a4c42b3717b1d1f70999e9
+          ref: 9908eab15a79c5b64126335d746b140028d05af1
           path: dependencies/phase17
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 9569c2ac3f7693ee9d9bed5b30a84f79cb8c2d91
+          ref: 59888cb7194e2a819602a58ddfa76829d060aa00
           path: dependencies/phase18
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
+          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
           path: dependencies/phase19
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
@@ -99,8 +99,12 @@ jobs:
           dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
           mkdir -p phase20-build/source phase20-build/include/phase18 phase20-build/include/phase19 phase20-build/include/phase20
           curl -fLsS --retry 3 -o phase20-build/Makefile \
-            https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+            https://raw.githubusercontent.com/devkitPro/3ds-examples/be2001fee08cf8ec7d3366e095e83f6f75da8942/templates/application/Makefile
           sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase20-build/Makefile
+          # A 37 KiB PC research frame previously contributed to ARM11 crashes.
+          # Enforce the same native hard stop as the audited Phase19 viewer.
+          sed -i '/^CXXFLAGS[[:space:]]*:=/s/$/ -Werror=frame-larger-than=4096 -fstack-usage/' phase20-build/Makefile
+          grep -Fq -- '-Werror=frame-larger-than=4096 -fstack-usage' phase20-build/Makefile
           sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRoguePhase20/g' phase20-build/Makefile
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase 20 Read Only\n' >> phase20-build/Makefile
           cp phase20/main.cpp phase20-build/source/main.cpp
@@ -109,8 +113,15 @@ jobs:
           cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
-          cp dependencies/phase18/phase18/*.hpp phase20-build/include/phase18/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_copy_v1.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
+          test -s phase20-build/build/main.su
+          cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
+          head -n 30 phase20-build/STACK_USAGE.txt
+          # Require the new Phase20 ABI to remain read-only and small.
+          if grep -R -E '#include.*(editor_model|pc_readonly|offline_export)\\.hpp' phase20-build/include/phase20/ phase20-build/source/; then
+            echo 'FAIL: research/editor header reached ARM11 Phase20'; exit 1
+          fi
           test -s phase20-build/PKSMRoguePhase20.3dsx
           test -s phase20-build/PKSMRoguePhase20.elf
           arm-none-eabi-nm -C phase20-build/PKSMRoguePhase20.elf > phase20-build/ELF_SYMBOLS.txt
@@ -131,6 +142,7 @@ jobs:
             phase20-build/PKSMRoguePhase20.3dsx
             phase20-build/PKSMRoguePhase20.elf
             phase20-build/SHA256SUMS.txt
+            phase20-build/STACK_USAGE.txt
           retention-days: 7
   experimental-cia:
     name: Isolated Phase20 CIA metadata and package (not release)
@@ -148,7 +160,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
+          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
           path: dependencies/phase19
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
