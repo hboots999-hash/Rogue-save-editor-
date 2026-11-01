@@ -20,6 +20,9 @@ int main(){
     std::string reason;
     assert(inspectCopiedBuffer(bytes.data(),bytes.size(),live,reason));
     assert(!live.synthetic);
+    assert(live.sourceModelApi==rogue18::ModelApiVersion);
+    assert(rogue18::hasDigest(live.sourceSha256));
+    assert(live.sourceSha256==rogue18::sourceDigest(bytes.data(),bytes.size()));
     assert(live.moneyStatus==Availability::Ready && live.money==40001);
     assert(live.activeCounter==41);
     assert(live.partyStatus==Availability::Ready && live.partyCount==2);
@@ -159,5 +162,63 @@ int main(){
         assert(fromStream.money==40001 && fromStream.party[0].species==25);
     }
 
+    // Phase18 current parser must accept modulo-u32 rollover adjacency.
+    auto rollover=bytes;
+    for(unsigned bank=0;bank<2;bank++)
+      for(unsigned physical=0;physical<14;physical++){
+        const auto sector=(bank*14u+physical)*h168::Sector;
+        h168::w32(rollover.data(),sector+0xffc,
+                  bank==0?0xffffffffu:0u);
+      }
+    static Demo rolls{};
+    assert(inspectCopiedBuffer(rollover.data(),rollover.size(),rolls,reason));
+    assert(rolls.money==40001 && rolls.activeCounter==0u);
+    assert(rolls.sourceSha256!=live.sourceSha256);
+    // A stale/nonadjacent source copy is never silently selected.
+    auto gapped=bytes;
+    for(unsigned i=0;i<14;i++){
+        const auto off=(14u+i)*h168::Sector;
+        h168::w32(gapped.data(),off+0xffc,60u);
+    }
+    assert(!inspectCopiedBuffer(gapped.data(),gapped.size(),rolls,reason));
+    assert(rolls.activeCounter==0u &&
+           rolls.sourceSha256==rogue18::sourceDigest(rollover.data(),rollover.size()));
+
+    // Recompute sector checksums to probe semantic field checks beyond
+    // simple checksum rejection; any invalid Pokémon remains blocked.
+    const size_t activeS1=originalInfo.banks[originalInfo.active].sector[1];
+    const size_t monAt=activeS1+0x238u;
+    auto badAbility=bytes;
+    auto canonical=rogue18::plaintext(badAbility.data(),monAt);
+    uint32_t misc=h168::r32(canonical.data(),44u);
+    misc=(misc&~(uint32_t(3)<<29))|(uint32_t(3)<<29);
+    h168::w32(canonical.data(),44u,misc);
+    rogue18::encode(badAbility.data(),monAt,canonical);
+    h168::w16(badAbility.data(),activeS1+0xff6,
+               h168::checksum(badAbility.data()+activeS1));
+    assert(!inspectCopiedBuffer(badAbility.data(),badAbility.size(),rolls,reason));
+    assert(rolls.money==40001 && rolls.activeCounter==0u);
+
+    auto badEV=bytes;
+    canonical=rogue18::plaintext(badEV.data(),monAt);
+    canonical[24]=253;
+    rogue18::encode(badEV.data(),monAt,canonical);
+    h168::w16(badEV.data(),activeS1+0xff6,
+               h168::checksum(badEV.data()+activeS1));
+    assert(!inspectCopiedBuffer(badEV.data(),badEV.size(),rolls,reason));
+
+    auto badPP=bytes;
+    canonical=rogue18::plaintext(badPP.data(),monAt);
+    canonical[20]=65; // parser may decode, but UI enforces PP<=64
+    rogue18::encode(badPP.data(),monAt,canonical);
+    h168::w16(badPP.data(),activeS1+0xff6,
+               h168::checksum(badPP.data()+activeS1));
+    assert(!inspectCopiedBuffer(badPP.data(),badPP.size(),rolls,reason));
+    assert(rolls.sourceSha256==rogue18::sourceDigest(rollover.data(),rollover.size()));
+
+    assert(!inspectCopiedBuffer(nullptr,h168::Size,rolls,reason));
+    assert(!inspectCopiedBuffer(bytes.data(),0,rolls,reason));
+    assert(!inspectCopiedBuffer(bytes.data(),h168::Size-1,rolls,reason));
+    assert(rolls.activeCounter==0);
     std::cout<<"PASS Phase19: pinned Phase18 H168 copied-data read only bridge, no writes\n";
 }
