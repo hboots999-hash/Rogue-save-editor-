@@ -167,9 +167,23 @@ inline bool validateBankBag(const uint8_t* raw,const h168::Bank& bank){
 }
 inline bool validate(const uint8_t* raw,size_t n,h168::Info& info){
     if(!h168::inspect(raw,n,info))return false;
-    // Conservative H168 policy: two consecutive historical counters only.
+    // Save counter is uint32_t and wraps. Phase10's legacy inspector
+    // chooses the numerically greatest counter, which is wrong at rollover.
+    // Require adjacent counters in modular arithmetic and reselect the
+    // true successor even if it is counter zero.
     const uint32_t a=info.banks[0].counter,b=info.banks[1].counter;
-    if(!((a>b && a-b==1u)||(b>a && b-a==1u)))return false;
+    if(static_cast<uint32_t>(a+1u)==b)info.active=1u;
+    else if(static_cast<uint32_t>(b+1u)==a)info.active=0u;
+    else return false;
+    const auto& latest=info.banks[info.active];
+    const size_t activeS1=latest.sector[1];
+    info.money=h168::r32(raw,activeS1+layout::Money)^latest.key;
+    info.partyCount=h168::r32(raw,activeS1+layout::PartyCount);
+    info.items=0;
+    for(unsigned j=0;j<layout::BagPhysicalSlots;j++){
+        if(!h168::r16(raw,activeS1+layout::BagArray+j*layout::ItemSlotStride))break;
+        ++info.items;
+    }
     for(const auto& bank:info.banks){
         if(!validateBankBag(raw,bank))return false;
         const size_t s1=bank.sector[1];
