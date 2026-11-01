@@ -3,7 +3,7 @@
 // Layout is observed for the private GBA-P-H168 Emerald Rogue 2.1.2 save,
 // but structural validity is NOT proof that a draft is game-playable.
 #pragma once
-#include "raw_copy_v1.hpp"
+#include "raw_v1.hpp"
 #include "bag_rules.hpp"
 #include "layout_geometry.hpp"
 #include "source_digest.hpp"
