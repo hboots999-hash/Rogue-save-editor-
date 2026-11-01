@@ -1,8 +1,12 @@
 // Phase19/Phase18 integration test: generated non-playable 128KiB H168 copy.
 // Reuse Phase18's existing deterministic fixture, not a private game save.
 #define main phase18_regression_reference_main
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 #include "phase18/test_offline_engine.cpp"
+#pragma GCC diagnostic pop
 #undef main
+#include "ui.hpp"
 #include "read_only_import.hpp"
 #include <cassert>
 #include <cstring>
