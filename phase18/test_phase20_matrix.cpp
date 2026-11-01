@@ -1,9 +1,13 @@
 // Synthetic-only Phase20 v2 coverage: 24 encrypted orders x all six party
 // positions x all four existing move slots, all occupied bag entries.
 // No private user saves, ROM resources, restored game or live writer.
+#include "integration_v2.hpp"
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 #define main phase18_original_fixture_main_not_called
 #include "test_offline_engine.cpp"
 #undef main
+#pragma GCC diagnostic pop
 #include <limits>
 using namespace rogue18;
 static int failMatrix(unsigned line,const char* expression) {
