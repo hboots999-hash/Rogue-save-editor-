@@ -71,7 +71,11 @@ inline bool inspectCopy(const uint8_t* raw,size_t n,phase19::Demo& visible,
     }
     // Independent Phase18 model guards and Phase19 presentation guards.
     // Both must pass BEFORE changing either of the caller-visible outputs.
-    const auto model=rogue18::inspectReadOnly(raw,n,false);
+    rogue18::SaveView model{};
+    try { model=rogue18::inspectReadOnly(raw,n,false); }
+    catch(const std::bad_alloc&) {
+        reason="Insufficient memory for copied-save model.";return false;
+    }
     if(!model.valid || model.apiVersion!=rogue18::ModelApiVersion ||
        model.confidence!=rogue18::DataConfidence::StructurallyValidated ||
        !rogue18::hasDigest(model.sourceSha256) ||
@@ -101,11 +105,17 @@ inline bool inspectCopy(const uint8_t* raw,size_t n,phase19::Demo& visible,
         const auto& a=model.party[i].value;
         const auto& b=checked.party[i];
         if(b.species!=a.species || b.ability!=a.abilitySlot ||
-           b.nature!=a.effectiveNature || b.egg!=a.egg)return false;
+           b.nature!=a.effectiveNature || b.egg!=a.egg) {
+            reason="Phase18/Phase19 party model agreement failure.";return false;
+        }
         for(unsigned j=0;j<6;j++)
-            if(b.iv[j]!=a.ivs[j] || b.ev[j]!=a.evs[j])return false;
+            if(b.iv[j]!=a.ivs[j] || b.ev[j]!=a.evs[j]) {
+                reason="Phase18/Phase19 party stat agreement failure.";return false;
+            }
         for(unsigned j=0;j<4;j++)
-            if(b.moves[j]!=a.moves[j] || b.pp[j]!=a.pp[j])return false;
+            if(b.moves[j]!=a.moves[j] || b.pp[j]!=a.pp[j]) {
+                reason="Phase18/Phase19 move/PP agreement failure.";return false;
+            }
     }
     for(size_t i=0;i<model.items.size();++i)
         if(checked.bag[i].id!=model.items[i].itemId ||
