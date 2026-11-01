@@ -6,7 +6,7 @@ Status: **integration design, NOT an implementation authorisation**. Phase19 is 
 
 Phase19 source: `phase19/read_only_import.hpp`; `phase19/adapter.hpp`, `phase19/ui.hpp`.
 
-Read-only APIs pinned from Phase18 commit `596743d8eaa073759a736b5a8107db43f3a8c17b`:
+Read-only APIs pinned from Phase18 commit `ea7303e3d04e9c409febd44ee3e1f834de02cdc6`:
 - `rogue18::validate(const uint8_t*, size_t, h168::Info&)`: structural checks on **exact 131072-byte unwrapped H168** copy. Both Gen III-style historical banks must pass sector checksums and contain adjacent counters. Checks conservative bag and party layout.
 - `rogue18::partyAt(const uint8_t*, size_t, const h168::Info&, unsigned, rogue18::Mon&)`: bounded decoded party. Includes numeric species, IVs 0–31, EVs <=252 (sum <=510), numeric moves and PP, EX-v2.1 two-bit ability **slot**, effective nature and egg flag.
 - `h168::item(const uint8_t*, const h168::Info&, unsigned, unsigned&, unsigned&)`: existing item numeric ID and quantity. No verified pocket or display-name mapping.
@@ -60,3 +60,7 @@ Blockers before editing can even be considered:
 **Rosalina shortcut START+SELECT:** application exit is triggered by **standalone START release**, never on the initial START keydown and never if SELECT was held/pressed during the same START press. Do not bind SELECT alone to a destructive action. Pressing a Rosalina chord in either order should not exit the app.
 
 PR #7 must remain a separate unmerged draft until physical-read-only verification. Phase17/18 branches must not be modified while implementing this interface.
+
+## QA #10 integration boundary clarification
+
+On the 3DS **do not include** Phase18 `editor_model.hpp` or `pc_readonly.hpp` inside Phase19's native implementation: the research-only PC inspector has a 37,104-byte frame and unsafe unresolved ROM semantics. Phase19's native `Phase18ReadView` consumes only audited `rogue18::validate`, `rogue18::partyAt`, `h168::item` and `rogue18::sourceDigest` at pin `ea7303e3d04e9c409febd44ee3e1f834de02cdc6`. The host integration build independently compares party, bag, money, counters, SHA and metadata against `rogue18::SaveView` API v1; CI fails if the versioned API changes. In Phase20 **do not directly co-include Phase17 and Phase18's duplicate `h168` declarations**: use isolated translation units with a versioned read-only DTO bridge. No writer/restore bridge, source fingerprint alone or caller-provided evidence flag authorizes operations.
