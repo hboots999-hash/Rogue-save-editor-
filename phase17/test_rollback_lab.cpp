@@ -125,6 +125,33 @@ int main(int argc,char**argv) {
                 malformed.backup.bytes=&tooLargeBackup;
                 assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
                        EvidenceCode::InvalidJournal);
+                // Phase14 historically tolerates extra trailing wrapper
+                // bytes in generic test fixtures. Phase17 must require the
+                // EXACT observed 263168-byte target, even if an attacker
+                // provides a newly checksummed matching-size journal.
+                auto extendedPlan=plan;
+                extendedPlan.before.push_back(0x5a);
+                extendedPlan.after.push_back(0x5a);
+                const auto extendedRecord=phase14::encodeJournal(extendedPlan);
+                assert(extendedPlan.before.size()==263169u);
+                malformed=evidence;
+                malformed.backup.bytes=&extendedPlan.before;
+                malformed.journal.bytes=&extendedRecord;
+                malformed.live.bytes=&extendedPlan.before;
+                assert(phase17::inspectRecoveryEvidence(malformed,signer).code==
+                       EvidenceCode::InvalidJournal);
+                // Even if a public client forges perfectly plausible
+                // length/counter/hash values, unsupported wrapper sizes are
+                // never a valid read-only status envelope.
+                P17ReadOnlyStatusV1 oversized{};
+                assert(p17_readonly_status_init_blocked_v1(&oversized));
+                oversized.code=P17_RO_RAM_REHEARSAL_READABLE;
+                oversized.expected_title=rogue_live::ExpectedTitle;
+                oversized.source_counter=49;
+                oversized.container_bytes=263169;
+                oversized.journal_bytes=526402;
+                oversized.source_sha256[0]=1;
+                assert(!p17_readonly_status_shape_valid_v1(&oversized));
                 malformed=evidence;
                 auto overlong=record;overlong.push_back(0);
                 malformed.journal.bytes=&overlong;
