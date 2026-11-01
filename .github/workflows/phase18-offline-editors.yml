@@ -135,7 +135,7 @@ jobs:
           frames=[]
           for file in glob.glob('/tmp/phase18-*-native.su')+['/tmp/phase18-native.su']:
               for line in open(file):
-                  parts=line.split()  # robust whitespace separation across GCC .su variants
+                  parts=line.rstrip().rsplit(chr(9),2)  # split exact GCC tabs, preserve spaces in C++ signatures
                   if len(parts)>=3:
                       try: frames.append((int(parts[1]),parts[2],parts[0]))
                       except ValueError: pass
