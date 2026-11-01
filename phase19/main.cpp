@@ -189,6 +189,7 @@ void top(const State& s) {
             std::puts("00000001.sav");
             std::puts("\nNo installed game is opened.");
             std::puts("263168-byte VC wrapper blocked.");
+            std::puts("Layout check != ROM identity.");
             break;
         case Screen::Proposal:
             std::puts("EDIT PROPOSAL - NOT APPLIED");
