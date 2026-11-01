@@ -1,29 +1,46 @@
-# Phase 19 — Nintendo 3DS editor UI demonstrator
+# Phase 19 — PKSM Rogue Edition, experimental 3DS read-only viewer
 
-**Status: synthetic demonstration only, read-only with respect to all save data.** No real saves are read, no SD files created, and no native save or restore service is linked. This is an isolated new native homebrew UI, not a release of PKSM Rogue Edition.
+**Current status (1 November 2026):** updated standalone 3DSX builds a fictional editing demonstration and an **opt-in read-only viewer for a separately prepared 131072-byte H168 SD save copy**. No live Nintendo 3DS game archive is opened. No save, backup, draft, item, Pokémon, money or PC value is ever written or restored. The new copied-save-integrated version **has not** been tested on the user's physical handheld; earlier real-console success was for the previous corrected synthetic-only 3DSX. **PR #7 stays DRAFT.**
 
-## Implemented
+## Features
 
-Native top/bottom libctru console interface: home menu, three-member example party, two sample PC boxes with navigation, Pokémon details, IV/EV/move/ability/nature editing menus, item inventory and quantity proposals, money proposals, backup management and recovery help.
+- Two-screen libctru console UI: Home, Party, PC, Pokémon detail with numeric move IDs **and PP**, fictional IV/EV/Move/PP previews, read-only Ability/Nature, Bag, Money, Backups, Recovery and copied-SD Import.
+- The native executable **starts in fictional DEMO mode**. Fictional proposals can be adjusted and double-confirmed, but finish **BLOCKED** and do not modify even the sample snapshot.
+- Seventh Home menu entry: **Inspect SD copy (read-only)**. Press A to inspect only `sdmc:/3ds/PKSM-Rogue/imports/00000001.sav`. The file must be an **independently prepared, unwrapped exact 131072-byte H168 copy**; missing, corrupt, wrong-sized and 263168-byte authenticated GBA VC wrappers are refused. Failed reads leave the visible data unchanged. Do not truncate or overwrite original saves.
+- Imported party, money and existing item quantities are numerical and **READ ONLY**. Party nickname/level, exact ROM move/item names and actual PC layout are unverified: show Species N, Lv? and Unsupported PC, not fake values. Structure validation is not proof of exact ROM identity or game-playability.
+- Native copied-save imports disable proposals using both snapshot origin and a **separate session-edit gate**. Import->X explicitly resets to a full fictional snapshot, clearing all previously imported bytes in inactive slots. No real-data editor or Phase18 draft/export API is linked.
 
-Values are fictional. Ranges in this demonstration: IV 0–31, EV max 252 and total max 510, move index 1–1024, ability index 0–255, nature index 0–24, money 0–999999, item quantity 0–999. These limits do NOT authorize edits for the actual Emerald Rogue v2.1.2 title. Every editing workflow previews in-memory numbers, requires two explicit confirmations, and **ends BLOCKED** without changing even the demo fixture. B cancels at every step. "Backups" and "Restore" never access files; they show an unavailable status rather than inventing a backup. No external private assets, screenshots, ROMs or saves are included.
+## Controls — **L shoulder NOT REQUIRED**
 
-## Controls
+| Location | Controls |
+| --- | --- |
+| Home and lists | D-pad Up/Down select; A open; B back |
+| PC boxes / Edit category | **R or D-pad Right** next; **X or D-pad Left** previous |
+| Bag pages (6 entries per page) | **R or D-pad Right** next; **X or D-pad Left** previous |
+| Fictional proposal only | Up/Down ±1, Left/Right ±10, X reset, A advance to BLOCKED, B cancel |
+| Exit | **START alone, released** |
+| Rosalina shortcut | **START + SELECT**, either order, is reserved and must not exit the app |
 
-Home: Up/Down then A. Party/Bag: Up/Down and A. PC: L/R switches boxes, A opens an example Pokémon. Pokémon detail: A or X opens edit categories. Edit: L/R selects IV/EV/Moves/Ability/Nature, Up/Down chooses field, A opens a number proposal. In proposal: Up/Down +/-1, Left/Right +/-10, X resets, A reviews, B cancels. Next A shows confirmation two; final A shows BLOCKED. START exits safely.
+L continues to function as an optional previous control but is not needed for any essential flow. On the top screen, all status/recovery guidance wraps at word boundaries; the lower screen shows context-oriented controls.
 
-## Build and isolation
+## Build, verified checks and limits
 
-GitHub workflow: .github/workflows/phase19-editor-ui.yml. Host C++ tests verify navigation, bounds, confirmations, cancel, demo data immutability and blocked backup/restore. CI builds a standalone 3DSX/ELF with devkitPro/libctru and packages a distinct **experimental** CIA, both with SHA256 receipts; optional isolated Azahar UI startup smoke captures screenshots but cannot test actual game or source identity.
+Workflow: `.github/workflows/phase19-editor-ui.yml` builds experimental 3DSX/ELF using devkitPro and packages a separate demonstration CIA Title ID **000400000F73A500**. Host strict-warning and sanitizer suites cover all menu categories, confirmation cancellation, unsupported states, fake-data isolation, L-free navigation, 450-item pagination, Rosalina chord and safe memory handling. Phase18 generated dual-bank H168 fixtures test empty party/bag, stored values, corrupt sectors and read-only stream canary. Native linked-ELF symbol audit excludes Phase18 proposal/export interfaces. Azahar screenshots of boot, selected menus and exit attempts are best-effort **emulator** evidence, never proof of physical 3DS compatibility.
 
-Phase 19 preview Title ID **000400000F73A500**, separate from the installed Emerald Rogue title **0004000007D7BA00** and the previous native preview **000400000F73A400**. Check title IDs before any hardware test; prior prototype CI success cannot rule out real-console crashes.
+A previous experimental CIA caused an ARM11 stack crash; the corrected demo 3DSX later passed actual hardware tests. The **new updated 3DSX** must be separately validated when the user's console is available. Do **not** install the previously crashing CIA as a shortcut.
 
-## Integration requirements
+### When 3DS is available again
 
-1. Keep UI State independent of read/write adapters. Add a future **explicit read-only provider** after validation for the exact H168 save version; report unsupported PC layout as unavailable rather than guessing. No real data is loaded in Phase 19.
-2. For a real editor, each field must have independent Phase 18 real-save mapping validation, valid species/item/move IDs, capability gating and Pokémon checksum verification. Synthetic limits alone are not enough.
-3. Authenticated GBA VC restore and rollback are a separate gate; leave installed-game writes impossible until that gate and physical gameplay persistence tests pass.
-4. Existing Phase 9–13 code, restoration modules and other branches were not modified. Do not merge this PR as evidence that real save editing works.
+1. Preserve verified backups and confirm Emerald Rogue still starts.
+2. Download **the latest Phase19 3DSX** from the newest passing GitHub Actions run; back up the previous working 3DSX and replace it through the Homebrew Launcher path. **Do not install the experimental CIA.**
+3. First launch with **no copied save in the import folder**. Verify demo menus, R/X navigation, and the seventh Import option showing missing-file status, then B back and standalone START release to exit.
+4. Only if an independently verified, unwrapped 131072-byte H168 **copy** is available, place that copy at the fixed SD path and inspect the numeric party, bag and money read-only. **Never** modify installed Emerald Rogue or trim its 263168-byte VC backup.
+
+Further details: [READ_ONLY_IMPORT.md](READ_ONLY_IMPORT.md), [INTEGRATION_CONTRACT.md](INTEGRATION_CONTRACT.md), [PHASE20_INTEGRATION_CONTRACT.md](PHASE20_INTEGRATION_CONTRACT.md), [PHASE_HANDOFF.md](PHASE_HANDOFF.md), [HARDWARE_TEST_MATRIX.md](HARDWARE_TEST_MATRIX.md).
+
+---
+
+## Historical engineering notes (some statements superseded by the current overview)
 
 ## 1 November 2026 — Phase 19 adapter/UI integration iteration
 
