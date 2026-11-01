@@ -1,7 +1,10 @@
 // Cross-product, NON-PLAYABLE fixture regression for Phase20's five v2 ops.
 // No copyrighted ROM, private save, privileged archive or installed writes.
 #define main phase18_fixture_main_for_matrix
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 #include "test_offline_engine.cpp"
+#pragma GCC diagnostic pop
 #undef main
 #undef CHECK
 #include "integration_v2.hpp"
