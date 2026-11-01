@@ -46,3 +46,16 @@ Potential root cause identified on source inspection: expanded adapter `Demo` em
 **Retest gate:** check HOME Menu and Emerald Rogue independently first; retain original saves/backups. Do not relaunch the crashing CIA. After replacement build CI passes, prefer testing corrected standalone 3DSX only. Stop on another exception and record the screen; keep CIA retest separate. A successful replacement emulator job does **not** close this hardware incident.
 
 The Phase19 PR must remain **DRAFT/unmerged** and must not claim physical hardware pass until manually retested.
+
+
+### Confirmed ARM11 exception symbolication of original pre-fix ELF
+
+Downloaded and inspected the exact previous run's `PKSMRoguePhase19.elf` artifact from GitHub Actions run **41259169949** (prior hardware-tested CIA generation). The user photograph's registers read:
+- `PC = 0x00104780`, `SP = 0x07FF85E0`, `FAR = 0x07FF85D8`, write access.
+- `addr2line`: `0x00104780` = `gfxInit()` entry, `libctru/source/gfx.c:126`.
+- ARM disassembly at `0x00104780`: `push {r4,r5,r6,lr}`. This writes below `SP`, including the faulting address `0x07FF85D8`.
+- At the beginning of `main`, original executable has `sub sp, sp, #63744` followed by `sub sp, sp, #252` **before calling `gfxInitDefault()`**. This is 63,996 bytes of stack reservation in main, due to the oversized local `State` owning `Demo`.
+
+Thus **the startup failure mechanism is confirmed as an out-of-bounds/unmapped stack write during gfxInit's prologue, following an oversized main stack frame**. This replaces the earlier qualified source-level hypothesis. The static snapshot/reference fix eliminates the oversized frame by design, subject to replacement build/emulator and a separate physical 3DS retest. It does NOT prove safety of unrelated code, actual backup integrity, or real device success.
+
+Never recommend the pre-fix CIA/3DSX artifact. Distinguish old and new GitHub Actions run IDs.
