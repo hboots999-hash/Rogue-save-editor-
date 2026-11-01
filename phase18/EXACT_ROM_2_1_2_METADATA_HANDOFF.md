@@ -20,7 +20,7 @@ Within each 28-byte record, the compiled **base PP** field is at **offset +5** (
 
 - Ordinary move IDs **1..848** have named entries; ID 0 = none, ID 165 = Struggle (not an ordinary user-editable move). Entries 849..883 are blank/reserved; 884..935 are special Dynamax/Gigantamax-like names, **never automatically selectable**.
 - Of 848 ordinary entries, **40 base PP values disagree** between variants A/B. Example: ID 58, `Ice Beam`, PP **10 / 15**. These are not interchangeable: **do not choose one table by guessing**.
-- 807 ordinary entries have matching positive PP in both tables and decodable names, including Struggle ID 165. Excluding Struggle yields **806 potential UI review entries**; this is still **not permission to teach them**.
+- 808 ordinary entries have matching positive PP in both tables and decodable names, **including** Struggle ID 165. Excluding Struggle yields **807 potential UI review entries**; this is still **not permission to teach them**.
 - Sample independently located ROM data: ID 53 `Flamethrower` PP 15/15; ID 405 `Bug Buzz` PP 10/10; ID 483 `Quiver Dance` PP 20/20; ID 552 `Fiery Dance` PP 10/10. These are **this ROM's numeric IDs**, not guessed from the public source.
 - The public EX-v2.1 PP-Up layout remains a hypothesis for this target build until the exact-ROM code path is validated: four 2-bit counters, 0–3 each, `maxPP=basePP+floor(0.2*basePP*ups)`. Original Phase18 research deliberately resets replaced slot PP Ups, but exact-ROM behaviour may differ.
 
