@@ -47,7 +47,7 @@ int main(){
     assert(&s.demo==&sameFixture.demo); // process-lifetime mock, not a stack copy
     assert(s.demo.synthetic);
     const Demo original=s.demo;
-    assert(s.demo.synthetic && count(s)==6);
+    assert(s.demo.synthetic && count(s)==7);
     home(s,0);
     assert(s.screen==Screen::Party && count(s)==3);
     pressKey(s,Key::Up);assert(s.selected==0);
