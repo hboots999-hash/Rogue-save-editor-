@@ -58,6 +58,7 @@ public:
     bool receiptWritten=false;
     bool failReceipt=false; // Simulate lost/failed terminal receipt in RAM only.
     bool tamperOnFirstWrite=false;
+    size_t tamperOffset=0x20; // synthetic-only byte, caller chooses untouched source slot
     explicit Shadow(Bytes initial):live(std::move(initial)) {}
     bool writesAllowed()const{return true;} // ONLY this private vector
     bool unresolved()const{return journalPresent;}
@@ -87,9 +88,10 @@ public:
         const size_t count=partial?n/2:n;
         if(count)std::memcpy(live.data()+off,bytes,count);
         if(tamperOnFirstWrite && writes==1) {
-            // Change an unrelated byte in the currently active slot.
-            // A recovery routine must NEVER silently overwrite it.
-            live[0x20]^=0x40;
+            // Change an unrelated byte in the untouched source slot.
+            // Never index beyond the simulated buffer, including fuzz tests.
+            if(tamperOffset>=live.size())return false;
+            live[tamperOffset]^=0x40;
         }
         if(writes==powerLossAt)throw SimulatedPowerLoss{};
         return !partial;
