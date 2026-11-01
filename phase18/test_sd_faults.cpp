@@ -56,11 +56,22 @@ int main(int argc,char** argv){
             const auto bad=exportCopied(original.data(),original.size(),
                                         imported.c_str(),root.c_str(),req);
             raw_v1::ioFault={};
-            CHECK(!bad.ok && bad.draftName.empty());
+            CHECK(!bad.ok);
+            // Failed writes/flush/close/readback retain an uncertain basename.
+            // It must be visible to Phase20 instead of being mistaken for a
+            // successfully approved draft; no source bytes are ever changed.
+            const bool created=(phase!=0);
+            if(faultBackup){
+                CHECK(bad.draftName.empty());
+                CHECK(bad.backupName==(created?nameFor(true,1):std::string{}));
+            }else{
+                CHECK(bad.backupName==nameFor(true,1));
+                CHECK(bad.draftName==(created?nameFor(false,1):std::string{}));
+            }
+            if(created)CHECK(bad.reason.find(nameFor(faultBackup,1))!=std::string::npos);
             CHECK(readBytes(imported)==original);
             const auto broken=root/(faultBackup?"backups":"drafts")/
                               nameFor(faultBackup,1);
-            const bool created=(phase!=0);
             CHECK(fs::exists(broken)==created);
             Bytes retained{};
             if(created){
