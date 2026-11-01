@@ -91,7 +91,7 @@ int main(int argc,char** argv) {
     // transaction domain, irrespective of which physical slot is active.
     // Raw H168 internal bank counters follow a distinct validation policy.
     c=source;h168::w32(c.data(),0x34,10);assert(!layout(c,l)); // 10,12
-    c=source;h168::w32(c.data(),0x34,13);assert(!layout(c,l)); // 13,12
+    c=source;h168::w32(c.data(),0x34,14);assert(!layout(c,l)); // 14,12
     c=source;h168::w32(c.data(),0x34,15);assert(!layout(c,l)); // 15,12
     c=source;h168::w32(c.data(),0x34,0);
     h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX);
