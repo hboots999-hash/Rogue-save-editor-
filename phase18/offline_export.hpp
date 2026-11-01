@@ -12,6 +12,9 @@ struct ExportResult {
     bool ok=false;
     std::string reason,backupName,draftName;
     size_t changed=0;
+    ExportResult(bool good=false,std::string why={},std::string backup={},
+                 std::string draft={},size_t count=0)
+      : ok(good),reason(why),backupName(backup),draftName(draft),changed(count) {}
 };
 // Strict Phase10 import location, not a caller-selected game-save destination.
 // On native 3DS the root is limited to this application's own SD folder.
