@@ -21,3 +21,17 @@ Tests use a *generated, non-playable* 128-KiB dual-bank fixture from Phase18, no
 First verify that Emerald Rogue still starts and that independent original game backups remain safe. Test the replacement **3DSX**, not the previously crashing experimental CIA. Without any imported copy, opening the seventh menu entry and pressing A should report that the fixed file is missing, then B should return safely to the menu. Only later, if an independently verified 131,072-byte *unwrapped copy* is available, place it at the fixed path and test viewing its numeric party/bag/money data. Do not install a new CIA, edit actual save bytes, restore or inject any draft as part of Phase 19.
 
 Status: integration candidate, not yet a physical-hardware read-only import PASS, PR #7 remains draft and unmerged.
+
+
+## 1 Nov 2026 — host-only development hardening (no new hardware tests)
+
+- **Legitimately empty party/bag now accepted**: a structurally valid copied H168 save with no party Pokémon and/or no bag stacks returns EMPTY instead of being rejected. Generated fixtures modify and re-sign both historical banks, then verify empty-state UI behavior.
+- Extracted a testable FILE*-based exact read-only stream inspector. Fixed SD path remains the only native path, opened using fopen with "rb"; separate errors for file not found, inaccessible files, seeking/size failure, incomplete reads and wrapped 263168-byte container. A failed inspection preserves the previous screen data.
+- Host integration test now uses disposable generated temporary files, compares every original byte before/after reading, refuses corrupted and wrapped files, and flips a byte in each of the 28 historical bank sectors to verify rejection (the trailing 4 sectors are not claimed to be independently authenticated).
+- Pokémon detail screen now displays move IDs **with PP**, distinguishes mock party from copied save, and labels real PC storage UNSUPPORTED without misleading "Box 1/0". Native notices wrap at word boundaries so missing-file and recovery guidance is readable. R cycles forward without needing a functioning L shoulder button.
+- The native build workflow audits the linked ELF for presence of the Phase18 read-only validator and absence of project-specific Phase18 mutation/export functions. Generic library FS service symbols may still exist because libctru supplies them; their presence is not evidence of this app calling them.
+- "H168 structure checked" **does not mean ROM identity authenticated**. A structural decoder result never permits game-save writes, draft exporting or restore.
+
+Phase18 PR #8 has subsequently added an optional source_digest.hpp on its branch; the Phase19 dependency remains intentionally pinned at 596743d8eaa073759a736b5a8107db43f3a8c17b until separately reviewed. Do not automatically merge or repin.
+
+**The updated 3DSX is still awaiting its own physical-device check.** Earlier UI hardware passes applied to the preceding build. Keep Phase19 as an unmerged draft; do not test the CIA or the actual game save.
