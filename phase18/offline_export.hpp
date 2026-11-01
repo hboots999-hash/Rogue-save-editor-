@@ -2,7 +2,7 @@
 // NEVER accepts a game archive; NEVER writes to source import or live title.
 // GPL-3.0-or-later. Reuses Phase10 exclusive no-overwrite SDMC functions.
 #pragma once
-#include "offline_engine.hpp"
+#include "integration_v2.hpp"
 #include "raw_v1_sd.hpp"
 #include <cstring>
 #include <memory>
@@ -32,17 +32,16 @@ inline bool approvedPaths(const char* root,const char* sourcePath){
 }
 inline ExportResult exportCopied(const uint8_t* expectedCopy,size_t n,
                                  const char* sourcePath,const char* root,
-                                 const Request& req,
-                                 const Evidence& evidence=Evidence{}){
+                                 const Request& req){
     if(!expectedCopy || n!=h168::Size || !approvedPaths(root,sourcePath))
         return {false,"Only the fixed offline SD import path is supported"};
     auto read=h168::readExact(sourcePath);
     if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
         return {false,"Stale or missing offline source: blocked"};
-    const auto prepared=propose(expectedCopy,n,req,evidence);
+    const auto prepared=v2::preview(expectedCopy,n,req);
     if(!prepared.ok)return {false,"Edit rejected: "+prepared.reason};
-    if(!verifyExact(expectedCopy,n,prepared.candidate.data(),
-                    prepared.candidate.size(),req,evidence))
+    if(!v2::verify(expectedCopy,n,prepared.candidate.data(),
+                    prepared.candidate.size(),req))
         return {false,"Byte-exact candidate proof failed"};
     read=h168::readExact(sourcePath);
     if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
@@ -67,7 +66,7 @@ inline ExportResult exportCopied(const uint8_t* expectedCopy,size_t n,
     if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
         return {false,"Source changed after export: do not use draft",backup,draft};
     auto stored=h168::readExact((drafts+"/"+draft).c_str());
-    if(!stored || !verifyExact(expectedCopy,n,stored.get(),h168::Size,req,evidence))
+    if(!stored || !v2::verify(expectedCopy,n,stored.get(),h168::Size,req))
         return {false,"Stored draft failed byte-exact proof",backup,draft};
     return {true,"OFFLINE SD draft only; NEVER restore without separate release gates",
             backup,draft,prepared.changedOffsets.size()};
