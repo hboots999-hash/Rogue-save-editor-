@@ -25,10 +25,28 @@ These are not proof of power-cut durability, direct restore, game acceptance, or
 ## Evidence and gates
 
 - Host strict and sanitized tests: **check latest CI** at [Phase 17 Actions](https://github.com/hboots999-hash/Rogue-save-editor-/actions/workflows/phase17-rollback-rehearsal.yml).
-- Real hardware Phase 17 shadow simulation: **not yet tested**. No claim of an actual installed-game restore; game-write gate remains hardcoded false in the inherited Phase 14 adapter.
+- Real hardware Phase 17 RAM-only shadow simulation: **PASS, 1 November 2026** (user-supplied physical 3DS photos; details below). No claim of an actual installed-game restore; game-write gate remains hardcoded false in the inherited Phase 14 adapter.
 - Existing Phase 16 files contain personal save data and are NEVER committed or uploaded. Phase 17 reads them unchanged.
 - The next development phase is an independently reviewed, reproducible, *disposable-game-progress* authenticated write/rollback pilot. It needs prewrite independent backup and authorisation, durable multi-file journal, a fail-closed recovery path, AGB_FIRM/game-relaunch verification and actual rollback. A RAM simulation PASS cannot unlock direct writes.
 
 ## Branch integration
 
-This feature depends on Phase 16/15/14 draft branches. Keep its PR draft and do not cherry-pick around recovery gates, merge into main, or alter Phase 18/19 work. Record actual physical console evidence in this handoff only after photographed results are provided.
+This feature depends on Phase 16/15/14 draft branches. Keep its PR draft and do not cherry-pick around recovery gates, merge into main, or alter Phase 18/19 work. Photographed physical console evidence is recorded below; do not commit photos, game saves or journal contents to this repository.
+
+## Physical Nintendo 3DS Phase 17 rehearsal — PASS (1 November 2026)
+
+User supplied three photographs of the actual Phase 17 screen. First shows `PKSM ROGUE - PHASE17 RAM ROLLBACK`, `LIVE GBA VC: READ ONLY`, `RESTORE ENABLED: NO` before verification. The next screen shows `Phase16 journal: VERIFIED`, **Backup 263168 bytes**, **Journal 526400 bytes**, **Source counter 49**. The final photographed result is `TEST RESULT: RAM ROLLBACK TESTS PASSED` with:
+
+| RAM-only hardware check | On-console output |
+| --- | --- |
+| RAM restore / explicit undo | 1 / 1 |
+| Short-write recoveries | 4 / 4 |
+| Crash restart recoveries (simulated process interruptions) | 4 / 4 |
+| Rollback short retries | 4 / 4 |
+| Rollback crash retries | 4 / 4 |
+| Foreign-change refusals | 1 / 1 |
+| Bytes recovered exactly | YES |
+
+These results demonstrate on-device read-only verification of the preserved Phase 16 data and execution of the Phase 14 recovery algorithms against **RAM-only copies** using the console's current authentication session. The test application did not attempt an installed-game write. The test's simulated interruption cases are not a physical power-loss test. **Still unverified**: native live-save write permissions; production journal durability across abrupt power-off; AGB_FIRM accepting and re-saving an edited save; recovery after an actual torn filesystem write; restoration of an untouched original save; verified live rollback. No Phase 17 hardware pass authorises direct game-save writes.
+
+GitHub Actions: [run #41259255688](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41259255688) — all five CI jobs passed at code head `10598f1cc188b66b4cb5f4d6389e6f05c88b9900` prior to this documentation update. PR #9 remains draft. Leave the two private Phase 16 SD files intact. Next steps are independent recovery backup/restore readiness, hardened journal lifecycle, and an explicitly reviewed pilot on **expendable** progress, never a direct write on this evidence alone.
