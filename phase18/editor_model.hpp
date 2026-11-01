@@ -132,4 +132,19 @@ inline bool beginRequest(const SaveView& view,Kind kind,unsigned slot,Request& o
     }
     return false;
 }
+// Explicit four-slot selection for Phase19. Changing a generic Move
+// request's moveSlot without updating the expected ID and PP is forbidden.
+inline bool beginMoveRequest(const SaveView& view,unsigned partySlot,
+                             unsigned moveSlot,Request& out){
+    if(moveSlot>=4 || !beginRequest(view,Kind::Move,partySlot,out))
+        return false;
+    const auto& mon=view.party[partySlot].value;
+    if(mon.moves[moveSlot]==0)return false;
+    out.moveSlot=static_cast<uint8_t>(moveSlot);
+    out.expectedMoveId=mon.moves[moveSlot];
+    out.moveId=mon.moves[moveSlot];
+    out.expectedPP=mon.pp[moveSlot];
+    out.pp=mon.pp[moveSlot];
+    return true;
+}
 } // namespace rogue18
