@@ -2,6 +2,7 @@
 // Nonplayable H168 synthetic save. Host-only shadow writer/rollback tests.
 // NEVER contacts the installed game, SD card or privileged Nintendo services.
 #include "rollback_lab.hpp"
+#include "recovery_evidence_gate.hpp"
 #include <cassert>
 #include <fstream>
 #include <iterator>
@@ -68,6 +69,71 @@ int main(int argc,char**argv) {
             assert(plan.before==source && plan.after!=source);
             const Bytes record=phase14::encodeJournal(plan);
             assert(record.size()==526400);
+            // Read-only multi-file recovery gate: every unknown/missing,
+            // stale or corrupt state blocks before any transaction.
+            using phase17::RecordState;
+            using phase17::EvidenceCode;
+            phase17::RecoveryEvidence evidence{};
+            evidence.backup={RecordState::Readable,&source};
+            evidence.journal={RecordState::Readable,&record};
+            evidence.live={RecordState::Readable,&source};
+            evidence.restoredReceipt=RecordState::Missing;
+            evidence.rolledbackReceipt=RecordState::Missing;
+            const auto okEvidence=phase17::inspectRecoveryEvidence(evidence,signer);
+            assert(okEvidence.code==EvidenceCode::ReadyForRamOnly);
+            assert(okEvidence.canRunRamRehearsal());
+            assert(!okEvidence.mayWriteInstalledGame());
+            assert(!okEvidence.mayOverwriteJournal());
+            assert(okEvidence.backupSize==263168);
+            assert(okEvidence.journalSize==526400);
+            assert(okEvidence.sourceCounter==49);
+            auto missing=evidence;
+            missing.backup.state=RecordState::Missing;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::MissingBackup);
+            missing=evidence;missing.journal.state=RecordState::Missing;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::MissingJournal);
+            missing=evidence;missing.restoredReceipt=RecordState::Readable;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::TerminalReceiptPresent);
+            missing=evidence;missing.rolledbackReceipt=RecordState::Readable;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::TerminalReceiptPresent);
+            missing=evidence;missing.restoredReceipt=RecordState::NotChecked;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::StorageError);
+            missing=evidence;missing.journal.state=RecordState::Unreadable;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::StorageError);
+            auto stale=source;stale.back()^=1;
+            missing=evidence;missing.live.bytes=&stale;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::LiveChanged);
+            missing.live.bytes=&plan.after;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::LiveChanged);
+            auto wrongBackup=source;wrongBackup[0x20]^=1;
+            missing=evidence;missing.backup.bytes=&wrongBackup;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::BackupMismatch);
+            auto corruptRecord=record;corruptRecord.back()^=1;
+            missing=evidence;missing.journal.bytes=&corruptRecord;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::InvalidJournal);
+            corruptRecord.pop_back();
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::InvalidJournal);
+            auto incompatible=plan;
+            incompatible.after[incompatible.slots.target+
+                               rogue_live::HeaderSize+42]^=0x01;
+            const auto incompatibleRecord=phase14::encodeJournal(incompatible);
+            missing=evidence;missing.journal.bytes=&incompatibleRecord;
+            assert(phase17::inspectRecoveryEvidence(missing,signer).code==
+                   EvidenceCode::InvalidAuthentication);
+            FakeSigner detachedSigner{};
+            assert(phase17::inspectRecoveryEvidence(evidence,detachedSigner).code==
+                   EvidenceCode::InvalidAuthentication);
             const auto report=phase17::rehearse(source,record,signer);
             assert(report.code==phase17::ResultCode::Passed);
             assert(report.allByteExact);
