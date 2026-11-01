@@ -284,7 +284,35 @@ int main(int argc,char** argv){
 
 
     auto corrupt=b;
-    const unsigned s1=info.banks[1].sector[1];
+    // Flip one protected byte in every physical sector of both banks.
+    // All 28 must be rejected despite the active party being otherwise valid.
+    for(unsigned physical=0;physical<28;physical++){
+        auto invalid=b;
+        const size_t off=physical*h168::Sector+64;
+        invalid[off]^=0x5a;
+        h168::Info check{};
+        CHECK(!validate(invalid.data(),invalid.size(),check));
+    }
+    // An attacker can repair section checksums but not silently change the
+    // Pokémon ciphertext without also invalidating its 16-bit checksum.
+    for(unsigned partySlot=0;partySlot<2;partySlot++){
+        auto cipher=b;
+        const size_t mon=s1+0x238+104*partySlot;
+        cipher[mon+32+partySlot*8]^=1;
+        h168::w16(cipher.data(),s1+0xff6,h168::checksum(cipher.data()+s1));
+        h168::Info check{};
+        CHECK(!validate(cipher.data(),cipher.size(),check));
+    }
+    // Different XOR key but a repaired section 0 alone invalidates bag/money.
+    {
+        auto wrongKey=b;
+        const size_t sec0=info.banks[info.active].sector[0];
+        wrongKey[sec0+0x4c]^=1;
+        h168::w16(wrongKey.data(),sec0+0xff6,
+                   h168::checksum(wrongKey.data()+sec0));
+        h168::Info check{};
+        CHECK(!validate(wrongKey.data(),wrongKey.size(),check));
+    }
     corrupt[s1+0x238+32]^=0xff; // mon payload, sector + mon checksum broken
     CHECK(!propose(corrupt.data(),corrupt.size(),Request{},moves).ok);
     corrupt=b;corrupt[info.banks[0].sector[1]+0x4a8]^=0x80;
