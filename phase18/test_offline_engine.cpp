@@ -253,6 +253,17 @@ int main(int argc,char** argv){
     CHECK(!propose(b.data(),b.size(),q).ok);
     Evidence insertion{};insertion.verifiedBagInsertion=true;
     insertion.verifiedInsertItemIds={99};
+    // EX v2.1 geometry: start at 80 slots, 50 reserved for key items.
+    CHECK(capacityFromUpgrades(0)==80 && normalCapacityFromUpgrades(0)==30);
+    CHECK(capacityFromUpgrades(37)==450 && normalCapacityFromUpgrades(37)==400);
+    CHECK(capacityFromUpgrades(200)==450);
+    insertion.verifiedUpgradeCount=0;
+    insertion.verifiedItemPockets={{113,1},{1,3},{5,7},{99,9}};
+    CHECK(insertionCompatible(insertion.verifiedItemPockets,
+                              std::vector<uint16_t>{113,1,5},99,0));
+    CHECK(!insertionCompatible(insertion.verifiedItemPockets,
+                               std::vector<uint16_t>{5,113,1},99,0));
+
     auto inserted=propose(b.data(),b.size(),q,insertion);
     CHECK(inserted.ok && sameInactive(b,inserted.candidate));
     CHECK(validate(inserted.candidate.data(),inserted.candidate.size(),after));
@@ -264,6 +275,13 @@ int main(int argc,char** argv){
     insertion.verifiedInsertItemIds.push_back(113);
     CHECK(!propose(b.data(),b.size(),q,insertion).ok); // duplicate
     q.itemId=99;q.slot=4;CHECK(!propose(b.data(),b.size(),q,insertion).ok);
+    q.slot=3;
+    insertion.verifiedUpgradeCount=255;
+    CHECK(!propose(b.data(),b.size(),q,insertion).ok);
+    insertion.verifiedUpgradeCount=0;
+    insertion.verifiedItemPockets={{113,1},{1,3},{5,9},{99,1}};
+    CHECK(!propose(b.data(),b.size(),q,insertion).ok);
+
 
     auto corrupt=b;
     const unsigned s1=info.banks[1].sector[1];
