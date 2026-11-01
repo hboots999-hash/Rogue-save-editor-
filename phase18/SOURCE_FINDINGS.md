@@ -19,7 +19,22 @@ Source: `include/constants/global.h`, `include/constants/rogue.h`, `include/cons
 
 - `BAG_ITEM_CAPACITY = 450` physical slots, **50 reserved** for key items. `ITEM_BAG_MAX_CAPACITY_UPGRADE = 37`, `ITEM_BAG_SLOTS_PER_UPGRADE = 10`. `Rogue_GetBagCapacity` returns **min(80 + 10*upgrades, 450)**, leaving 30..400 nonreserved slots and 50 reserved key slots. Stack quantity maximum in the source is **999**.
 - The EX build uses nine ordered pockets: items 1, held items 2, medicine 3, stones 4, balls 5, TM/HM 6, berries 7, Pokéblocks 8, key items 9. Existing bag slots are sorted by pocket, not freely appendable.
-- **Source's bag upgrade offset differs from observed target:** public EX-v2.1 `SaveBlock1` lists `money` at +0x490, `bagCapacityUpgrades` following `bagSortMode` around +0x495, and bag array at +0x560. The user's **privately confirmed** H168 dump places money at +0x4A8 and bag array at +0x578 (both shifted +0x18). We must **NOT** assume the upgrade offset also shifts +0x18. Thus Phase18 cannot automatically derive the H168 live upgraded capacity.
+- **Offset discrepancy resolved at the source geometry level:** public EX-v2.1
+  `include/global.h` retains outdated comments (`money 0x490`, bag `0x560`) from a
+  100-byte party stride. The source now asserts `sizeof(struct Pokemon)==104`;
+  six records beginning at `0x238` end at `0x238+6*104=0x4A8` (money).
+  The following four-byte money, four-byte mode/upgrade/reserved block and
+  50 four-byte PC item slots place the bag at `0x4A8+8+200=0x578`,
+  matching the historical independently observed H168 fields. The associated
+  public-source candidate upgrade byte is `0x4AD` but has **not** been verified
+  in a private actual 2.1.2 save. `layout_geometry.hpp` encodes and statically
+  asserts all derived offsets. This resolves stale source comments without
+  claiming full ROM identity.
+- Source-derived bag capacity upgrades are now compared against the **read-only
+  candidate byte** in the active copied save and an explicit external
+  `verifiedH168BagUpgradeOffset` flag before insertion, rather than trusting an
+  arbitrary caller-supplied upgrade count. Any mismatched/unverified value is
+  rejected.
 - The insertion implementation now REQUIRES explicit externally verified upgrade count (0..37), pocket classification for **every existing item and proposed new ID**, observed sorted pocket order, append-only placement after the final existing pocket, source-backed reserved/normal slot counts, and a confirmed inserted item-ID allowlist. It still rejects by default. Appending a new medicine item after key items would break pocket ordering and is forbidden. New insertion also cannot identify all custom IDs from the public v2.1 table reliably.
 - Existing-item quantity editing remains an experimental offline-only feature with 1..999 source ceiling and exact slot/ID/current-count guards. Source semantics are not a substitute for disposable game-load tests.
 
@@ -38,3 +53,26 @@ Private pre-existing handoff: `phase9/profiles/confirmed_h168_save_layout_READ_O
 Phase 16's reported on-device authentication and recovery-journal persistence after restart improve the wider project's recovery evidence, but **cannot validate EX-v2.1 edit semantics against v2.1.2**. Phase18 has no live game IO or restore path.
 
 Still needed to enable ROM-specific editing: an independently identified exact v2.1.2 source revision or a private, separately authorized ROM data-table comparison, a verified H168 bag-upgrade byte and pocket ID map, then disposable in-game edit/load/re-save tests and checks for PC, abilities, nature and move IDs. Until then the Phase19 UI must present them as blocked, not claimed complete.
+
+
+## Phase19 snapshot integrity and 32-bit save counter rollover
+
+- `source_digest.hpp` implements standalone SHA-256 with published empty/abc
+  known-answer regressions. `SaveView.sourceSha256` seals the entire 131072-byte
+  copied input; `beginRequest` and `beginMoveRequest` attach that digest.
+  `propose` rejects changed copies even when the selected value and save
+  counter happen to match. Direct engine users may still supply a request
+  without a digest for backwards-compatible RAM-only tests, but Phase19 must
+  always supply the pinned digest.
+- The Phase10 inspector used a numerical
+  maximum for newest bank; at a legitimate uint32 save-counter wrap from
+  0xFFFFFFFF to 0 this selects the wrong bank. Phase18 now requires adjacent
+  modular counters and recomputes active money, party and bag counts after
+  selecting the true successor. CI tests both directions, gaps and equal
+  counters.
+- New `beginMoveRequest` handles slots 0–3 with slot-specific
+  expected move ID and PP and blocks absent/empty move slots.
+- **No
+  source-derived ability/nature/move or pocket ID means that an actual v2.1.2
+  game build has been verified.** These features remain gated as described in
+  `PHASE20_FEATURE_MATRIX.md`.
