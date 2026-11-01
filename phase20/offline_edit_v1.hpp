@@ -234,6 +234,24 @@ struct BatchFlow {
     unsigned page=0;
     char message[256]{};
 };
+inline unsigned batchValueLimit(const phase19::Demo& d,
+                                const EditChoice& c,const BatchFlow* q) {
+    if(c.kind!=OfflineKind::EV || !q || !q->collecting ||
+       c.slot>=d.partyCount || c.field>=6)return maxValue(d,c);
+    // Source remains immutable. A queued EV decrease can legitimately
+    // release headroom for a later EV increase on the SAME Pokémon.
+    // Exclude the currently selected stat, which is not yet staged.
+    unsigned other=0;
+    for(unsigned i=0;i<6;++i)if(i!=c.field) {
+        unsigned n=d.party[c.slot].ev[i];
+        for(const auto& e:q->pending.edits)
+            if(e.kind==rogue18::Kind::EVs &&
+               e.slot==c.slot && e.field==i)
+                n=e.value;
+        other+=n;
+    }
+    return other>510u?0u:std::min(252u,510u-other);
+}
 inline bool batchReady(const BatchFlow& q) {
     return q.collecting && !q.pending.edits.empty();
 }
@@ -482,7 +500,7 @@ inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
                             key==Key::Right||key==Key::R?10:
                             key==Key::Left?-10:0;
             const unsigned lo=flow.choice.kind==OfflineKind::ExistingItem?1u:0u;
-            const unsigned hi=maxValue(state.demo,flow.choice);
+            const unsigned hi=batchValueLimit(state.demo,flow.choice,batch);
             if(delta) {
                 const int64_t v=static_cast<int64_t>(flow.proposed)+delta;
                 flow.proposed=static_cast<unsigned>(std::max(int64_t(lo),
