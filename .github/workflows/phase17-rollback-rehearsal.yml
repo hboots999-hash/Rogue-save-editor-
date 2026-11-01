@@ -98,6 +98,12 @@ jobs:
           make -C phase17-build -j2
           test -s phase17-build/PKSMRoguePhase17RO.3dsx
           test -s phase17-build/PKSMRoguePhase17RO.elf
+          # Cross-compile the versioned read-only C status ABI separately.
+          # Static layout checks run for ARM11 as well as x86 host consumers.
+          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp \
+            -Iphase17 -c phase17/readonly_status_v1.cpp -o phase17-build/readonly-status-v1.o
+          test -s phase17-build/readonly-status-v1.o
           if arm-none-eabi-nm -u phase17-build/build/main.o | grep FSPXI_WriteFile; then
             echo 'ERROR: unexpected privileged write symbol in Phase17 main'; exit 1
           fi
