@@ -1,5 +1,5 @@
 /* Phase 19 isolated native 3DS UI; GPL-3.0-or-later.
- * Synthetic data only. NO filesystem, imported save, AGBSAVE, or restore.
+ * Synthetic data only. NO filesystem, imported save, installed-title access, or restore.
  */
 #include <3ds.h>
 #include <cstdio>
