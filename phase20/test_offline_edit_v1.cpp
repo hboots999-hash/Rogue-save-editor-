@@ -24,6 +24,18 @@ static void writeBytes(const fs::path& path,const std::vector<uint8_t>& bytes){
     f.write(reinterpret_cast<const char*>(bytes.data()),bytes.size());
     f.close();assert(f.good());
 }
+struct HostExportCtx {
+    const std::vector<uint8_t>* source;
+    fs::path root;
+    fs::path import;
+};
+static rogue18::ExportResult hostSubmit(
+    const phase19::Demo& display,const phase20::CopyObservation& captured,
+    const phase20::EditChoice& choice,void* ctx) {
+    const auto& c=*static_cast<const HostExportCtx*>(ctx);
+    return phase20::exportGuarded(c.source->data(),c.source->size(),
+        display,captured,choice,c.import.c_str(),c.root.c_str());
+}
 int main(){
     using namespace phase20;
     const auto original=fixture();
@@ -128,6 +140,16 @@ int main(){
     assert(!flow.succeeded);
     assert(takeOfflineKey(state,flow,captured,phase19::Key::B));
     assert(flow.stage==EditStage::Value);
+    assert(readBytes(input)==original); // no draft on cancelled second confirmation
+    assert(takeOfflineKey(state,flow,captured,phase19::Key::A));
+    assert(takeOfflineKey(state,flow,captured,phase19::Key::A));
+    assert(flow.stage==EditStage::ConfirmTwo);
+    HostExportCtx host{&original,root,input};
+    assert(takeOfflineKey(state,flow,captured,phase19::Key::A,
+                          &hostSubmit,&host));
+    assert(flow.stage==EditStage::Result && flow.succeeded);
+    assert(std::string(flow.result).find("OFFLINE COPY ONLY")!=std::string::npos);
+    assert(readBytes(input)==original);
     assert(takeOfflineKey(state,flow,captured,phase19::Key::B));
     assert(flow.stage==EditStage::Idle);
     assert(state.screen==phase19::Screen::Money);
