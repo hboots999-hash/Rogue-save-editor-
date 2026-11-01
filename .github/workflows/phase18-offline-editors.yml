@@ -47,6 +47,7 @@ jobs:
           g++ $FLAGS -Iphase18 phase18/test_phase20_matrix.cpp -o /tmp/pksm-phase18-phase20-matrix-test
           g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_sd_faults.cpp -o /tmp/pksm-phase18-sd-fault-test
           g++ $FLAGS -Iphase18 phase18/test_boundaries_v2.cpp -o /tmp/pksm-phase18-boundaries-test
+          g++ $FLAGS -Iphase18 phase18/test_v3_adversarial.cpp -o /tmp/pksm-phase18-v3-adversarial-test
           P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
           for attempt in 1 2 3; do
             g++ $FLAGS $P17 -Iphase18 phase18/test_unified_v2.cpp -o "/tmp/pksm-phase18-unified-$attempt"
@@ -65,6 +66,7 @@ jobs:
           /tmp/pksm-phase18-phase20-matrix-test
           /tmp/pksm-phase18-sd-fault-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-boundaries-test
+          /tmp/pksm-phase18-v3-adversarial-test
       - name: Cross-check test fixture with independent read-only Python decoder
         shell: bash
         run: |
