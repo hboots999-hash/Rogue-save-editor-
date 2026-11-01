@@ -4,6 +4,11 @@ on:
     branches: [feature/phase17-rollback-rehearsal]
     paths:
       - 'phase17/**'
+      - 'phase14/**'
+      - 'phase15/**'
+      - 'phase16/**'
+      - 'phase13/**'
+      - 'phase11/**'
       - '.github/workflows/phase17-rollback-rehearsal.yml'
   workflow_dispatch:
 permissions:
