@@ -47,7 +47,9 @@ inline PcInspection inspectPcCandidate(const uint8_t* raw,size_t n){
     PcInspection out{};
     h168::Info info{};
     if(!validate(raw,n,info))return out;
-    std::array<uint8_t,PcBytes> store{};
+    // 36.8 KiB cannot safely live on the 3DS main-thread stack.
+    // Heap allocation is confined to explicit opt-in research inspection.
+    std::vector<uint8_t> store(PcBytes,0);
     const auto& bank=info.banks[info.active];
     for(unsigned i=0;i<PcSections;i++){
         const size_t offset=bank.sector[5+i];
