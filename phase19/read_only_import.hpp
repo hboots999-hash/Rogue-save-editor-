@@ -2,7 +2,7 @@
 // No installed title archives, save restoration, proposal calls or file writes.
 #pragma once
 #include "adapter.hpp"
-#include "phase18/editor_model.hpp"
+#include "phase18/offline_engine.hpp"
 #include <cstdio>
 #include <cstring>
 #include <memory>
@@ -13,52 +13,50 @@
 
 namespace phase19 {
 constexpr const char* OfflineImportPath="sdmc:/3ds/PKSM-Rogue/imports/00000001.sav";
-// Only the versioned Phase18 read-only SaveView is admitted to this UI.
-// No Phase18 Request, propose, export, restoration or write API is called.
-static_assert(rogue18::ModelApiVersion==1u,
-              "Phase19 requires a reviewed Phase18 SaveView v1; audit before repinning");
+// Native adapter deliberately depends on the audited Phase18 low-level
+// READ-ONLY decoder, not editor_model.hpp: the latter imports the unverified
+// PC research parser which has a 37-KiB stack frame on ARM11.
+// Host CI cross-checks this v1 adapter against ModelApiVersion=1 SaveView.
+// Neither editor proposals nor PC access can be linked by this translation unit.
+constexpr uint32_t Phase18ReadModelApiV1=1u;
 struct Phase18ReadView final : ReadOnlyProvider {
-    const rogue18::SaveView& view;
-    explicit Phase18ReadView(const rogue18::SaveView& v):view(v){}
+    const uint8_t* data;
+    const size_t length;
+    const h168::Info info;
+    Phase18ReadView(const uint8_t* p,size_t n,const h168::Info& valid)
+        :data(p),length(n),info(valid){}
     Availability summary(unsigned& money,unsigned& counter) const override {
-        money=view.money;
-        counter=view.activeCounter;
+        money=info.money;counter=info.banks[info.active].counter;
         return Availability::Ready;
     }
     Availability partyCount(unsigned& size) const override {
-        size=static_cast<unsigned>(view.party.size());
-        return size?Availability::Ready:Availability::Empty;
+        size=info.partyCount;return size?Availability::Ready:Availability::Empty;
     }
     Availability partyAt(unsigned index,Pokemon& p) const override {
-        if(index>=view.party.size() || view.party[index].slot!=index)
+        rogue18::Mon m{};
+        if(!rogue18::partyAt(data,length,info,index,m))
             return Availability::Invalid;
-        const rogue18::Mon& m=view.party[index].value;
         p=Pokemon{};
         p.species=m.species;
-        p.level=0; // Not verified by Phase18 numeric read-only contract.
+        p.level=0; // Phase18 does not expose verified level or nickname.
         std::snprintf(p.name,sizeof(p.name),"Species %u",p.species);
-        for(unsigned i=0;i<6;i++){
-            p.iv[i]=m.ivs[i];p.ev[i]=m.evs[i];
-        }
-        for(unsigned i=0;i<4;i++){
-            p.moves[i]=m.moves[i];p.pp[i]=m.pp[i];
-        }
-        p.ability=m.abilitySlot; // 0,1,2; explicitly NOT the Gmax flag
+        for(unsigned i=0;i<6;i++){p.iv[i]=m.ivs[i];p.ev[i]=m.evs[i];}
+        for(unsigned i=0;i<4;i++){p.moves[i]=m.moves[i];p.pp[i]=m.pp[i];}
+        p.ability=m.abilitySlot;
         p.nature=m.effectiveNature;
         p.egg=m.egg;
         return Availability::Ready;
     }
     Availability bagCount(unsigned& size) const override {
-        size=static_cast<unsigned>(view.items.size());
-        return size?Availability::Ready:Availability::Empty;
+        size=info.items;return size?Availability::Ready:Availability::Empty;
     }
     Availability itemAt(unsigned index,Item& item) const override {
-        if(index>=view.items.size() || view.items[index].slot!=index)
+        unsigned id=0,qty=0;
+        if(!h168::item(data,info,index,id,qty))
             return Availability::Invalid;
-        const auto& i=view.items[index];
         item=Item{};
-        item.id=i.itemId;item.quantity=i.quantity;
-        std::snprintf(item.name,sizeof(item.name),"Item %u",item.id);
+        item.id=id;item.quantity=qty;
+        std::snprintf(item.name,sizeof(item.name),"Item %u",id);
         return Availability::Ready;
     }
     Availability pcBoxCount(unsigned& n) const override {
@@ -79,28 +77,12 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
         reason="Exact 128 KiB unwrapped H168 copy required.";
         return false;
     }
-    rogue18::SaveView model{};
-    try {
-        model=rogue18::inspectReadOnly(raw,n,false); // No PC candidate inference.
-    }catch(const std::bad_alloc&) {
-        reason="Not enough memory to validate copied save.";
+    h168::Info info{};
+    if(!rogue18::validate(raw,n,info)) {
+        reason="Unsupported H168 copy, counter, checksum or Pokémon values.";
         return false;
     }
-    if(!model.valid || model.apiVersion!=rogue18::ModelApiVersion ||
-       model.confidence!=rogue18::DataConfidence::StructurallyValidated ||
-       !rogue18::hasDigest(model.sourceSha256) ||
-       !model.capabilities.copiedSaveOnly ||
-       model.capabilities.liveWrite || model.capabilities.restore ||
-       model.capabilities.pcEdit) {
-        reason="Unsupported H168 copy, counter, checksum or model version.";
-        return false;
-    }
-    if(model.party.size()>6u || model.items.size()>450u ||
-       model.money>999999u) {
-        reason="Validated copy exceeds read-only viewer bounds.";
-        return false;
-    }
-    Phase18ReadView view(model);
+    Phase18ReadView view(raw,n,info);
     // Stage in static storage: invalid input never changes current UI.
     // Never allocate a ~64 KiB Demo inside the 3DS main-thread stack.
     static Demo checked{};
@@ -118,8 +100,8 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
     checked.pcStatus=Availability::Unsupported;
     checked.backupStatus=Availability::Unverified;
     checked.synthetic=false; // No real-data edit proposals, ever.
-    checked.sourceModelApi=model.apiVersion;
-    checked.sourceSha256=model.sourceSha256;
+    checked.sourceModelApi=Phase18ReadModelApiV1;
+    checked.sourceSha256=rogue18::sourceDigest(raw,n);
     destination=checked;
     reason="H168 structure checked; ROM identity unverified. READ ONLY.";
     return true;
