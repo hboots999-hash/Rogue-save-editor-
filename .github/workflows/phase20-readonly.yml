@@ -153,7 +153,7 @@ jobs:
           cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
-          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp} phase20-build/include/phase18/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
           test -s phase20-build/build/main.su
           cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
@@ -181,6 +181,8 @@ jobs:
             echo 'FAIL: unexpected installed-save restore symbol'; exit 1
           fi
           grep -Fq 'exportFixedSDCopy(const phase19::Demo& display' phase20/offline_edit_v1.hpp
+          grep -Fq 'exportFixedBatch(const phase19::Demo& d' phase20/offline_edit_v1.hpp
+          grep -Fq 'phase20::batchShortcut(state,observation,batch)' phase20/main.cpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
