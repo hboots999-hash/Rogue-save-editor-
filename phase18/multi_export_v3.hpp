@@ -3,11 +3,14 @@
 #pragma once
 #include "multi_edit_v3.hpp"
 #include "offline_export.hpp"
+#include <exception>
+#include <new>
 
 namespace rogue18 { namespace v3 {
 inline ExportResult exportCopiedBatch(const uint8_t* expectedCopy,size_t n,
                                       const char* sourcePath,const char* root,
                                       const Batch& batch){
+    try {
     if(!expectedCopy || n!=raw_v1::Size ||
        !approvedPaths(root,sourcePath))
         return {false,"Only exact fixed offline SD import is supported"};
@@ -56,5 +59,12 @@ inline ExportResult exportCopiedBatch(const uint8_t* expectedCopy,size_t n,
         return {false,"Stored batch draft failed independent proof",backup,draft};
     return {true,"V3 OFFLINE multi-edit draft only, NEVER restore to installed save",
             backup,draft,candidate.changedOffsets.size()};
+    } catch(const std::bad_alloc&) {
+        // No success can escape an allocator failure. Any already-created
+        // uniquely named output remains on disk for manual inspection.
+        return {false,"Batch export memory exhaustion: no approved draft; inspect SD files"};
+    } catch(const std::exception&) {
+        return {false,"Batch export exception: no approved draft; inspect SD files"};
+    }
 }
 }} // namespace rogue18::v3
