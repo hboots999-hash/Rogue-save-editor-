@@ -108,8 +108,11 @@ jobs:
           dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
           mkdir -p phase19-build/source phase19-build/include/phase18 phase19-build/include/phase10/preview
           curl -fLsS --retry 3 -o phase19-build/Makefile \
-            https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+            https://raw.githubusercontent.com/devkitPro/3ds-examples/be2001fee08cf8ec7d3366e095e83f6f75da8942/templates/application/Makefile
           sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase19-build/Makefile
+          # No inferred giant ARM stack frames (historical gfxInit crash).
+          sed -i '/^CXXFLAGS[[:space:]]*:=/s/$/ -Werror=frame-larger-than=4096 -fstack-usage/' phase19-build/Makefile
+          grep -Fq -- '-Werror=frame-larger-than=4096 -fstack-usage' phase19-build/Makefile
           sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRoguePhase19/g' phase19-build/Makefile
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase 19 Demo\n' >> phase19-build/Makefile
           cp phase19/main.cpp phase19-build/source/main.cpp
@@ -126,6 +129,10 @@ jobs:
           cp phase18-dependency/phase18/pc_readonly.hpp phase19-build/include/phase18/pc_readonly.hpp
           cp phase18-dependency/phase10/preview/offline.hpp phase19-build/include/phase10/preview/offline.hpp
           make -C phase19-build -j2
+          test -s phase19-build/build/main.su
+          cp phase19-build/build/main.su phase19-build/STACK_USAGE.txt
+          # Native source-level stack report travels with the ELF for review.
+          head -n 80 phase19-build/STACK_USAGE.txt
           test -s phase19-build/PKSMRoguePhase19.3dsx
           test -s phase19-build/PKSMRoguePhase19.elf
           # Native symbol check: forbid Phase18 proposal/export and offline SD
@@ -150,6 +157,7 @@ jobs:
             phase19-build/PKSMRoguePhase19.3dsx
             phase19-build/PKSMRoguePhase19.elf
             phase19-build/SHA256SUMS.txt
+            phase19-build/STACK_USAGE.txt
           retention-days: 7
   package-cia:
     name: Experimental isolated CIA packaging
