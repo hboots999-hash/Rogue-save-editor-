@@ -53,6 +53,10 @@ An **earlier installed experimental CIA** crashed with ARM11 data abort; binary 
 5. Phase20 **offline export** requires separate explicit approval and disposable media/test assets. Before undertaking it, verify sufficient SD space, untouched input, immutable backups, exact distinct draft filenames/readback, and a documented recovery path. Do not use the owner's personal gameplay copy or live GBA VC title.
 6. Restart the Homebrew Launcher/game separately and confirm the installed Emerald Rogue game and its save still launch normally. Stop immediately for any ARM11 crash, HOME Menu instability, SD errors or mismatched metadata. Preserve crash dump; do not repeatedly launch a suspect CIA.
 
+### Independent Phase20 native stack artifact inspected
+
+Downloaded the **actual** Phase20 native build artifact from [run #41338410580](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41338410580) (PR #12) and inspected `STACK_USAGE.txt`. Its largest reported function frame is **1,064 bytes** in `phase20::inspectCopy`; `phase20::takeOfflineKey` is **424 bytes**, `rogue18::exportCopied` **400 bytes**, and native `main()` **232 bytes**. The distinct offline-SD writer has a **704-byte** frame. These are below the 4,096-byte enforced per-function threshold, and materially improve on the historical oversized-main crash. However, compiler frame reports are **not** a peak heap/recursive-call-chain measurement, and the exporter may allocate several 128-KiB vectors plus STL buffers. Actual ARM11 heap exhaustion, low SD space, interrupted file export and physical 3DS launch remain **unverified**. No installed game-save writer was enabled by this review.
+
 ## F. Integration/release boundaries
 
 Phase19 PR #7 and Phase20 PR #12 are still separate drafts. No PR merge, installed-title writer, CMAC, raw-to-authenticated-container conversion, PC editing, save injection, restoration authority or private save uploads. Phase20's own stack/sanitizer/emulator results do **not** waive the physical 3DS gate. Remain read-only at the integration boundary until exact matching-ROM metadata, save durability and independent recovery are proved.
