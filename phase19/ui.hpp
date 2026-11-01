@@ -29,8 +29,8 @@ struct State {
     // Non-owning read-only snapshot view: no 64-KiB demo in the 3DS thread stack.
     // Caller keeps externally supplied provider snapshot alive during UI use.
     const Demo& demo;
-    State():demo(mockSnapshotRef()),demoPreviewEnabled(true){}
-    explicit State(const Demo& source):demo(source),demoPreviewEnabled(source.synthetic){}
+    State():demoPreviewEnabled(true),demo(mockSnapshotRef()){}
+    explicit State(const Demo& source):demoPreviewEnabled(source.synthetic),demo(source){}
 };
 static_assert(sizeof(State)<256,"Phase19 State must remain stack-safe on 3DS");
 inline void switchView(State& s, bool toFictionalDemo) {
