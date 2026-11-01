@@ -81,3 +81,19 @@ The new entry accepts only exact 131072-byte H168 unwrapped copied input at sdmc
 Phase18 PR #8 has subsequently added an optional source_digest.hpp on its branch; the Phase19 dependency remains intentionally pinned at 596743d8eaa073759a736b5a8107db43f3a8c17b until separately reviewed. Do not automatically merge or repin.
 
 **The updated 3DSX is still awaiting its own physical-device check.** Earlier UI hardware passes applied to the preceding build. Keep Phase19 as an unmerged draft; do not test the CIA or the actual game save.
+
+
+## 1 November 2026 — Phase 19 accessibility, Rosalina and Phase 20 contract
+
+These changes were made without a physical 3DS:
+
+- **No working L needed:** In PC boxes, IV/EV/move/PP/ability/nature groups, and bag paging, use **R or D-pad Right for next** and **X or D-pad Left for previous**. D-pad Up/Down selects; A enters; B cancels. Inside a proposal, X instead means reset and Left/Right adjust the number, so the controls remain context-sensitive.
+- **START+SELECT is reserved for Rosalina:** A pure input gate recognises either button press order. It now exits only after **releasing standalone START**, and suppresses exit for any START press during which SELECT was detected. No SELECT-alone binding. Host tests cover simultaneous and staggered chords, standalone exit and recovery after a chord.
+- **Imported real-copy safety latch:** `State.demoPreviewEnabled` is separate from `Demo.synthetic`; `switchView(state,false)` after a successful import clears all pending demo navigation/proposals and disables every edit. Explicit `Import -> X` repopulates the fictional fixture and re-enables mock previews. Failed import never sets the latch or loses current data.
+- **Navigation coverage:** `test_accessibility.cpp` covers all seven home entries, PC box selection, L-free group selection, 19-stack and 450-stack bag paging, cancel/back operations, and import-to-demo transitions. Host and adapter suites continue to exercise IV, EV, move ID refusal, PP, ability/nature refusal, money, recovery and backup confirmations.
+- **Rendering:** Native console uses an allocation-free word wrap helper from `screen_text.hpp`; statuses identify the source (demo vs copied save), numeric move IDs display with PP, unsupported real PC shows no fictitious box number. Additional emulator smoke captures opt-in import, missing-copy and exit-attempt screenshots where emulator keyboard mapping permits; screenshots do not prove button semantics or real hardware compatibility.
+- **Source/build:** The read-only Phase18 decoder remains pinned to `596743d8eaa073759a736b5a8107db43f3a8c17b`. Native CI checks linked ELF for absence of project edit/export symbols and bounds State to <256 bytes. The previous stack-crash defect must not recur.
+
+**Phase 20:** See [PHASE20_INTEGRATION_CONTRACT.md](PHASE20_INTEGRATION_CONTRACT.md) for current read-only APIs, unsupported real PC and identifier-name assumptions, required future edit intents, independent source fingerprints, hardware/recovery release gates and strict nonwriting policy.
+
+**Safe later testing:** Run only the new 3DSX through Homebrew Launcher. Without placing any actual file, open **Inspect SD copy (read-only)** and press A; expect a missing-import warning, B return, standalone START release exit. If accessing Rosalina, hold START+SELECT together; it should not exit the app. Do **not** test the previously crashing CIA, install new CIA, rewrite your Emerald Rogue save or truncate the 263168-byte authenticated VC container. Independent originals remain untouched. All new build tests are host/emulator only, **not** real-console passes; PR #7 stays DRAFT/unmerged.
