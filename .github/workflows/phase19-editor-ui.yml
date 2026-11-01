@@ -41,6 +41,9 @@ jobs:
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Iphase19 phase19/test_accessibility.cpp -o /tmp/phase19-accessibility
           /tmp/phase19-accessibility
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase19 phase19/test_screen_text.cpp -o /tmp/phase19-screen-text
+          /tmp/phase19-screen-text
           g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
             -fsanitize=address,undefined -fno-omit-frame-pointer \
             -Iphase19 phase19/test_accessibility.cpp -o /tmp/phase19-accessibility-asan
@@ -104,6 +107,7 @@ jobs:
           printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase 19 Demo\n' >> phase19-build/Makefile
           cp phase19/main.cpp phase19-build/source/main.cpp
           cp phase19/ui.hpp phase19-build/include/ui.hpp
+          cp phase19/screen_text.hpp phase19-build/include/screen_text.hpp
           cp phase19/adapter.hpp phase19-build/include/adapter.hpp
           cp phase19/read_only_import.hpp phase19-build/include/read_only_import.hpp
           cp phase19/rosalina_input.hpp phase19-build/include/rosalina_input.hpp
