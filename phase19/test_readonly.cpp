@@ -148,5 +148,16 @@ int main(){
     assert(!inspectReadOnlyStream(wrappedStream.get(),fromStream,reason));
     assert(reason.find("263168")!=std::string::npos);
     assert(fromStream.money==40001 && fromStream.party[0].species==25);
+
+    // All 28 journalled sector payload checksums must fail closed if changed.
+    // The final 4 physical 4-KiB sectors are not covered by this format's
+    // two historical save banks; do not claim full-file authentication.
+    for(unsigned sector=0;sector<28;sector++){
+        auto singleFlip=bytes;
+        singleFlip[sector*h168::Sector+0x350]^=0x01;
+        assert(!inspectCopiedBuffer(singleFlip.data(),singleFlip.size(),fromStream,reason));
+        assert(fromStream.money==40001 && fromStream.party[0].species==25);
+    }
+
     std::cout<<"PASS Phase19: pinned Phase18 H168 copied-data read only bridge, no writes\n";
 }
