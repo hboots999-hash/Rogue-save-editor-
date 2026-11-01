@@ -9,6 +9,7 @@
 #include <new>
 #include <string>
 #include <cstdint>
+#include <cerrno>
 
 namespace phase19 {
 constexpr const char* OfflineImportPath="sdmc:/3ds/PKSM-Rogue/imports/00000001.sav";
@@ -87,10 +88,12 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
     // Never allocate a ~64 KiB Demo inside the 3DS main-thread stack.
     static Demo checked{};
     captureInto(view,checked);
-    if(checked.partyStatus==Availability::Invalid ||
-       checked.partyStatus==Availability::Unsupported ||
-       checked.bagStatus==Availability::Invalid ||
-       checked.bagStatus==Availability::Unsupported ||
+    // An empty party or bag is a legitimate, fully validated save state.
+    // Unsupported/invalid data is still rejected fail-closed.
+    if((checked.partyStatus!=Availability::Ready &&
+        checked.partyStatus!=Availability::Empty) ||
+       (checked.bagStatus!=Availability::Ready &&
+        checked.bagStatus!=Availability::Empty) ||
        checked.moneyStatus!=Availability::Ready) {
         reason="Copy parsed, but UI could not safely display its fields.";
         return false;
@@ -106,38 +109,64 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
 // No live GBA VC title or mounted save archive is touched.
 // Only this user-imported file is opened for rb and then closed.
 // Detect wrapped 263,168-byte container and wrong-size files explicitly.
-inline bool inspectFixedSDCopy(Demo& destination,std::string& reason) {
-    std::unique_ptr<FILE, int(*)(FILE*)> file(std::fopen(OfflineImportPath,"rb"),
-                                              &std::fclose);
-    if(!file) {
-        reason="No offline SD import found. No game save was opened.";
+// File stream is supplied by the caller and is never written or closed here.
+// Host tests can exercise this exact byte-reader without a 3DS or private save.
+// Caller opens the fixed SD import with "rb", and closes it on return.
+inline bool inspectReadOnlyStream(std::FILE* stream,Demo& destination,
+                                  std::string& reason) {
+    if(!stream) {
+        reason="No offline copy stream was provided.";
         return false;
     }
-    if(std::fseek(file.get(),0,SEEK_END)!=0){
-        reason="Cannot read size of offline SD import.";
+    if(std::fseek(stream,0,SEEK_END)!=0) {
+        reason="Cannot determine the offline copy size.";
         return false;
     }
-    const long n=std::ftell(file.get());
-    if(n!=long(h168::Size)) {
-        reason=n==263168?
+    const long n=std::ftell(stream);
+    if(n<0) {
+        reason="Offline copy size read failed.";
+        return false;
+    }
+    if(n!=static_cast<long>(h168::Size)) {
+        reason=n==263168L?
           "Wrapped 263168-byte VC container: unsupported here.":
           "Wrong file size: requires exact 131072-byte copy.";
         return false;
     }
-    if(std::fseek(file.get(),0,SEEK_SET)!=0) {
-        reason="Cannot rewind offline SD import.";
+    if(std::fseek(stream,0,SEEK_SET)!=0) {
+        reason="Cannot rewind the offline copy.";
         return false;
     }
     auto bytes=std::unique_ptr<uint8_t[]>(new(std::nothrow) uint8_t[h168::Size]);
-    if(!bytes){
+    if(!bytes) {
         reason="Not enough memory to inspect the offline copy.";
         return false;
     }
-    if(std::fread(bytes.get(),1,h168::Size,file.get())!=h168::Size){
+    if(std::fread(bytes.get(),1,h168::Size,stream)!=h168::Size ||
+       std::ferror(stream)) {
         reason="Offline SD copy could not be read in full.";
         return false;
     }
-    file.reset();
+    // Keep previous visible snapshot if the file mutates during inspection.
+    // This extra-byte check detects growth beyond the exact expected payload.
+    if(std::fgetc(stream)!=EOF || std::ferror(stream)) {
+        reason="Offline SD copy changed or failed during inspection.";
+        return false;
+    }
     return inspectCopiedBuffer(bytes.get(),h168::Size,destination,reason);
+}
+
+inline bool inspectFixedSDCopy(Demo& destination,std::string& reason) {
+    errno=0;
+    std::unique_ptr<FILE, int(*)(FILE*)> file(std::fopen(OfflineImportPath,"rb"),
+                                              &std::fclose);
+    if(!file) {
+        if(errno==ENOENT)
+            reason="No SD import at fixed path. No game save was opened.";
+        else
+            reason="Cannot read the SD import (filesystem error).";
+        return false;
+    }
+    return inspectReadOnlyStream(file.get(),destination,reason);
 }
 } // namespace phase19
