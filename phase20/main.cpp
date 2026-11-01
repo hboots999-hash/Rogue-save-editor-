@@ -9,6 +9,8 @@
 #include "phase20/offline_edit_v1.hpp"
 #include "rosalina_input.hpp"
 #include <string>
+#include <new>
+#include <exception>
 using namespace phase19;
 namespace {
 const char* names[6]={"HP","Atk","Def","SpA","SpD","Spe"};
@@ -349,7 +351,15 @@ int main() {
         if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
                 std::string reason;
-                if(phase20::inspectFixedSDCopy(active,observation,reason)) {
+                bool inspected=false;
+                try {
+                    inspected=phase20::inspectFixedSDCopy(active,observation,reason);
+                } catch (const std::bad_alloc&) {
+                    reason="Insufficient memory for copied-save import.";
+                } catch (const std::exception&) {
+                    reason="Copied-save inspection failed safely; check the SD copy.";
+                }
+                if(inspected) {
                     switchView(state,false);
                 } else {
                     std::snprintf(importStatus,sizeof(importStatus),"%s",reason.c_str());
