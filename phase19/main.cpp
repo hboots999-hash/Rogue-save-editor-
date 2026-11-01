@@ -111,6 +111,15 @@ void top(const State& s) {
             std::puts("Retain independent GodMode9");
             std::puts("and Checkpoint original backups.");
             break;
+        case Screen::Recovery:
+            std::puts("RECOVERY / ERROR GUIDE");
+            line(0,s.selected,"No save or title mismatch");
+            line(1,s.selected,"Unknown layout/version");
+            line(2,s.selected,"Checksum failure");
+            line(3,s.selected,"Backup not verified");
+            line(4,s.selected,"Restore not approved");
+            std::puts("\nA: show recovery guidance");
+            break;
         case Screen::Proposal:
             std::puts("EDIT PROPOSAL - NOT APPLIED");
             if(s.proposalFrom==Screen::Money) std::puts("Money");
