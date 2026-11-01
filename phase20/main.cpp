@@ -96,7 +96,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
     std::puts("PKSM ROGUE - PHASE20 SAFE VIEW");
     std::puts("==============================");
     std::puts(s.demo.synthetic?"SYNTHETIC DEMO - NO SAVE WRITES":
-              "IMPORTED SD COPY - READ ONLY");
+              "IMPORTED SD COPY - OFFLINE DRAFT");
     std::puts("");
     switch(s.screen) {
         case Screen::Home:
@@ -111,7 +111,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             std::puts(s.demo.synthetic?"\nFictional example data.":"\nValidated copy view (no edits).");
             break;
         case Screen::Party:
-            std::puts(s.demo.synthetic?"PARTY - DEMO":"PARTY - COPIED SAVE (READ ONLY)");
+            std::puts(s.demo.synthetic?"PARTY - DEMO":"PARTY - OFFLINE COPY");
             std::printf("Status: %s\n",availabilityText(s.demo.partyStatus));
             for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.party[i];
@@ -188,7 +188,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             break;
         }
         case Screen::Bag:
-            std::puts(s.demo.synthetic?"BAG / ITEMS - DEMO":"BAG / ITEMS - READ ONLY");
+            std::puts(s.demo.synthetic?"BAG / ITEMS - DEMO":"BAG / ITEMS - OFFLINE COPY");
         {
             std::printf("Status: %s\n",availabilityText(s.demo.bagStatus));
             const unsigned first=(s.selected/6u)*6u;
