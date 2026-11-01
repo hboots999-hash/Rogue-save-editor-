@@ -4,6 +4,8 @@
 #include <array>
 #include <cstdint>
 #include <algorithm>
+#include <cstring>
+#include <type_traits>
 
 namespace phase19 {
 enum class Availability : uint8_t { Ready, Empty, Unsupported, Invalid, Unverified };
@@ -47,7 +49,7 @@ struct ReadOnlyProvider {
 };
 
 inline bool validPokemon(const Pokemon& m) {
-    if(!m.species || m.level>100 || m.ability>1 || m.nature>24)return false;
+    if(!m.species || m.level>100 || m.ability>3 || m.nature>24)return false;
     unsigned evsum=0;
     for(unsigned i=0;i<6;i++){
         if(m.iv[i]>31 || m.ev[i]>252)return false;
@@ -60,8 +62,9 @@ inline bool validPokemon(const Pokemon& m) {
 }
 // Fail closed. Unsupported or invalid provider data must not leak mock values.
 // Hard limits intentionally small until storage layout and paging are proven.
-inline Demo capture(const ReadOnlyProvider& p) {
-    Demo out{};
+inline void captureInto(const ReadOnlyProvider& p, Demo& out) {
+    static_assert(std::is_trivially_copyable<Demo>::value,"Snapshot must remain POD-like");
+    std::fill_n(reinterpret_cast<uint8_t*>(&out),sizeof(out),uint8_t(0));
     unsigned n=0, val=0, counter=0;
     out.moneyStatus=p.summary(val,counter);
     if(out.moneyStatus==Availability::Ready && val<=999999) {
@@ -130,6 +133,10 @@ inline Demo capture(const ReadOnlyProvider& p) {
     }
     // Real-save editing NEVER becomes active through capture().
     out.synthetic=false;
+}
+inline Demo capture(const ReadOnlyProvider& p) {
+    Demo out{};
+    captureInto(p,out);
     return out;
 }
 inline void populateMock(Demo& d) {
