@@ -40,12 +40,20 @@ inline bool layout(const Bytes& b,Layout& l) {
     if(b.size()<ContainerMin || b.size()>MaxContainer) return false;
     const auto a=parseHeader(b.data(),HeaderSize,0);
     const auto z=parseHeader(b.data()+SlotSize,HeaderSize,SlotSize);
-    // Stronger than the read-only Phase 11 selector: no unknown-size/foreign
-    // slot fallback, equal/rollover counters or uninitialized recovery slot.
-    if(!a.valid || !z.valid || a.title!=ExpectedTitle || z.title!=ExpectedTitle ||
-       a.timesSaved==z.timesSaved) return false;
+    // Restore-only wrapper policy: REQUIRE two adjacent, monotonically
+    // increasing counters before selecting a source slot. Phase18's internal
+    // raw-H168 bank-counter rollover rules are a DIFFERENT on-disk domain
+    // and cannot establish safe GBA VC wrapper-slot ordering. If an older
+    // wrapper slot was skipped, is equal, or is near 32-bit rollover, fail
+    // closed rather than guessing which slot the console/game will load.
+    // This intentionally rejects UINT32_MAX and the 0/UINT32_MAX rollover
+    // pair until independent physical AGB_FIRM slot-selection evidence.
+    if(!a.valid || !z.valid || a.title!=ExpectedTitle || z.title!=ExpectedTitle)
+        return false;
+    const uint32_t low=std::min(a.timesSaved,z.timesSaved);
+    const uint32_t high=std::max(a.timesSaved,z.timesSaved);
+    if(high==UINT32_MAX || high-low!=1u) return false;
     const auto chosen=a.timesSaved>z.timesSaved?a:z;
-    if(chosen.timesSaved==UINT32_MAX) return false;
     if(std::memcmp(b.data()+0x40,b.data()+SlotSize+0x40,16)) return false;
     l.active=chosen.offset; l.target=l.active?0:SlotSize; l.counter=chosen.timesSaved;
     return true;
