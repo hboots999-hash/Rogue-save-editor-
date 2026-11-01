@@ -15,5 +15,5 @@ int main(){
     const rogue18::Request empty{};
     return (a.canRestoreInstalledGame ||
             rogue18::v2::mayRestoreInstalledGame(empty) ||
-            phase14::LiveWritesEnabled)?1:0;
+            phase17::EvidenceReport{}.mayWriteInstalledGame())?1:0;
 }
