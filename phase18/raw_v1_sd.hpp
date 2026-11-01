@@ -133,7 +133,7 @@ inline bool uniqueWrite(const std::string& folder,const char* prefix,
         if(inject)ioFault.writes=0;
         const bool rejectCreate=inject && ioFault.stage==IoFault::OpenNoSpace;
         if(rejectCreate)errno=ENOSPC;
-        int fd=rejectCreate?-1:::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
+        int fd=rejectCreate ? -1 : ::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
 #else
         int fd=::open(full.c_str(),O_CREAT|O_EXCL|O_WRONLY,0666);
 #endif
