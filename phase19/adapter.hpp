@@ -15,7 +15,7 @@ struct Pokemon {
     unsigned ability=0,nature=0;
     bool egg=false;
 };
-struct Item { const char* name=""; unsigned id=0,quantity=0; };
+struct Item { char name[20]{}; unsigned id=0,quantity=0; };
 struct Demo {
     // Snapshot is immutable inside UI State. This flag cannot authorize writes.
     bool synthetic=false;
