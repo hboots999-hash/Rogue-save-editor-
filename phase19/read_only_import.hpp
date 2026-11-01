@@ -6,6 +6,7 @@
 #include <cstdio>
 #include <cstring>
 #include <memory>
+#include <new>
 #include <string>
 #include <cstdint>
 
@@ -82,27 +83,22 @@ inline bool inspectCopiedBuffer(const uint8_t* raw,size_t n,
         return false;
     }
     Phase18ReadView view(raw,n,info);
-    // Fixed-size DTO is constructed into *static* caller-provided memory in
-    // native app; no 60-KiB UI object on 3DS main thread stack.
-    captureInto(view,destination);
-    if(destination.partyStatus==Availability::Invalid ||
-       destination.partyStatus==Availability::Unsupported ||
-       destination.bagStatus==Availability::Invalid ||
-       destination.bagStatus==Availability::Unsupported ||
-       destination.moneyStatus!=Availability::Ready) {
-        // Previously validated raw may still exceed UI boundaries. Clear
-        // partially parsed view, never silently show mock as if it were real.
-        std::fill_n(reinterpret_cast<uint8_t*>(&destination),sizeof(destination),uint8_t(0));
-        destination.partyStatus=Availability::Invalid;
-        destination.bagStatus=Availability::Invalid;
-        destination.moneyStatus=Availability::Invalid;
-        destination.pcStatus=Availability::Unsupported;
+    // Stage in static storage: invalid input never changes current UI.
+    // Never allocate a ~64 KiB Demo inside the 3DS main-thread stack.
+    static Demo checked{};
+    captureInto(view,checked);
+    if(checked.partyStatus==Availability::Invalid ||
+       checked.partyStatus==Availability::Unsupported ||
+       checked.bagStatus==Availability::Invalid ||
+       checked.bagStatus==Availability::Unsupported ||
+       checked.moneyStatus!=Availability::Ready) {
         reason="Copy parsed, but UI could not safely display its fields.";
         return false;
     }
-    destination.pcStatus=Availability::Unsupported;
-    destination.backupStatus=Availability::Unverified;
-    destination.synthetic=false; // No real-data edit proposals, ever.
+    checked.pcStatus=Availability::Unsupported;
+    checked.backupStatus=Availability::Unverified;
+    checked.synthetic=false; // No real-data edit proposals, ever.
+    destination=checked;
     reason="VALID COPY: party/bag/money READ ONLY. PC unsupported.";
     return true;
 }
