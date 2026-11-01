@@ -15,6 +15,23 @@ This document is owned independently of the Phase 17, Phase 18, Phase 19, and in
 
 Phase19 currently pins Phase18 **`596743d8eaa073759a736b5a8107db43f3a8c17b`**, while Phase18 continues changing. The pinned source is deliberately not equivalent to Phase18's newest branch HEAD. Any update requires explicit API diff, repin, reproducible CI and supported-provenance checks. Phase19 also has a previously confirmed stack-crash in an older CIA; never reuse that artifact.
 
+## Independent QA PR #10 — finding disposition (1 November 2026)
+
+The independent QA team identified these **open integration issues**. Severity reflects the missing release evidence, not a proven problem with the user's current game save.
+
+| QA ID | Finding | Phase20 action / owner | Gate |
+| --- | --- | --- | --- |
+| QA-01 (HIGH) | Phase19 pinned an older Phase18 commit than QA's newer edited source | Phase19 owner must review the Phase18 API changes, pin an exact audited commit, rebuild native UI and re-run ASan/UBSan/3DSX/CIA smoke | Block bundled interface |
+| QA-02 (HIGH) | Phase14 wrapper slot selection allowed skipped counters, while Phase18 checks internal raw bank adjacency | Phase17 branch now fail-closes on **nonadjacent non-wrapping wrapper counters**; synthetic tests added for 49/48, skipped/equal and near-rollover pairs. Re-pin QA to the verified commit and evaluate the independent raw bank domain separately | Block live restore; code correction pending its exact CI confirmation |
+| QA-03 (HIGH) | No trusted 131072-byte raw edit to 263168-byte authenticated GBA VC container restoration boundary | No bridge permitted in Stage A. Require fully separate reviewed container patching/CMAC and rollback verification much later | Block installed writes |
+| QA-04 (HIGH) | ROM ID and mapping evidence is caller-provided and not proof of exact game version | Phase18/QA must independently verify ROM identity and mapping. Unsupported edits remain disabled | Block new move/ability/nature/PC/item insertion |
+| QA-05 (MEDIUM) | Raw save checksums do not cover all trailing bytes; format validation is not ROM identity proof | Preserve full **source SHA-256 optimistic lock**, reject stale view/copy, explicitly label version identity unverified | Block unverified writes |
+| QA-06 (HIGH) | Production journal durability and complete receipt lifecycle untested | Preserve Phase17 RAM-only status; independent durable recovery design and expendable test before any live pilot | Block live restore |
+| QA-07 (MEDIUM) | Phase19 build template comes from a moving upstream revision | Pin devkitPro build inputs to reviewed immutable versions, verify title ID and artifact hashes | Block release packaging |
+| QA-08 (MEDIUM) | Unified Phase17/18/19 headers may not compile together | Require QA unified-header probe logs. Resolve type/namespace conflicts by read-only independent module boundary, never by weakening validation | Block Phase20 combined build |
+
+**Interpretation:** Independent QA is a useful defect-finding gate; its pinned test results do not automatically apply to moving feature branch heads. All current PRs remain draft. A repaired issue is not closed until the exact source revision passes appropriate regressions, and hardware-dependent gates cannot close through host/emulator CI.
+
 ## Phase20 Stage A: safe read-only composition (first release candidate)
 
 1. Start from a standalone Phase19 **3DSX**, not the older crashing CIA. Do not install any extra CIA to test Stage A.
