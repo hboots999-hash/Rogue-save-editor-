@@ -3,6 +3,7 @@
 #include "recovery_evidence_gate.hpp"
 #include <cassert>
 #include <iostream>
+#include <cstring>
 struct DenyingSigner {
     bool calculate(const phase14::Digest&,phase14::Mac&) { return false; }
 };
@@ -42,5 +43,24 @@ int main() {
     report=phase17::inspectRecoveryEvidence(e,signer);
     assert(report.code==phase17::EvidenceCode::StorageError);
     assert(!report.mayWriteInstalledGame());
+    // This checks only structural wrapper selection, not CMAC or restoration.
+    // A nonadjacent gap currently reaches Phase14 layout() unchecked.
+    phase14::Bytes wrapped(rogue_live::ContainerMin,0);
+    for(size_t off : {size_t(0),size_t(rogue_live::SlotSize)}) {
+        std::memcpy(wrapped.data()+off,".SAV",4);
+        h168::w32(wrapped.data(),off+0x34,off?49u:48u);
+        h168::w32(wrapped.data(),off+0x38,
+                   static_cast<uint32_t>(rogue_live::ExpectedTitle));
+        h168::w32(wrapped.data(),off+0x3c,
+                   static_cast<uint32_t>(rogue_live::ExpectedTitle>>32));
+        std::memset(wrapped.data()+off+0x40,0x43,16);
+        h168::w32(wrapped.data(),off+0x50,rogue_live::HeaderSize);
+        h168::w32(wrapped.data(),off+0x54,rogue_live::RawSize);
+    }
+    phase14::Layout structurallySelected{};
+    assert(phase14::layout(wrapped,structurallySelected));
+    h168::w32(wrapped.data(),rogue_live::SlotSize+0x34,60u);
+    if (phase14::layout(wrapped,structurallySelected))
+        std::cout<<"::warning::QA-02 Phase14 structural wrapper selector accepted nonadjacent 48/60 counters; require independent release review\\n";
     std::cout<<"PASS: Phase17 corrupted/unchecked/terminal evidence blocks, writes always prohibited\n";
 }
