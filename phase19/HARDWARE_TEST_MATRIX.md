@@ -18,7 +18,7 @@
 | 03 | Pokémon detail | A; select an IV; adjust; A three times | IV proposal reviewed twice, then BLOCKED; no save or backup changes in demo | PASS — proposal and final BLOCKED notice photographed; user confirmed return via B |
 | 04 | Pokémon edit | R, Down, A, Right, X, B | EV proposals, 510 cap, reset and cancel | PARTIAL PASS (user-confirmed): Volcarona HP EV +1 proposal reached final BLOCKED notice on physical 3DS. 510-cap boundary, X reset and B cancel not individually tested. |
 | 05 | Pokémon edit | R, A, Up, A | Changed move ID produces UNVERIFIED warning; no write | PASS (user-confirmed): Volcarona first move ID +1 proposal refused as INVALID/UNVERIFIED on real 3DS. |
-| 06 | Pokémon edit | R (to PP), A, Up, A, B | Move PP proposal supported for demo; B cancels from confirmation to proposal | NOT RUN |
+| 06 | Pokémon edit | R (to PP), A, Up, A, B | Move PP proposal supported for demo; B cancels from confirmation to proposal | PASS (user-confirmed): increased synthetic move PP, opened confirmation and pressed B to return to proposal; no write. |
 | 07 | Pokémon edit | R to ability and nature; A on each | Unsupported edit notices | NOT RUN |
 | 08 | Home | Down, A, R, Down, A, A | PC box switch, sample Pokémon detail, PC edit UNSUPPORTED | PASS (user-confirmed): R switched to Box 2 showing Garchomp, Milotic and Breloom; selecting Garchomp then A showed PC edit UNSUPPORTED. Prior Box 1 and Gengar read-only detail were photographed. |
 | 09 | Home | Down twice, A, Down, A, Up, A, A, A | Item quantity proposal blocked after two reviews | PASS (user-confirmed): Rare Candy proposal and two confirmations ended with BLOCKED; prior bag inventory screen photo captured. |
@@ -48,3 +48,5 @@ phase19/test_ui.cpp drives the same logical Key enum (Up/Down/Left/Right/A/B/X/L
 **1 November 2026 user confirmation:** Volcarona HP EV +1 in the synthetic Effort Values menu advanced through confirmations and ended BLOCKED. This demonstrates EV proposal and safe refusal on physical hardware; cap boundary and reset/cancel controls remain pending.
 
 **1 November 2026 user confirmation:** Volcarona's first synthetic Move ID was incremented in the proposal screen; A returned INVALID/UNVERIFIED as expected. This verifies the unsupported-move ID guard on hardware, not any save-writing capability.
+
+**1 November 2026 PP hardware check:** User confirms the move PP +1 proposal reached the first confirmation, and pressing B returned to the proposal screen without applying a change. The Phase 19 preview remains synthetic-only.
