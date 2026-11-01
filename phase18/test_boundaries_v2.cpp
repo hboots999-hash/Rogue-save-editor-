@@ -31,7 +31,7 @@ static Bytes sixPartyAndFullBag(unsigned permutation){
             const size_t pos=s1+layout::PartyStart+slot*104u;
             // Keep fixture's known-good BoxPokemon canonical plaintext,
             // but force every possible encrypted block permutation.
-            std::memcpy(b.data()+pos,b.data()+s1+layout::PartyStart,104u);
+            if(slot)std::memcpy(b.data()+pos,b.data()+s1+layout::PartyStart,104u);
             h168::w32(b.data(),pos,permutation+slot*24u);
             auto p=growth;
             for(unsigned i=0;i<4;i++){
