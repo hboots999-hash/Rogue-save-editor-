@@ -89,7 +89,16 @@ int main() {
     assert(s.screen==Screen::Notice);
     key(s,Key::B);key(s,Key::B);
     assert(s.screen==Screen::Home);
-    go(s,5); assert(s.screen==Screen::Notice);
+    go(s,5); assert(s.screen==Screen::Recovery);
+    for(unsigned i=0;i<5;i++) {
+        assert(s.selected==i);
+        key(s,Key::A);
+        assert(s.screen==Screen::Notice);
+        assert(std::strlen(s.notice)>18);
+        key(s,Key::B);
+        assert(s.screen==Screen::Recovery);
+        if(i<4) key(s,Key::Down);
+    }
     key(s,Key::B); assert(s.screen==Screen::Home);
     assert(s.demo.money==immutable.money);
     for(unsigned i=0;i<3;i++) {
