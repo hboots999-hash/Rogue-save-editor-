@@ -2,6 +2,7 @@
 // No UI, IO, live title or restoration code. GPL-3.0-or-later.
 #pragma once
 #include "pc_readonly.hpp"
+#include "source_digest.hpp"
 #include <array>
 #include <cstddef>
 #include <cstdint>
@@ -33,6 +34,7 @@ struct SaveView {
     DataConfidence confidence=DataConfidence::Unsupported;
     std::string error{};
     uint32_t activeCounter=0,inactiveCounter=0,money=0;
+    Digest256 sourceSha256{}; // source snapshot identity, no personal bytes recorded
     unsigned activeBank=0;
     std::vector<PartyView> party{};
     std::vector<ItemView> items{};
@@ -70,6 +72,7 @@ inline SaveView inspectReadOnly(const uint8_t* bytes,size_t size,
                             static_cast<uint16_t>(qty)});
     }
     if(researchPcCandidate)v.pc=inspectPcCandidate(bytes,size);
+    v.sourceSha256=sourceDigest(bytes,size);
     v.valid=true;
     v.confidence=DataConfidence::StructurallyValidated;
     return v;
@@ -83,6 +86,7 @@ inline bool beginRequest(const SaveView& view,Kind kind,unsigned slot,Request& o
     if(!view.valid || view.apiVersion!=ModelApiVersion)return false;
     out.kind=kind;out.slot=slot;
     out.expectedCounter=view.activeCounter;
+    out.expectedDigest=view.sourceSha256;
     if(kind==Kind::Money){
         out.expectedMoney=view.money;
         out.money=view.money;
