@@ -34,3 +34,11 @@ New features: explicit Ready/Empty/Unsupported/Invalid/Unverified states; sample
 Backup status says NOT CHECKED IN APP: Phase 16 hardware evidence does not mean this isolated preview can locate verified backups. Recovery has concise on-screen messages for missing saves, unknown layout, checksum failures, backup absence and disabled restoration. All actual-save snapshots are non-editable. Invalid input and missing provider data never fall back to fictional values.
 
 Host tests include every control route, cancel, invalid/no-op changes, an example read-only provider, unsupported status and PC pagination. CI uses strict C++17 and ASan/UBSan, native devkitPro, CIA packaging and optional Azahar smoke. These are not physical Nintendo 3DS hardware tests; those remain outstanding. Details: phase19/INTEGRATION_CONTRACT.md.
+
+## 1 November 2026 — Phase18 READ-ONLY copied-save integration
+
+Phase19 can now display validated *user-supplied unwrapped copied* H168 save data, without opening the installed GBA VC game. The seventh main-menu entry, **Inspect SD copy (read-only)**, triggers a deliberate one-time read from the fixed offline SD import path. The native app **still starts with the same fictional Pokémon** and never scans for game saves automatically. The UI can show active bank money/counter, numeric party species, IVs/EVs, numeric moves/PP, effective nature index, two-bit ability slot and existing bag ID/quantities. Unverified real Pokémon name/level shows Species ID/Lv?. Real PC storage remains unsupported; all actual-data edits are blocked.
+
+The parser is compiled from the **pinned Phase18 PR #8 source commit 596743d8eaa073759a736b5a8107db43f3a8c17b**, checked out separately by CI, without merging or changing Phase18. Invalid, wrapped 263168-byte or wrong-sized file attempts do not replace the displayed data. The source folder is SD-only read-binary; this app cannot write live saves, drafts, backups or restore. Full details and safe hardware testing instructions are in READ_ONLY_IMPORT.md.
+
+**No real imported save has yet been tested on hardware.** The previous physical console passes apply to the older synthetic UI build, not this new import-integrated executable. Revalidate the updated 3DSX safely before any copied-save experiment. The draft PR must stay unmerged.
