@@ -7,7 +7,7 @@
 
 namespace phase19 {
 enum class Screen : uint8_t {
-    Home, Party, PC, Pokemon, Edit, Bag, Money, Backups,
+    Home, Party, PC, Pokemon, Edit, Bag, Money, Backups, Recovery,
     Proposal, ConfirmOne, ConfirmTwo, Notice
 };
 enum class Key : uint8_t { Up, Down, Left, Right, A, B, X, L, R, Start };
@@ -62,6 +62,7 @@ inline unsigned count(const State& s) {
         case Screen::PC: return static_cast<unsigned>(s.demo.pc[s.box].size());
         case Screen::Bag: return static_cast<unsigned>(s.demo.bag.size());
         case Screen::Backups: return 3;
+        case Screen::Recovery: return 5;
         case Screen::Edit: return s.group == Group::IV || s.group == Group::EV ? 6u :
                                   s.group == Group::Moves ? 4u : 1u;
         default: return 0;
@@ -106,6 +107,15 @@ inline unsigned maximum(const State& s) {
         }
     }
     return 0;
+}
+inline const char* recoveryMessage(unsigned code) {
+    switch(code) {
+        case 0: return "No save: keep originals; verify game ID and use an external backup.";
+        case 1: return "Unsupported layout: do NOT edit; confirm exact Rogue version.";
+        case 2: return "Checksum failed: do NOT restore; use a known-good original.";
+        case 3: return "Backup missing: stop. Create a verified external backup first.";
+        default: return "Restore denied: CMAC and rollback are not approved.";
+    }
 }
 inline void openNotice(State& s, Screen ret, const char* message) {
     s.returnTo=ret; s.notice=message; s.screen=Screen::Notice;
@@ -198,8 +208,7 @@ inline void press(State& s, Key k) {
                 case 2: s.screen=Screen::Bag; break;
                 case 3: s.screen=Screen::Money; break;
                 case 4: s.screen=Screen::Backups; break;
-                default: openNotice(s,Screen::Home,
-                    "Recovery: use external verified backups; never inject a draft blindly."); break;
+                default: s.screen=Screen::Recovery; break;
             }
             break;
         case Screen::Party:
@@ -208,6 +217,7 @@ inline void press(State& s, Key k) {
             s.screen=Screen::Pokemon;
             break;
         case Screen::Edit: startProposal(s,Screen::Edit); break;
+        case Screen::Recovery: openNotice(s,Screen::Recovery,recoveryMessage(s.selected)); break;
         case Screen::Bag: startProposal(s,Screen::Bag); break;
         case Screen::Backups:
             if(s.selected==1) openNotice(s,Screen::Backups,
