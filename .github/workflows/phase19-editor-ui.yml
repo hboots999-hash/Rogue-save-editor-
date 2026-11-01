@@ -26,7 +26,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 596743d8eaa073759a736b5a8107db43f3a8c17b
+          ref: ea7303e3d04e9c409febd44ee3e1f834de02cdc6
           path: phase18-dependency
       - name: Compile and exercise state transitions (strict warnings)
         shell: bash
@@ -98,7 +98,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 596743d8eaa073759a736b5a8107db43f3a8c17b
+          ref: ea7303e3d04e9c409febd44ee3e1f834de02cdc6
           path: phase18-dependency
       - name: Compile with standard devkitPro application template
         shell: bash
@@ -120,6 +120,10 @@ jobs:
           cp phase19/rosalina_input.hpp phase19-build/include/rosalina_input.hpp
           cp phase18-dependency/phase18/offline_engine.hpp phase19-build/include/phase18/offline_engine.hpp
           cp phase18-dependency/phase18/bag_rules.hpp phase19-build/include/phase18/bag_rules.hpp
+          cp phase18-dependency/phase18/layout_geometry.hpp phase19-build/include/phase18/layout_geometry.hpp
+          cp phase18-dependency/phase18/source_digest.hpp phase19-build/include/phase18/source_digest.hpp
+          cp phase18-dependency/phase18/editor_model.hpp phase19-build/include/phase18/editor_model.hpp
+          cp phase18-dependency/phase18/pc_readonly.hpp phase19-build/include/phase18/pc_readonly.hpp
           cp phase18-dependency/phase10/preview/offline.hpp phase19-build/include/phase10/preview/offline.hpp
           make -C phase19-build -j2
           test -s phase19-build/PKSMRoguePhase19.3dsx
