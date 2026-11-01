@@ -254,24 +254,29 @@ jobs:
               xdotool windowactivate --sync "$azwin" || true
               xdotool windowfocus --sync "$azwin" || true
             fi
+            # Xdotool quick taps are shorter than a 3DS VBlank, causing
+            # menu presses to be missed. Hold each emulated button for
+            # several frames and release explicitly.
+            tap3ds() {
+              xdotool keydown "$1" || true
+              sleep 0.24
+              xdotool keyup "$1" || true
+              sleep 0.24
+            }
             import -window root evidence/3dsx-home.png
-            xdotool key a || true
-            sleep 2
+            tap3ds a
             import -window root evidence/3dsx-party.png
-            xdotool key s || true
-            sleep 1
-            for i in 1 2 3 4 5 6; do xdotool key g || true; sleep 0.15; done
-            xdotool key a || true
-            sleep 1
+            tap3ds s
+            import -window root evidence/3dsx-home-return.png
+            for i in 1 2 3 4 5 6; do tap3ds g; done
+            tap3ds a
             import -window root evidence/3dsx-import-menu.png
-            xdotool key a || true
-            sleep 1
+            tap3ds a
             import -window root evidence/3dsx-missing-copy.png
             # Normal B/back and standalone START-release exit attempt.
-            xdotool key s || true
-            xdotool key s || true
-            xdotool key m || true
-            sleep 1
+            tap3ds s
+            tap3ds s
+            tap3ds m
             import -window root evidence/3dsx-exit-attempt.png
             kill "$guest" 2>/dev/null || true
             wait "$guest" 2>/dev/null || true
@@ -293,6 +298,7 @@ jobs:
           '
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
+          test -s evidence/3dsx-home-return.png
           test -s evidence/3dsx-import-menu.png
           test -s evidence/3dsx-missing-copy.png
           test -s evidence/3dsx-exit-attempt.png
