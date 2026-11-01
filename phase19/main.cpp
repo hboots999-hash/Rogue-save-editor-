@@ -46,7 +46,7 @@ void top(const State& s) {
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
             break;
-        case Screen::PC:
+        case Screen::PC: {
             std::printf("PC BOX %u/%u - %s\n",s.box+1u,s.demo.pcBoxes,
                         availabilityText(s.demo.pcStatus));
             if(s.demo.pcStatus!=Availability::Ready) {
@@ -62,6 +62,7 @@ void top(const State& s) {
             if(count(s))std::printf("Viewing %u-%u / %u\n",first+1u,stop,count(s));
             std::puts("\nL/R: box; A: detail (read-only)");
             break;
+        }
         case Screen::Pokemon: {
             const auto& m=pokemon(s);
             std::printf("%s  Lv%u (Species %u)\n",m.name,m.level,m.species);
