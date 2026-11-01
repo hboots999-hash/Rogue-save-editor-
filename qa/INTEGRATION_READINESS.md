@@ -14,7 +14,7 @@ New commits on those concurrently developed branches are OUTSIDE these pinned te
 - Existing Phase17 CI run 41324125202: SUCCESS at c78b26e (host fault/receipt/corrupt journal tests, native and emulator jobs). Emulator boot is not evidence of privileged native IO.
 - Existing Phase18 CI has successful earlier strict and ASan/UBSan host runs. The selected ea7303e3 input was queued when this report was drafted; do not substitute older green runs for this commit.
 - Phase19 source contains an opt-in exact 128KiB SD-copy reader using fopen("rb") and an explicit real-data edit denial in ui.hpp. This is a **structural read-only** viewer, not a game-validity or safety certification.
-- This QA branch adds independent cross-version compiled tests, 28-sector corruption rejection, malformed-length and stale-copy protections, forbidden-edit default gates, Phase17 evidence denials, and an ARM11 compile against a newer Phase18 snapshot. Outcomes must be read from the **latest integration-qa GitHub Actions run**, not assumed by the existence of this test code.
+- **QA run 41325990864 PASSED** both jobs at `1858d7df` against the pinned Phase17/18/19 snapshots: strict and ASan/UBSan host tests, inherited Phase11–17 and Phase18 suites, synthetic Phase18->Phase19 read-only copying, forbidden-edit tests, and ARM11 compile. It separately issued a warning for the **confirmed unified-header failure**, captured in the `isolated-qa-header-compatibility` artifact. A subsequent QA commit adds wrapper-counter structural diagnostics and must be judged by its own newer CI run.
 
 ## Findings / defect and risk register
 
@@ -27,7 +27,9 @@ New commits on those concurrently developed branches are OUTSIDE these pinned te
 | QA-05 | MEDIUM | Phase19 "validated copy" is checksum/geometry-valid, NOT independently ROM-version authenticated; unknown level/nickname and PC views remain unsupported. The final four 4096-byte sectors are outside the 28 checked H168 bank sectors. | Continue labeling read-only, unverified ROM identity. Require full source SHA-256 pin against stale/different copies, not only sector checksums. |
 | QA-06 | HIGH | Existing recovery journal and RAM fault injection are not a production write-ahead recovery facility; receipt durability, native partial writes, filesystem power-loss semantics and independent backup recovery remain untested. | Block live writes. Require separately approved expendable-data 3DS testing and external recovery path in a future release. |
 | QA-07 | MEDIUM | The Phase19 native build downloads an upstream devkitPro Makefile at build time from a moving branch, reducing reproducibility. Its CIA tests establish only isolated emulator/package behaviour. | Pin/review the build template, produce full SHA-256 artifact manifest, parse CIA metadata independently, and do not infer real-hardware success. |
-| QA-08 | MEDIUM | In single-program integration Phase17 and Phase18 vendored format headers may clash in the same translation unit; independent PR builds do not prove link/ABI compatibility. | Dedicated unified-header compile probe is included. Inspect the resulting CI artifact; if it fails, define a single canonical read-only type boundary or hide implementations in independent translation units. |
+| QA-08 | HIGH — CONFIRMED | The independent unified-header probe FAILS: Phase17 and Phase18 each define `h168::Size`, `h168::Bank`, `h168::Info`, `h168::Result` and `h168::r16` from different physical `offline.hpp` paths. PR builds of individual modules do not resolve this collision. | Use one canonical format declaration or separately compiled translation units with a versioned boundary; do not directly combine both headers in Phase20. Evidence: QA run 41325990864, unified-header artifact. |
+| QA-09 | HIGH — CONFIRMED | Phase13/14 authenticated restoration preflight permits only `MoneyPlusOne` and `ItemQuantityPlusOne`; it rejects any other operation and disallows broader value changes. Phase18 supports wider RAM-only money, item, IV/EV, moves and other requests. | **No generic Phase18-to-Phase17 restore adapter exists.** A separate reviewed, field-specific, byte-exact and authenticated transaction policy is required before any write integration. |
+| QA-10 | MEDIUM — RESOLVED UPSTREAM | Phase19 snapshot `dad28767` failed `-Werror=reorder` in its `State` constructor initializers, preventing strict host and ARM11 compilation. | The independent Phase19 branch corrected initializer order at `4e4d2a8d`; QA pinned that fixed snapshot and verified its ARM11 reader compilation without modifying upstream code. |
 
 **Fixes in this PR are deliberately isolated test coverage and deterministic revision pinning, not modifications to production code.** No Phase17, 18 or 19 source defect is claimed resolved on its own branch.
 
@@ -40,7 +42,8 @@ New commits on those concurrently developed branches are OUTSIDE these pinned te
 - [x] Include inherited Phase17 RAM fault suite and Phase18 strict/sanitized tests.
 - [x] Add native ARM11 **compile-only** check for Phase19 viewer using Phase18 audited snapshot (not installation).
 - [x] Add unified-header compile diagnostic and preserve logs if incompatible.
-- [ ] Record completed CI result for exact QA HEAD; resolve any failures.
+- [x] Record success for QA cross-branch code at `1858d7df` (run 41325990864); re-evaluate after the later wrapper-diagnostic commit.
+- [ ] Obtain success for the **latest QA HEAD** and record known warning-only integration blockers.
 - [ ] Demonstrate a reproducible full 3DSX/ELF/CIA bundle against reconciled Phase18/19 code, verify title metadata and package hashes.
 - [ ] Independently cross-check package and imported copied-save parser on emulator **without real data**, and verify canary/side-effect absence.
 - [ ] Obtain exact matching H168 v2.1.2 ROM-derived, legally usable species/item/move/pocket/ability/nature metadata.
@@ -52,7 +55,7 @@ New commits on those concurrently developed branches are OUTSIDE these pinned te
 
 **G0 — privacy and separation:** No private save/ROM or live writer committed; keep all draft branches unmerged. **Required.**
 
-**G1 — CI + memory safety:** Pass Phase17 recovery negatives, Phase18 edit/rollback tests, Phase19 UI/copy tests, ASan/UBSan, unified ABI checks, ARM11 compile, package integrity and fixed-dependency reproducibility. **Pending QA results.**
+**G1 — CI + memory safety:** Standalone host/sanitizer and ARM11 reader compilation **passed on QA commit `1858d7df`**. Unified-header inclusion **failed**; full current-source 3DSX/CIA packaging and emulator integration remain outstanding. **NOT PASSED AS A RELEASE GATE.**
 
 **G2 — domain correctness:** Confirm H168 2.1.2 exact title/ROM/field semantics and safety of Pokémon recalculation, bank selection, item capacity and ignored sectors. **BLOCKED.**
 
