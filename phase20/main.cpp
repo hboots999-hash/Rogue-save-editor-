@@ -1,11 +1,12 @@
-/* Phase 20: synthetic demo + composed read-only source/ABI boundary. GPL-3.0-or-later.
- * No live GBA VC title access, game archive, save edit, or restoration.
+/* Phase20: copied-save read + SD-only offline draft UI, GPL-3.0-or-later.
+ * NO installed-title archive, game-save writes, CMAC or restoration.
  */
 #include <3ds.h>
 #include <cstdio>
 #include "ui.hpp"
 #include "screen_text.hpp"
 #include "phase20/read_only_v1.hpp"
+#include "phase20/offline_edit_v1.hpp"
 #include "rosalina_input.hpp"
 #include <string>
 using namespace phase19;
@@ -31,7 +32,66 @@ void wrappedNotice(const char* message) {
         std::printf("%.*s\n",static_cast<int>(chars),line);
     });
 }
-void top(const State& s) {
+void offlineTop(const State& s,const phase20::OfflineFlow& f) {
+    using phase20::EditStage;
+    std::puts("OFFLINE COPY EDITOR - NO GAME IO");
+    std::puts("===============================");
+    std::puts("SOURCE: SD imported copy ONLY");
+    std::puts("Original imported file unchanged");
+    std::puts("");
+    if(f.stage==EditStage::Category) {
+        std::puts("Choose a party edit category");
+        std::printf("%c Individual Values (IV)\n",f.category==0?'>':' ');
+        std::printf("%c Effort Values (EV)\n",f.category==1?'>':' ');
+        std::printf("%c Existing move PP\n",f.category==2?'>':' ');
+        std::puts("\nR/Right, X/Left: change");
+        std::puts("A: select   B: cancel");
+    } else if(f.stage==EditStage::Field) {
+        std::printf("%s / party #%u\n\n",phase20::kindName(f.choice.kind),
+                    f.choice.slot+1u);
+        for(unsigned i=0;i<phase20::fieldCount(f.choice.kind);i++) {
+            auto c=f.choice;c.field=i;
+            std::printf("%c %s%u: %u\n",i==f.choice.field?'>':' ',
+              f.choice.kind==phase20::OfflineKind::PP?"Move ":"Stat ",
+              i+1u,phase20::oldValue(s.demo,c));
+        }
+        std::puts("\nA: edit selected field   B: back");
+    } else if(f.stage==EditStage::Value) {
+        std::printf("%s\n",phase20::kindName(f.choice.kind));
+        if(f.choice.kind==phase20::OfflineKind::ExistingItem)
+            std::printf("Item ID: %u / bag slot %u\n",
+              s.demo.bag[f.choice.slot].id,f.choice.slot+1u);
+        if(f.choice.kind==phase20::OfflineKind::IV ||
+           f.choice.kind==phase20::OfflineKind::EV ||
+           f.choice.kind==phase20::OfflineKind::PP)
+            std::printf("Party #%u field #%u\n",
+              f.choice.slot+1u,f.choice.field+1u);
+        std::printf("\nOriginal: %u\nNew value: %u\nMax: %u\n",
+                    f.original,f.proposed,phase20::maxValue(s.demo,f.choice));
+        std::puts("\nUp/Down +/-1 Left/Right +/-10");
+        std::puts("X reset; A review; B back");
+    } else if(f.stage==EditStage::ConfirmOne ||
+              f.stage==EditStage::ConfirmTwo) {
+        std::puts("EXPORT AN OFFLINE DRAFT");
+        std::printf("\n%s: %u -> %u\n",
+           phase20::kindName(f.choice.kind),f.original,f.proposed);
+        std::printf("\nConfirmation %u of 2\n",
+           f.stage==EditStage::ConfirmOne?1u:2u);
+        std::puts("\nA: confirm  B: return");
+        std::puts("\nONLY SD copies/backup/drafts");
+        std::puts("NEVER the installed game save.");
+        std::puts("Draft is NOT game-verified.");
+    } else if(f.stage==EditStage::Result) {
+        std::puts(f.succeeded?"OFFLINE DRAFT CREATED":"OFFLINE EXPORT REFUSED");
+        wrappedNotice(f.result);
+        std::puts("\nA/B: return to imported view");
+        std::puts("\nOriginal is never overwritten.");
+    }
+}
+void top(const State& s,const phase20::OfflineFlow& edit) {
+    if(edit.stage!=phase20::EditStage::Idle){
+        consoleClear();offlineTop(s,edit);return;
+    }
     consoleClear();
     std::puts("PKSM ROGUE - PHASE20 SAFE VIEW");
     std::puts("==============================");
@@ -142,7 +202,7 @@ void top(const State& s) {
             if(count(s))std::printf("%u-%u of %u stacks\n",first+1u,stop,count(s));
             std::puts("\nR/Right: next page");
             std::puts("X/Left: previous page");
-            std::puts(s.demo.synthetic?"A: demo quantity":"Imported bag READ ONLY");
+            std::puts(s.demo.synthetic?"A: demo quantity":"A: OFFLINE existing quantity");
             std::puts("No adding unknown item IDs.");
         }
             break;
@@ -215,9 +275,9 @@ void top(const State& s) {
             break;
     }
 }
-void bottom(const State& s) {
+void bottom(const State& s,const phase20::OfflineFlow& edit) {
     consoleClear();
-    std::puts("PKSM ROGUE - NONWRITING BUILD");
+    std::puts("PKSM ROGUE - SD COPY ONLY");
     std::puts("----------------------------");
     std::puts("D-Pad: navigate/adjust");
     std::puts("A: select     B: cancel");
@@ -226,12 +286,17 @@ void bottom(const State& s) {
     std::puts("START release: exit");
     std::puts("START+SELECT: Rosalina");
     std::puts("");
-    if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
+    if(edit.stage!=phase20::EditStage::Idle) {
+        std::puts("Edits export distinct SD drafts.");
+        std::puts("NO installed-game write/restore.");
+    } else if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
        s.screen==Screen::ConfirmTwo)
-        std::puts("Final confirmation = BLOCKED.");
+        std::puts("DEMO preview always BLOCKED.");
     else if(s.screen==Screen::Backups)
         std::puts("Backups/restore NOT ACTIVE.");
-    else std::puts(s.demo.synthetic?"DEMO: no game save opened.":"SD COPY VIEW / NO WRITES.");
+    else std::puts(s.demo.synthetic?"DEMO: no game save opened.":"Offline editing: A on money,");
+    if(edit.stage==phase20::EditStage::Idle && !s.demo.synthetic)
+        std::puts("bag item or party Pokemon.");
     std::puts("\nEXPERIMENTAL - NOT A RELEASE");
 }
 bool toKey(u32 keys,Key& key) {
@@ -259,6 +324,7 @@ int main() {
     populateMock(active);
     static State state(active);
     static char importStatus[200]{};
+    static phase20::OfflineFlow editing{};
     static phase20::CopyObservation observation{};
     static P17ReadOnlyStatusV1 recoveryStatus{};
     (void)p17_readonly_status_init_blocked_v1(&recoveryStatus);
@@ -292,12 +358,14 @@ int main() {
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
                 switchView(state,true);
-            } else press(state,k);
+            } else if(!phase20::takeOfflineKey(state,editing,observation,k)) {
+                press(state,k);
+            }
             redraw=true;
         }
         if(redraw) {
-            consoleSelect(&upper); top(state);
-            consoleSelect(&lower); bottom(state);
+            consoleSelect(&upper); top(state,editing);
+            consoleSelect(&lower); bottom(state,editing);
             redraw=false;
         }
         gspWaitForVBlank();
