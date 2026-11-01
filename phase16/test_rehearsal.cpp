@@ -17,16 +17,19 @@ using phase16::Code;
 struct FakeDevice {
     Bytes live;
     unsigned reads=0,macCalls=0,failRead=0,failMac=0,changeRead=0;
-    bool unstable=false;
-    explicit FakeDevice(Bytes initial):live(std::move(initial)){}
+    bool unstable=false,requireOpenedFile=true,openedFile=false;
+    explicit FakeDevice(Bytes initial,bool requireOpen=true)
+        :live(std::move(initial)),requireOpenedFile(requireOpen){}
     bool read(Bytes& b){
         ++reads;
         if(reads==failRead)return false;
         b=live;
         if(reads==changeRead)b.back()^=1;
+        openedFile=true;
         return true;
     }
     bool calculate(const phase14::Digest& d,phase14::Mac& mac){
+        if(requireOpenedFile && !openedFile)return false;
         ++macCalls;
         if(macCalls==failMac)return false;
         const auto digest=phase14::hash(d.data(),d.size());
@@ -47,7 +50,7 @@ static Bytes sourceContainer(const Bytes& raw){
         h168::w32(container.data(),off+0x50,rogue_live::HeaderSize);
         h168::w32(container.data(),off+0x54,rogue_live::RawSize);
         std::copy(raw.begin(),raw.end(),container.begin()+off+rogue_live::HeaderSize);
-        FakeDevice mock(container);
+        FakeDevice mock(container,false);
         phase14::Mac mac{};
         assert(phase14::stableMac(mock,phase14::slotHash(container,off),mac));
         std::copy(mac.begin(),mac.end(),container.begin()+off+0x10);
@@ -126,6 +129,16 @@ int main(int argc,char** argv){
     const fs::path root=temp;
     unsigned serial=0;
     auto store=[&]{return DiskStore(root/("test-"+std::to_string(++serial)));};
+    // The console CMAC service is FILE-BOUND: our mock rejects any MAC
+    // computation until a read-only file read has opened the fake handle.
+    {
+        FakeDevice notYetOpen(original);
+        phase14::Mac tag{};
+        assert(!notYetOpen.calculate(phase14::slotHash(original,0),tag));
+        Bytes opened;
+        assert(notYetOpen.read(opened));
+        assert(notYetOpen.calculate(phase14::slotHash(original,0),tag));
+    }
 
     {
         auto disk=store();
