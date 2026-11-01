@@ -134,6 +134,39 @@ int main(int argc,char**argv) {
             FakeSigner detachedSigner{};
             assert(phase17::inspectRecoveryEvidence(evidence,detachedSigner).code==
                    EvidenceCode::InvalidAuthentication);
+            // A full shadow write with a FAILED completion receipt must be
+            // reported unresolved, then recoverable on a new RAM backend.
+            {
+                phase17::Shadow first(source);
+                first.failReceipt=true;
+                assert(phase14::execute(first,signer,plan)==
+                       phase14::Status::RecoveryRequired);
+                assert(first.live==plan.after);
+                assert(first.journalPresent && !first.receiptWritten);
+                phase17::Shadow restarted(first.live);
+                restarted.journalPresent=true;
+                restarted.journal=first.journal;
+                assert(phase14::recover(restarted,signer,plan)==
+                       phase14::Status::RolledBack);
+                assert(restarted.live==source && restarted.receiptWritten);
+            }
+            // Failed rollback receipt must not erase the immutable journal
+            // or suppress the next explicit read/verify/recovery attempt.
+            {
+                phase17::Shadow first(plan.after);
+                first.journalPresent=true;
+                first.journal=record;
+                first.failReceipt=true;
+                assert(phase14::recover(first,signer,plan)==
+                       phase14::Status::RecoveryRequired);
+                assert(first.live==source && !first.receiptWritten);
+                phase17::Shadow retry(first.live);
+                retry.journalPresent=true;
+                retry.journal=record;
+                assert(phase14::recover(retry,signer,plan)==
+                       phase14::Status::RolledBack);
+                assert(retry.live==source && retry.receiptWritten);
+            }
             const auto report=phase17::rehearse(source,record,signer);
             assert(report.code==phase17::ResultCode::Passed);
             assert(report.allByteExact);
