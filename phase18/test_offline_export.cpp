@@ -32,6 +32,7 @@ int main(int argc,char** argv){
     Request q{};q.kind=Kind::Money;
     q.expectedCounter=info.banks[info.active].counter;
     q.expectedMoney=info.money;q.money=60000;
+    q.expectedDigest=sourceDigest(original.data(),original.size());
     auto output=exportCopied(original.data(),original.size(),
                              imp.c_str(),root.c_str(),q);
     CHECK(output.ok && output.changed>0);
