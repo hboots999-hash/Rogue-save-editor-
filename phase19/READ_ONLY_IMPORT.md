@@ -12,7 +12,7 @@ The Phase19 adapter uses Phase18's current EX v2.1 read-only decoder. IMPORTANT:
 
 ## Pinned Phase18 build dependency
 
-GitHub Actions checks out read-only dependency revision 596743d8eaa073759a736b5a8107db43f3a8c17b into a separate checkout directory, then uses the unchanged Phase18 parser and its bag_rules and Phase10 dependency to compile the Phase19 3DSX/CIA. PR #8 and branches Phase14–17 are not merged or modified. Later Phase18 API updates require explicit review and repinning.
+GitHub Actions checks out read-only dependency revision ea7303e3d04e9c409febd44ee3e1f834de02cdc6 into a separate checkout directory, then uses the unchanged Phase18 parser and its bag_rules and Phase10 dependency to compile the Phase19 3DSX/CIA. PR #8 and branches Phase14–17 are not merged or modified. Later Phase18 API updates require explicit review and repinning.
 
 Tests use a *generated, non-playable* 128-KiB dual-bank fixture from Phase18, not any private game save. Host tests validate displayed party, EVs, IVs, moves, PP, two-bit ability slot, bag, money, read-only controls, and corrupt/wrong-size input refusal. Build and emulator checks cannot certify a physical-console copy-read or authenticate the user's actual game state.
 
@@ -32,6 +32,6 @@ Status: integration candidate, not yet a physical-hardware read-only import PASS
 - The native build workflow audits the linked ELF for presence of the Phase18 read-only validator and absence of project-specific Phase18 mutation/export functions. Generic library FS service symbols may still exist because libctru supplies them; their presence is not evidence of this app calling them.
 - "H168 structure checked" **does not mean ROM identity authenticated**. A structural decoder result never permits game-save writes, draft exporting or restore.
 
-Phase18 PR #8 has subsequently added an optional source_digest.hpp on its branch; the Phase19 dependency remains intentionally pinned at 596743d8eaa073759a736b5a8107db43f3a8c17b until separately reviewed. Do not automatically merge or repin.
+QA correction: Phase19 now pins audited Phase18 ea7303e3d04e9c409febd44ee3e1f834de02cdc6, including source_digest.hpp and layout_geometry.hpp. ModelApiVersion=1 is host-cross-checked; native code deliberately excludes the unsafe PC research implementation. Later repins require independent review.
 
 **The updated 3DSX is still awaiting its own physical-device check.** Earlier UI hardware passes applied to the preceding build. Keep Phase19 as an unmerged draft; do not test the CIA or the actual game save.
