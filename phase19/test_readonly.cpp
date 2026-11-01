@@ -1,3 +1,6 @@
+#ifndef _GNU_SOURCE
+#define _GNU_SOURCE 1
+#endif
 // Phase19/Phase18 integration test: generated non-playable 128KiB H168 copy.
 // Reuse Phase18's existing deterministic fixture, not a private game save.
 #define main phase18_regression_reference_main
@@ -12,6 +15,50 @@
 #include <cstring>
 #include <iostream>
 using namespace phase19;
+#if defined(__linux__)
+// GNU cookie-based SD read fault simulation: claims an exact 128-KiB file
+// during seek/ftell, then returns early EOF or EIO during the read.
+struct FaultyCopy {
+    const uint8_t* bytes;
+    size_t available;
+    size_t position=0;
+    bool ioError=false;
+};
+static ssize_t faultyRead(void* context,char* dest,size_t requested){
+    auto& s=*static_cast<FaultyCopy*>(context);
+    if(s.ioError && s.position>=s.available){
+        errno=EIO;
+        return -1;
+    }
+    const size_t remaining=s.position<s.available?s.available-s.position:0u;
+    const size_t n=std::min(requested,remaining);
+    if(n){
+        std::memcpy(dest,s.bytes+s.position,n);
+        s.position+=n;
+    }
+    return static_cast<ssize_t>(n);
+}
+static int faultySeek(void* context,off64_t* offset,int whence){
+    auto& s=*static_cast<FaultyCopy*>(context);
+    off64_t position=0;
+    if(whence==SEEK_SET) position=*offset;
+    else if(whence==SEEK_CUR) position=static_cast<off64_t>(s.position)+*offset;
+    else if(whence==SEEK_END) position=static_cast<off64_t>(h168::Size)+*offset;
+    else return -1;
+    if(position<0 || position>static_cast<off64_t>(h168::Size))return -1;
+    s.position=static_cast<size_t>(position);
+    *offset=position;
+    return 0;
+}
+static FILE* faultyFile(FaultyCopy& data){
+    cookie_io_functions_t callbacks{};
+    callbacks.read=&faultyRead;
+    callbacks.seek=&faultySeek;
+    FILE* file=fopencookie(&data,"rb",callbacks);
+    if(file)std::setvbuf(file,nullptr,_IONBF,0);
+    return file;
+}
+#endif
 int main(){
     const auto bytes=fixture(); // generated rotated dual-bank H168 synthetic
     assert(bytes.size()==h168::Size);
@@ -220,5 +267,21 @@ int main(){
     assert(!inspectCopiedBuffer(bytes.data(),0,rolls,reason));
     assert(!inspectCopiedBuffer(bytes.data(),h168::Size-1,rolls,reason));
     assert(rolls.activeCounter==0);
+#if defined(__linux__)
+    FaultyCopy premature{bytes.data(),h168::Size/2u,0u,false};
+    std::unique_ptr<FILE, int(*)(FILE*)> prematureFile(faultyFile(premature),&std::fclose);
+    assert(prematureFile);
+    assert(!inspectReadOnlyStream(prematureFile.get(),rolls,reason));
+    assert(reason.find("full")!=std::string::npos);
+    assert(rolls.activeCounter==0u);
+
+    FaultyCopy diskError{bytes.data(),4096u,0u,true};
+    std::unique_ptr<FILE, int(*)(FILE*)> errorFile(faultyFile(diskError),&std::fclose);
+    assert(errorFile);
+    assert(!inspectReadOnlyStream(errorFile.get(),rolls,reason));
+    assert(reason.find("full")!=std::string::npos);
+    assert(rolls.sourceSha256==rogue18::sourceDigest(rollover.data(),rollover.size()));
+#endif
+
     std::cout<<"PASS Phase19: pinned Phase18 H168 copied-data read only bridge, no writes\n";
 }
