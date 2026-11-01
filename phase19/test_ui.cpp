@@ -65,7 +65,8 @@ int main() {
     key(s,Key::Down);key(s,Key::A);
     assert(s.screen==Screen::Proposal && s.proposal==pokemon(s).moves[1]);
     key(s,Key::Up);finishBlocked(s,Screen::Edit);
-    key(s,Key::B);key(s,Key::B);
+    key(s,Key::B);key(s,Key::B);key(s,Key::B);
+    assert(s.screen==Screen::Home);
     go(s,2);
     assert(s.screen==Screen::Bag);
     for(int i=0;i<100;i++) key(s,Key::Down);
