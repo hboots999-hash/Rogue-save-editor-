@@ -36,7 +36,7 @@ struct FakeDevice {
     }
 };
 static Bytes sourceContainer(const Bytes& raw){
-    Bytes container(rogue_live::ContainerMin+128,0x5a);
+    Bytes container(rogue_live::ContainerMin,0x5a);
     for(size_t off:{size_t(0),size_t(rogue_live::SlotSize)}){
         std::fill_n(container.begin()+off,rogue_live::HeaderSize,0);
         std::memcpy(container.data()+off,".SAV",4);
