@@ -23,6 +23,11 @@ jobs:
         mode: [strict, asan-ubsan]
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 132ef904c453dd5e793f9069fd55b5ac045bdced
+          path: dependencies/phase17
+          persist-credentials: false
       - name: Compile with strict diagnostics
         shell: bash
         run: |
@@ -38,6 +43,12 @@ jobs:
           g++ $FLAGS -Iphase18 phase18/test_pc_readonly.cpp -o /tmp/pksm-phase18-pc-test
           g++ $FLAGS -Iphase18 phase18/test_editor_model.cpp -o /tmp/pksm-phase18-model-test
           g++ $FLAGS -Iphase18 phase18/test_integrity.cpp -o /tmp/pksm-phase18-integrity-test
+          g++ $FLAGS -Iphase18 phase18/test_integration_v2.cpp -o /tmp/pksm-phase18-v2-test
+          P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
+          for attempt in 1 2 3; do
+            g++ $FLAGS $P17 -Iphase18 phase18/test_unified_v2.cpp -o "/tmp/pksm-phase18-unified-$attempt"
+            "/tmp/pksm-phase18-unified-$attempt"
+          done
       - name: Run deterministic structural, editing and rollback regressions
         shell: bash
         run: |
@@ -47,6 +58,7 @@ jobs:
           /tmp/pksm-phase18-pc-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-model-test /tmp/phase18_nonplayable.sav
           /tmp/pksm-phase18-integrity-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-v2-test /tmp/phase18_nonplayable.sav
       - name: Cross-check test fixture with independent read-only Python decoder
         shell: bash
         run: |
@@ -68,7 +80,7 @@ jobs:
       - name: Reject privileged save services in offline module
         run: |
           set -euo pipefail
-          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/offline_export.hpp phase18/pc_readonly.hpp phase18/editor_model.hpp phase18/test_offline_engine.cpp phase18/test_offline_export.cpp phase18/test_pc_readonly.cpp phase18/test_editor_model.cpp phase18/test_integrity.cpp phase18/source_digest.hpp phase18/layout_geometry.hpp phase18/bag_rules.hpp; then
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/offline_export.hpp phase18/pc_readonly.hpp phase18/editor_model.hpp phase18/test_offline_engine.cpp phase18/test_offline_export.cpp phase18/test_pc_readonly.cpp phase18/test_editor_model.cpp phase18/test_integrity.cpp phase18/source_digest.hpp phase18/layout_geometry.hpp phase18/bag_rules.hpp phase18/integration_v2.hpp phase18/test_integration_v2.cpp phase18/test_unified_v2.cpp phase18/raw_v1.hpp; then
             echo "Phase18 pure-memory code must contain no privileged filesystem APIs"
             exit 1
           fi
@@ -81,6 +93,11 @@ jobs:
       image: devkitpro/devkitarm:latest
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 132ef904c453dd5e793f9069fd55b5ac045bdced
+          path: dependencies/phase17
+          persist-credentials: false
       - name: Install 3DS development headers
         run: |
           set -eu
@@ -97,3 +114,9 @@ jobs:
             echo "Unexpected live game PxiFS symbol in Phase18 object"; exit 1
           fi
           test -s /tmp/phase18-native.o
+          P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
+          "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp \
+            -I"${DEVKITPRO}/libctru/include" $P17 -Iphase18 -D__3DS__ \
+            -c phase18/test_unified_v2.cpp -o /tmp/phase18-unified-native.o
+          test -s /tmp/phase18-unified-native.o
