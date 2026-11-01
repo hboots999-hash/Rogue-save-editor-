@@ -39,6 +39,8 @@ struct Report {
     unsigned explicitRollbacks=0;
     unsigned shortWriteRollbacks=0;
     unsigned crashRestarts=0;
+    unsigned failedRollbackRetries=0;
+    unsigned interruptedRollbackRetries=0;
     unsigned foreignChangeBlocks=0;
     bool allByteExact=false;
 };
@@ -161,6 +163,48 @@ Report rehearse(const Bytes& original,const Bytes& encoded,Signer& signer) {
             result.code=ResultCode::CrashRecoveryFailed;return result;
         }
         result.crashRestarts++;
+    }
+    // Retry recovery after a short write DURING rollback itself. The first
+    // recovery must fail closed and keep the immutable journal available.
+    for(int failAt=1;failAt<=4;failAt++){
+        Shadow first(plan.after);
+        first.journalPresent=true;
+        first.journal=encoded;
+        first.shortWriteAt=failAt;
+        if(phase14::recover(first,signer,plan)!=Status::RecoveryRequired ||
+           !first.journalPresent){
+            result.code=ResultCode::PartialRollbackFailed;return result;
+        }
+        Shadow retry(first.live);
+        retry.journalPresent=true;
+        retry.journal=encoded;
+        if(phase14::recover(retry,signer,plan)!=Status::RolledBack ||
+           !remainsOriginal(retry,original)){
+            result.code=ResultCode::PartialRollbackFailed;return result;
+        }
+        result.failedRollbackRetries++;
+    }
+    // And a second abrupt process termination DURING the recovery path.
+    // Restart a NEW in-memory backend from the interrupted rollback image.
+    for(int crashAt=1;crashAt<=4;crashAt++){
+        Shadow first(plan.after);
+        first.journalPresent=true;
+        first.journal=encoded;
+        first.powerLossAt=crashAt;
+        bool interrupted=false;
+        try{(void)phase14::recover(first,signer,plan);}
+        catch(const SimulatedPowerLoss&){interrupted=true;}
+        if(!interrupted){
+            result.code=ResultCode::CrashRecoveryFailed;return result;
+        }
+        Shadow retry(first.live);
+        retry.journalPresent=true;
+        retry.journal=encoded;
+        if(phase14::recover(retry,signer,plan)!=Status::RolledBack ||
+           !remainsOriginal(retry,original)){
+            result.code=ResultCode::CrashRecoveryFailed;return result;
+        }
+        result.interruptedRollbackRetries++;
     }
     {
         Shadow bad(original);
