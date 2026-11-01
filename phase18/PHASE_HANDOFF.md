@@ -92,3 +92,14 @@ The earlier Phase18 representation of the Gmax bit as an ability slot was **inco
 
 **Phase16/17 progress is acknowledged but does not grant Phase18 permission
 to write installed saves. All Phase18 outputs are offline drafts only.**
+
+
+## Verification of hardened continuation — CI and Phase20 handoff
+
+**PASS:** [GitHub Actions run 41325167130](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41325167130) for feature commit `0c92432922a97d45738c0420f6d72777826efb2a`, with all **three** jobs successful: strict C++17 host; ASan/UBSan host; devkitPro native ARM11 header compile. The host regression runner now includes SHA-256 known-answer vectors, same-counter stale input rejection, both UINT32_MAX/zero bank rollover directions, empty-party money edits, verified candidate bag-upgrade matching, four-slot move request guards, corrupt/oversized Pokémon and item requests, PC read-only candidate parsing, exact rollback, and zero live-save operations.
+
+**Source discrepancy:** upstream `0x490/0x560` comments were stale after 104-byte `struct Pokemon`; `layout_geometry.hpp` formally derives observed `0x4A8/0x578`. The bag upgrade at `0x4AD` is still a **source-derived candidate**, not confirmed on the exact private v2.1.2 ROM. No byte-level private save/ROM evidence has been committed.
+
+**Integration contract:** Phase19 should call `inspectReadOnly`, retain `SaveView.sourceSha256`, create requests through `beginRequest` or `beginMoveRequest` (for moves 0–3), and then call `propose` with that SHA-256 guard; `verifyExact` must validate the output before any offline export. Unsupported abilities, new move identifiers, nature, generic item insertion, and PC mutations remain blocked by default. This branch never interfaces with Phase16/17 restoration; PR #8 remains **draft**.
+
+The complete per-feature decision matrix and missing proof are in [PHASE20_FEATURE_MATRIX.md](PHASE20_FEATURE_MATRIX.md). The three-job CI run is a **synthetic/compile pass, not a real-ROM/gameplay test**.
