@@ -5,6 +5,7 @@
 #include <cassert>
 #include <string>
 #include <vector>
+#include <initializer_list>
 #include <cstring>
 #include <iostream>
 using namespace phase19;
@@ -115,7 +116,7 @@ int main(){
         "a.sav","phase18_draft_1234567890123.sav"}){
         assert(safeDraftBasename(candidate));
     }
-    for(const char* candidate:{
+    for(const char* candidate:std::initializer_list<const char*>{
         nullptr,"",".sav","../bad.sav","one/two.sav","..bad.sav",
         "bad\\file.sav","bad.txt","bad.sav/","white space.sav",
         "phase18_draft_999.sav\nunsafe"}){
