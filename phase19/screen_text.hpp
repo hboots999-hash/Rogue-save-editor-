@@ -34,7 +34,7 @@ inline void forEachWrappedLine(const char* raw,unsigned width,Emit emit) {
 // Processing is O(width * maxLines), without heap memory or recursion.
 template <typename Emit>
 inline void forEachBoundedLine(const char* raw,unsigned width,unsigned maxLines,
-                               Emit emit) {
+                               Emit emit,const char* overflowMessage="[MORE TEXT OMITTED]") {
     if(!raw || !width || !maxLines)return;
     const char* p=raw;
     unsigned lines=0;
@@ -61,9 +61,10 @@ inline void forEachBoundedLine(const char* raw,unsigned width,unsigned maxLines,
             if(*p=='\n')++p;
         }
         if(lines+1u==maxLines && *p) {
-            constexpr char marker[]="[MORE TEXT OMITTED]";
-            const unsigned markerLen=sizeof(marker)-1u;
-            emit(marker,markerLen<width?markerLen:width);
+            const char* marker=overflowMessage?overflowMessage:"[MORE TEXT OMITTED]";
+            unsigned markerLen=0;
+            while(marker[markerLen] && markerLen<width)++markerLen;
+            emit(marker,markerLen);
             return;
         }
         emit(begin,len);
@@ -76,20 +77,8 @@ inline void forEachBoundedLine(const char* raw,unsigned width,unsigned maxLines,
 template <typename Emit>
 inline void forEachWrappedLineBounded(const char* raw,unsigned width,
                                       unsigned maxLines,Emit emit) {
-    if(!raw || !width || !maxLines)return;
-    unsigned observed=0;
-    const char* held=nullptr;
-    unsigned heldSize=0;
-    forEachWrappedLine(raw,width,[&](const char* text,unsigned n) {
-        if(observed+1u<maxLines)emit(text,n);
-        else if(observed+1u==maxLines){held=text;heldSize=n;}
-        if(observed<maxLines+1u)++observed;
-    });
-    if(observed>=maxLines){
-        if(observed>maxLines){
-            constexpr const char note[]="[message truncated]";
-            emit(note,width<sizeof(note)-1u?width:sizeof(note)-1u);
-        } else if(held)emit(held,heldSize);
-    }
+    // Historical alias retained for Phase20. Unlike the prior helper this
+    // does not scan the remainder of an arbitrarily long error string.
+    forEachBoundedLine(raw,width,maxLines,emit,"[message truncated]");
 }
 } // namespace phase19
