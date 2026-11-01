@@ -4,6 +4,7 @@
 #include <3ds.h>
 #include <cstdio>
 #include "ui.hpp"
+#include "screen_text.hpp"
 #include "read_only_import.hpp"
 #include "rosalina_input.hpp"
 #include <string>
@@ -24,24 +25,11 @@ const char* groupName(Group g) {
 void line(unsigned i,unsigned selected,const char* str) {
     std::printf("%c %s\n",i==selected?'>':' ',str);
 }
-// Wrap long status text at word boundaries so it remains readable on 3DS.
-// No heap allocation or large main-thread stack buffer.
-void wrappedNotice(const char* text,unsigned width=31) {
-    while(text && *text) {
-        if(*text=='\n'){std::putchar('\n');++text;continue;}
-        const char* end=text;
-        while(*end && *end!='\n' && static_cast<unsigned>(end-text)<width)++end;
-        const char* cut=end;
-        if(*end && *end!='\n') {
-            const char* word=end;
-            while(word>text && word[-1]!=' ')--word;
-            if(word>text)cut=word;
-        }
-        while(text<cut)std::putchar(*text++);
-        while(*text==' ')++text;
-        if(*text=='\n')++text; // avoid a second blank line
-        std::putchar('\n');
-    }
+// Keep long guidance inside 3DS console width without heap allocations.
+void wrappedNotice(const char* message) {
+    forEachWrappedLine(message,31u,[](const char* line,unsigned chars) {
+        std::printf("%.*s\n",static_cast<int>(chars),line);
+    });
 }
 void top(const State& s) {
     consoleClear();
@@ -80,14 +68,15 @@ void top(const State& s) {
                 std::puts("Real PC layout not established.");
                 std::puts("No PC editing is permitted.");
             }
-            const unsigned first=(s.selected/6u)*6u;
-            const unsigned stop=std::min(count(s),first+6u);
+            const unsigned first=firstVisible(s.selected);
+            const unsigned stop=lastVisible(s.selected,count(s));
             for(unsigned i=first;i<stop;i++) {
                 const auto& m=s.demo.pc[s.box][i];
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
             if(count(s))std::printf("Viewing %u-%u / %u\n",first+1u,stop,count(s));
-            std::puts("\nR: next box; A: details");
+            std::puts("\nR/Right: next box");
+            std::puts("X/Left: previous; A: details");
             break;
         }
         case Screen::Pokemon: {
@@ -129,7 +118,8 @@ void top(const State& s) {
                 unsigned sum=0;for(auto v:m.ev) sum+=v;
                 std::printf("\nEV total: %u / 510\n",sum);
             }
-            std::puts("\nR: next category; A: preview");
+            std::puts("\nR/Right: next category");
+            std::puts("X/Left: previous; A: preview");
             if(s.group==Group::Nature)std::puts("PID nature changes: UNSUPPORTED");
             else if(s.group==Group::Ability)std::puts("Ability mapping: NOT VERIFIED");
             else if(s.group==Group::Moves)std::puts("New move IDs: NOT VERIFIED");
@@ -150,7 +140,9 @@ void top(const State& s) {
                             item.quantity,item.id);
             }
             if(count(s))std::printf("%u-%u of %u stacks\n",first+1u,stop,count(s));
-            std::puts(s.demo.synthetic?"\nL/R: page   A: quantity demo":"\nL/R: page   No editing");
+            std::puts("\nR/Right: next page");
+            std::puts("X/Left: previous page");
+            std::puts(s.demo.synthetic?"A: demo quantity":"Imported bag READ ONLY");
             std::puts("No adding unknown item IDs.");
         }
             break;
@@ -229,8 +221,8 @@ void bottom(const State& s) {
     std::puts("----------------------------");
     std::puts("D-Pad: navigate/adjust");
     std::puts("A: select     B: cancel");
-    std::puts("R: next box / edit group");
-    std::puts("L: previous (optional)");
+    std::puts("R/Right: next page/group");
+    std::puts("X/Left: previous (context)");
     std::puts("START release: exit");
     std::puts("START+SELECT: Rosalina");
     std::puts("");
