@@ -1,0 +1,287 @@
+name: Phase 12 installed Emerald Rogue live SAVE-to-SD backup
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase12-live-backup.yml'
+      - 'phase12/**'
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  host:
+    name: Host safety tests - no real ROM or save
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Synthetic offline + live header + immutable backup and stale-read tests
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase7/create_synthetic_fixture.py /tmp/h168-one-bank.sav
+          python3 phase10/preview/make_toy_two_bank.py /tmp/h168-one-bank.sav /tmp/h168-two-bank.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            phase10/preview/test_offline.cpp -o /tmp/h168-preview-test
+          /tmp/h168-preview-test /tmp/h168-one-bank.sav
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase11 phase11/test_live_header.cpp -o /tmp/live_header_test
+          /tmp/live_header_test
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror -Iphase10/preview -Iphase12 phase12/test_live_backup.cpp -o /tmp/live_backup_test
+          /tmp/live_backup_test /tmp/h168-one-bank.sav
+          if grep -E '^[[:space:]]*(rc|res)[[:space:]]*=[[:space:]]*FSPXI_(Write|Create|Delete)' phase11/live_read.hpp; then echo 'FORBIDDEN privileged writes'; exit 1; fi
+          g++ -std=c++17 -O1 -g -fsanitize=address,undefined \
+            -fno-omit-frame-pointer -Wall -Wextra -Wpedantic -Werror \
+            phase10/preview/test_offline.cpp -o /tmp/h168-preview-sanitized
+          ASAN_OPTIONS=detect_leaks=1 /tmp/h168-preview-sanitized /tmp/h168-one-bank.sav
+      - name: No private ROMs, CIA or personal saves in source
+        shell: bash
+        run: |
+          set -euo pipefail
+          if git ls-files | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then exit 1; fi
+
+  build:
+    name: Compile Phase 12 read-only live backup CIA
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install minimum native toolchain and build
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
+          mkdir -p phase10-build/source phase10-build/include
+          curl -fLsS -o phase10-build/Makefile \
+            https://raw.githubusercontent.com/devkitPro/3ds-examples/master/templates/application/Makefile
+          sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase10-build/Makefile
+          sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRogueH168Preview/g' phase10-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Live Backup Test\n' >> phase10-build/Makefile
+          cp phase12/main.cpp phase10-build/source/main.cpp
+          cp phase12/live_backup.hpp phase10-build/include/
+          cp phase11/rogue_svc.s phase10-build/source/rogue_svc.s
+          cp phase11/live_read.hpp phase11/live_header.hpp phase10-build/include/
+          cp phase10/preview/offline.hpp phase10-build/include/offline.hpp
+          make -C phase10-build -j2
+          test -s phase10-build/PKSMRogueH168Preview.3dsx
+          test -s phase10-build/PKSMRogueH168Preview.elf
+          sha256sum phase10-build/PKSMRogueH168Preview.{3dsx,elf} > phase10-build/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase12-H168-PREVIEW-3DSX-NOT-RELEASE
+          path: |
+            phase10-build/PKSMRogueH168Preview.3dsx
+            phase10-build/PKSMRogueH168Preview.elf
+            phase10-build/SHA256SUMS.txt
+          retention-days: 7
+
+  emulated-3dsx:
+    name: Azahar offline regression; NO live NAND probe attempted
+    needs: [build, host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase12-H168-PREVIEW-3DSX-NOT-RELEASE
+          path: binary
+      - name: Install pinned emulator and run synthetic guest
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage \
+            https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports"
+          python3 phase7/create_synthetic_fixture.py /tmp/tiny-toy.sav
+          python3 phase10/preview/make_toy_two_bank.py /tmp/tiny-toy.sav \
+            "$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          export XDG_DATA_HOME="$PWD/test-data" XDG_CONFIG_HOME="$PWD/test-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          BIN="$(realpath binary/PKSMRogueH168Preview.3dsx)"
+          export BIN
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/azahar.log 2>&1 &
+            pid=$!
+            sleep 18
+            win=$(xdotool search --name Azahar | tail -1)
+            timeout 3s xdotool windowactivate "$win" || true
+            timeout 3s xdotool windowfocus "$win" || true
+            xdotool mousemove --sync 650 360 click 1 || true
+            import -window root evidence/start.png
+            xdotool keydown --clearmodifiers z; sleep 0.5; xdotool keyup z; sleep 1
+            import -window root evidence/confirm1.png
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 1
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 3
+            import -window root evidence/result.png
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+          '
+          test -s evidence/start.png && test -s evidence/confirm1.png && test -s evidence/result.png
+          ROOT="$PWD/test-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          cmp "$ROOT/imports/00000001.sav" "$ROOT/backups/import_001.sav"
+          python3 - "$ROOT" <<'PY'
+          import struct,sys
+          from pathlib import Path
+          root=Path(sys.argv[1])
+          original=(root/"imports/00000001.sav").read_bytes()
+          draft=(root/"drafts/h168_001.sav").read_bytes()
+          assert len(original)==len(draft)==131072
+          assert original!=draft
+          # Toy active bank is physical bank 1 with section 1 at physical sector 15.
+          off=15*4096+0x4a8
+          assert (struct.unpack_from("<I",original,off)[0]^0x1234abcd)==40000
+          assert (struct.unpack_from("<I",draft,off)[0]^0x1234abcd)==40001
+          assert draft[:14*4096]==original[:14*4096]
+          print("PASS Azahar native preview: offline money +1, untouched save + bank backup")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase12-H168-emulated-3DSX-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
+
+  package-cia:
+    name: Package isolated experimental H168 CIA
+    needs: [build, host, emulated-3dsx]
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase12-H168-PREVIEW-3DSX-NOT-RELEASE
+          path: binary
+      - name: Build CIA with distinct application ID
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          chmod +x /tmp/makerom-tools/makerom
+          mkdir -p experimental
+          /tmp/makerom-tools/makerom -f cia -o experimental/PKSMRogue-H168-OFFLINE-PREVIEW-NOT-RELEASE.cia \
+            -target t -elf binary/PKSMRogueH168Preview.elf -rsf phase10/preview/rsf \
+            -desc app:4 -exefslogo 2>&1 | tee experimental/makerom.log
+          test -s experimental/PKSMRogue-H168-OFFLINE-PREVIEW-NOT-RELEASE.cia
+          python3 - <<'PY'
+          from pathlib import Path
+          b=Path('experimental/PKSMRogue-H168-OFFLINE-PREVIEW-NOT-RELEASE.cia').read_bytes()
+          assert b.count(bytes.fromhex('000400000f73a400'))>=2
+          assert bytes.fromhex('0004000007d7ba00') not in b
+          print('PASS distinct preview title ID 000400000F73A400, no Emerald Rogue title ID')
+          PY
+          sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
+          printf '%s\n' \
+            'PKSM Rogue H168 LIVE READ/SD BACKUP - NOT A RELEASE' \
+            'Title ID: 000400000F73A400; separate from actual game.' \
+            'Only reads /3ds/PKSM-Rogue/imports/00000001.sav.' \
+            'Requires two valid 14-sector banks and 104-byte party checksum.' \
+            'Only exports +/-? NO: increment by 1 money or existing bag quantity.' \
+            'Makes unique separate untouched backup and offline draft on SD.' \
+            'Y reads installed title H168; A then A creates verified SD-only backup.' \
+            'Never writes to live NAND save and never automatically restores.' \
+            'Hardware startup and safe recovery are NOT verified.' \
+            'Do not press Y in Azahar test, as Luma svc will not be available.' \
+            > experimental/READ_ME_FIRST.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase12-H168-OFFLINE-PREVIEW-CIA-UNVERIFIED-HARDWARE
+          path: experimental/
+          retention-days: 7
+
+  install-probe:
+    name: Phase 12 CIA smoke test (privileged NAND path not exercised)
+    needs: [package-cia]
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase12-H168-OFFLINE-PREVIEW-CIA-UNVERIFIED-HARDWARE
+          path: experimental
+      - name: Install isolated emulator-only title then open installed content
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports
+          python3 phase7/create_synthetic_fixture.py /tmp/toy.sav
+          python3 phase10/preview/make_toy_two_bank.py /tmp/toy.sav \
+            "$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav"
+          export XDG_DATA_HOME="$PWD/isolated-data" XDG_CONFIG_HOME="$PWD/isolated-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          CIA="$(realpath experimental/PKSMRogue-H168-OFFLINE-PREVIEW-NOT-RELEASE.cia)"
+          export CIA
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 timeout 55s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
+            pid=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$pid" || true
+            find isolated-data -type f -name "*.app" -printf "%p %s bytes\n" > evidence/files.txt || true
+            content=$(find isolated-data -type f -name "*.app" -path "*0f73a400*" -print -quit)
+            if [ -z "$content" ]; then echo NOT_INSTALLED; exit 0; fi
+            content=$(realpath "$content")
+            echo "$content" > evidence/installed-path.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$content" > evidence/guest.log 2>&1 &
+            guest=$!
+            sleep 20
+            import -window root evidence/installed-start.png || true
+            xdotool keydown --clearmodifiers z; sleep 0.5; xdotool keyup z; sleep 1
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 1
+            xdotool keydown --clearmodifiers a; sleep 0.5; xdotool keyup a; sleep 3
+            import -window root evidence/installed-result.png || true
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+          '
+          test -s evidence/installed-path.txt
+          test -s evidence/installed-start.png && test -s evidence/installed-result.png
+          ROOT="$PWD/isolated-data/azahar-emu/sdmc/3ds/PKSM-Rogue"
+          cmp "$ROOT/imports/00000001.sav" "$ROOT/backups/import_001.sav"
+          python3 - "$ROOT" <<'PY'
+          import struct,sys
+          from pathlib import Path
+          root=Path(sys.argv[1])
+          draft=(root/"drafts/h168_001.sav").read_bytes()
+          assert len(draft)==131072
+          assert (struct.unpack_from("<I",draft,15*4096+0x4a8)[0]^0x1234abcd)==40001
+          print("PASS installed-content emulation: +1 money offline draft and immutable backup")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase12-H168-installed-CIA-Azahar-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn

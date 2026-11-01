@@ -1,0 +1,105 @@
+name: Stock PKSM 10.4.2 — emulator control test
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths: ['.github/workflows/phase7-stock-pksm-control.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  cia-emulator-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 18
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
+          run-id: 41153365442
+          github-token: ${{ github.token }}
+          path: binary
+      - name: Install software-rendered display
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox imagemagick x11-apps mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+      - name: Replace experiment with official unmodified PKSM 10.4.2 CIA
+        shell: bash
+        run: |
+          curl -fLsS --retry 3 -o binary/PKSM_Rogue_Inspect.cia 'https://github.com/FlagBrew/PKSM/releases/download/10.4.2/PKSM.cia'
+          test "$(stat -c %s binary/PKSM_Rogue_Inspect.cia)" = 6841280
+          sha256sum binary/PKSM_Rogue_Inspect.cia
+      - name: Fetch Azahar release in isolated emulator environment
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 -o azahar.AppImage https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence isolated-data isolated-config
+      - name: Install experimental CIA then boot its installed .app
+        shell: bash
+        run: |
+          set -euo pipefail
+          export XDG_DATA_HOME="$PWD/isolated-data"
+          export XDG_CONFIG_HOME="$PWD/isolated-config"
+          export LIBGL_ALWAYS_SOFTWARE=1
+          export GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5
+          export MESA_GLSL_VERSION_OVERRIDE=450
+          export QT_QPA_PLATFORM=xcb
+          CIA="$(realpath "$(find binary -name 'PKSM_Rogue_Inspect.cia' -print -quit)")"
+          test -s "$CIA"
+          export CIA
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/window-manager.log 2>&1 &
+            glxinfo -B > evidence/graphics.txt 2>&1 || true
+            # Azahar documents --install as first-class CIA installer.
+            timeout 55s ./azahar.AppImage --appimage-extract-and-run --install "$CIA" > evidence/install.log 2>&1 &
+            install_pid=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$install_pid" || echo "Installer exited status $?; inspect install.log" >> evidence/install.log
+            find isolated-data -type f \( -name "*.app" -o -name "*.tmd" -o -name "*.tik" \) -printf "%p %s bytes\n" > evidence/installed-files.txt || true
+            # Record emulator title content without claiming installation success.
+            cat evidence/installed-files.txt
+            CONTENT=$(find isolated-data -type f -name "*.app" -path "*0f73a200*" -print -quit)
+            if [ -z "$CONTENT" ]; then
+              CONTENT=$(find isolated-data -type f -name "*.app" -print -quit)
+            fi
+            if [ -z "$CONTENT" ]; then
+              echo "NO_INSTALLED_APP_FOUND" | tee evidence/guest-result.txt
+              exit 0
+            fi
+            CONTENT=$(realpath "$CONTENT")
+            echo "$CONTENT" > evidence/installed-content-path.txt
+            # Bypass GUI File > Load. Azahar accepts one plain file-path argument.
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$CONTENT" > evidence/emulator.log 2>&1 &
+            emu_pid=$!
+            sleep 17
+            xwd -root -silent -out evidence/before-A.xwd 2>/dev/null || true
+            window_id=$(xdotool search --name Azahar | tail -1)
+            timeout 4s xdotool windowactivate "$window_id" || true
+            timeout 4s xdotool windowfocus "$window_id" || true
+            xdotool mousemove 600 260 click 1 || true
+            xdotool keydown a; sleep 0.4; xdotool keyup a
+            sleep 15
+            xwd -root -silent -out evidence/guest.xwd 2>/dev/null || true
+            echo "DIRECT_PATH_AND_A_INPUT_ATTEMPTED_NOT_YET_GUEST_VERIFIED" > evidence/guest-result.txt
+            kill "$emu_pid" 2>/dev/null || true
+            wait "$emu_pid" 2>/dev/null || true
+          '
+          if test -s evidence/guest.xwd; then convert evidence/guest.xwd -resize 1100x900\> evidence/guest.png || true; rm -f evidence/guest.xwd; fi
+          if test -s evidence/before-A.xwd; then convert evidence/before-A.xwd -resize 1100x900\> evidence/before-A.png || true; rm -f evidence/before-A.xwd; fi
+          find evidence -maxdepth 1 -type f -printf '%f %s bytes\n'
+      - name: Upload only diagnostic images and logs; never save/ROM/CIA
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: stock-PKSM-emulator-comparison-evidence
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn

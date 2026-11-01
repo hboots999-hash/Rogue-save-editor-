@@ -1,0 +1,100 @@
+name: Isolated Phase 17-19 integration QA (synthetic only)
+on:
+  push:
+    branches: [feature/integration-qa]
+  pull_request:
+    paths:
+      - 'qa/**'
+      - '.github/workflows/integration-qa.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host-contracts:
+    name: Strict and ASan/UBSan contracts on pinned branch snapshots
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: c78b26ef51ba1511792c4362883b1f77cd7ed861
+          path: dependencies/phase17
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ea7303e3d04e9c409febd44ee3e1f834de02cdc6
+          path: dependencies/phase18
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 4e4d2a8dabe7d40ce2f78dc5b1c4dcf46a3b7c8e
+          path: dependencies/phase19
+      - name: Verify upstream regressions, synthetic copy bridge and write-denial contracts
+        shell: bash
+        run: bash qa/run.sh
+      - name: Probe unified API headers (record blocker; no merges or changes)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p qa-evidence
+          if g++ -std=c++17 -fsyntax-only -Wall -Wextra -pedantic \
+            -Idependencies/phase17/phase17 -Idependencies/phase17/phase14 \
+            -Idependencies/phase17/phase11 -Idependencies/phase17/phase13 \
+            -Idependencies/phase17/phase10/preview \
+            -Idependencies/phase18 -Idependencies/phase18/phase18 \
+            -Idependencies/phase19 -Idependencies/phase19/phase19 \
+            qa/probe_unified_headers.cpp > qa-evidence/unified.log 2>&1; then
+            echo "UNIFIED HEADERS PASS" | tee qa-evidence/unified-result.txt
+          else
+            echo "BLOCKER: unified headers fail to compile" | tee qa-evidence/unified-result.txt
+            head -40 qa-evidence/unified.log
+            echo "::warning::Phase17/18/19 unified-header compilation failed: inspect QA artifact before integration."
+          fi
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: isolated-qa-header-compatibility
+          path: qa-evidence/
+          retention-days: 14
+          if-no-files-found: warn
+  native-compile:
+    name: ARM11 compile current Phase18 + Phase19 reader (no device, no CIA)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: ea7303e3d04e9c409febd44ee3e1f834de02cdc6
+          path: dependencies/phase18
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 4e4d2a8dabe7d40ce2f78dc5b1c4dcf46a3b7c8e
+          path: dependencies/phase19
+      - name: Compile integration reader on ARM11
+        shell: bash
+        run: |
+          set -euo pipefail
+          dkp-pacman -S --noconfirm --needed 3ds-dev
+          CXX="$DEVKITARM/bin/arm-none-eabi-g++"
+          FLAGS="-std=gnu++17 -O2 -Wall -Wextra -Werror -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp"
+          "$CXX" $FLAGS -D__3DS__ -I"$DEVKITPRO/libctru/include" \
+            -Idependencies/phase18 -Idependencies/phase18/phase18 \
+            -Idependencies/phase19/phase19 \
+            -c dependencies/phase19/phase19/main.cpp -o /tmp/qa-phase19-reader.o
+          "$DEVKITARM/bin/arm-none-eabi-nm" /tmp/qa-phase19-reader.o > /tmp/qa-symbols.txt
+          if grep -E 'FSPXI_WriteFile|rogue18::propose|h168::nativeSdmcCreateAndWrite' /tmp/qa-symbols.txt; then
+            echo "Unexpected save write/proposal symbol" >&2; exit 1
+          fi
+          test -s /tmp/qa-phase19-reader.o
+          echo 'PASS: Phase19 ARM11 reader compiles against audited Phase18 snapshot'

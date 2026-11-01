@@ -1,0 +1,35 @@
+name: PKSM Rogue Phase 10 — editor API preflight
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase10-editor-preflight.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  inspect:
+    name: Inspect pinned offline editor interfaces
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify source and list the existing safe editor API
+        shell: bash
+        run: |
+          set -euo pipefail
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 -d > /tmp/phase7-src.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/phase7-src.tar.xz' | sha256sum -c -
+          mkdir -p parser-src
+          tar -xJf /tmp/phase7-src.tar.xz -C parser-src --no-same-owner
+          echo '=== headers ==='
+          find parser-src/editor parser-src/bridge -maxdepth 2 -type f | sort
+          echo '=== editor headers ==='
+          for x in parser-src/editor/*.hpp parser-src/editor/*.h; do
+            if [ -f "$x" ]; then echo "### $x"; sed -n '1,170p' "$x"; fi
+          done
+          echo '=== implementation signatures / calls ==='
+          grep -nE '^(bool |int |void |struct |class |enum |[a-zA-Z_]+::|std::|namespace |static bool )' parser-src/editor/*.cpp | head -110 || true
+          echo '=== native screen edit call context ==='
+          grep -nE 'draft|Action::|edit|setMoney|set_|write|Rogue' parser-src/pksm_overlay/RogueInspectScreen.cpp | tail -90

@@ -1,0 +1,136 @@
+name: PKSM Rogue Phase 7 - native compile check
+
+on:
+  push:
+    branches: [feature/phase7-native-ci]
+    paths:
+      - '.github/workflows/phase7-native.yml'
+      - 'phase7/archive/**'
+      - 'phase7/patch_sd_isolation.py'
+      - 'phase7/verified_backup_gate.patch'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-build:
+    name: Compile experimental PKSM Rogue source (not a release)
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - name: Checkout own source, without personal saves
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Install GitPython and verify 3DS compiler
+        shell: bash
+        run: |
+          set -euo pipefail
+          apt-get update -qq
+          apt-get install -y --no-install-recommends python3-git python3-pip libcurl4-openssl-dev unzip
+          # Avoid refreshing remote devkitPro DB: pkg.devkitpro.org returned 403 in CI.
+          # Use the official image's packaged DB; a missing package must fail explicitly.
+          dkp-pacman -S --noconfirm --needed 3ds-pkg-config 3ds-curl 3ds-bzip2 3ds-mpg123 3dstools
+          # PKSM requires external host-side CIA tools in addition to devkitPro.
+          curl -fLsS -o /tmp/makerom.zip 'https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip'
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /usr/local/bin
+          chmod +x /usr/local/bin/makerom
+          curl -fLsS -o /tmp/bannertool.zip 'https://github.com/Epicpkmn11/bannertool/releases/download/v1.2.2/bannertool.zip'
+          echo 'e4259c08fe8944ebadd5f4b96f9a8603e5427338074cfc46323fbbc3410d51ed  /tmp/bannertool.zip' | sha256sum -c -
+          unzip -qjo /tmp/bannertool.zip 'linux-x86_64/bannertool' -d /usr/local/bin
+          chmod +x /usr/local/bin/bannertool
+          curl -fLsS -o /tmp/3dstool.tar.gz 'https://github.com/dnasdw/3dstool/releases/download/v1.2.6/3dstool_linux_x86_64.tar.gz'
+          echo "3dstool asset SHA256: $(sha256sum /tmp/3dstool.tar.gz)"
+          mkdir -p /tmp/3dstool-dir
+          tar -xzf /tmp/3dstool.tar.gz -C /tmp/3dstool-dir
+          find /tmp/3dstool-dir -maxdepth 3 -type f -name 3dstool -print
+          install -m 0755 "$(find /tmp/3dstool-dir -type f -name 3dstool | head -1)" /usr/local/bin/3dstool
+          command -v curl-config makerom bannertool 3dstool
+          echo "DEVKITPRO=${DEVKITPRO:-missing}"
+          echo "DEVKITARM=${DEVKITARM:-missing}"
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$PATH"
+          echo "$DEVKITARM/bin" >> "$GITHUB_PATH"
+          echo "$DEVKITPRO/tools/bin" >> "$GITHUB_PATH"
+          # Cross pkg-config is installed with the 3DS portlibs, not devkitARM/bin.
+          export PATH="$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          echo "$DEVKITPRO/portlibs/3ds/bin" >> "$GITHUB_PATH"
+          echo "Cross pkg-config candidates:"
+          find "$DEVKITPRO" -type f -name 'arm-none-eabi-pkg-config' -print
+          arm-none-eabi-g++ --version | head -1
+          for tool in 3dstool tex3ds makerom bannertool arm-none-eabi-pkg-config; do
+            command -v "$tool" || echo "MISSING TOOL: $tool"
+          done
+      - name: Authenticate Phase 7 source using fixed SHA256
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(find phase7/archive -name '*.b64' -type f | wc -l)" -eq 7
+          cat phase7/archive/{01,02,03,04,05,06,07}.b64 | tr -d '\r\n' | base64 --decode > /tmp/pksm-rogue-phase7-source.tar.xz
+          echo '9d1877a76942d90c5579015349455462bfcc6121469536cccce6346c0a01ed63  /tmp/pksm-rogue-phase7-source.tar.xz' | sha256sum --check
+          mkdir -p phase7-src
+          tar -xJf /tmp/pksm-rogue-phase7-source.tar.xz -C phase7-src --no-same-owner
+          test -f phase7-src/tools/native_preflight.py
+          test -f phase7-src/tools/apply_to_pksm.py
+          test -f phase7-src/pksm_overlay/RogueInspectScreen.cpp
+          if find phase7-src -type f \( -iname '*.sav' -o -iname '*.cia' \) | grep -q .; then
+            echo 'Unexpected save or executable in source archive' >&2
+            exit 1
+          fi
+      - name: Fetch pinned upstream PKSM and submodules
+        shell: bash
+        run: |
+          set -euo pipefail
+          git clone --recursive https://github.com/FlagBrew/PKSM.git disposable-PKSM
+          git -C disposable-PKSM checkout 9cad15694c1e90cc058ddd285eb68d56c7ad9ac8
+          git -C disposable-PKSM submodule update --init --recursive
+          git -C disposable-PKSM diff --exit-code
+          test "$(git -C disposable-PKSM rev-parse HEAD)" = '9cad15694c1e90cc058ddd285eb68d56c7ad9ac8'
+      - name: Preflight - no source edits on failure
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase7-src/tools/native_preflight.py disposable-PKSM --json | tee native-preflight.json
+      - name: Integrate Phase 7 only into disposable PKSM tree
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase7-src/tools/apply_to_pksm.py disposable-PKSM
+          python3 phase7/patch_sd_isolation.py disposable-PKSM
+          git -C disposable-PKSM apply --check "$GITHUB_WORKSPACE/phase7/verified_backup_gate.patch"
+          git -C disposable-PKSM apply "$GITHUB_WORKSPACE/phase7/verified_backup_gate.patch"
+          echo "Import backup gate patched into Rogue editor (source-only)."
+
+          # Block a build if Rogue still shares upstream's main SD folder paths.
+          if grep -R -n '/3ds/PKSM/' disposable-PKSM/3ds/source disposable-PKSM/common/include/sound; then
+            echo 'Shared PKSM SD paths remain; refusing build' >&2
+            exit 1
+          fi
+      - name: Compile 3DS files and record errors
+        shell: bash
+        run: |
+          set -euo pipefail
+          # For compiler diagnostics omit optional mystery gift/script assets.
+          # This still uses the native 3DS compiler, linker and CIA rules.
+          make -j2 -C disposable-PKSM 3ds-no-deps 2>&1 | tee native-build.log
+      - name: Record artifacts as unsafe experimental outputs
+        if: always()
+        shell: bash
+        run: |
+          mkdir -p ci-evidence
+          cp native-preflight.json ci-evidence/ 2>/dev/null || true
+          cp native-build.log ci-evidence/ 2>/dev/null || true
+          find disposable-PKSM/3ds -maxdepth 3 -type f \( -name '*.cia' -o -name '*.3dsx' -o -name '*.elf' \) -exec cp {} ci-evidence/ \; 2>/dev/null || true
+          printf '%s\n' 'EXPERIMENTAL; NOT DEVICE TESTED; DO NOT INSTALL OR RESTORE SAVES.' > ci-evidence/DO_NOT_INSTALL.txt
+          sha256sum ci-evidence/* > ci-evidence/SHA256SUMS.txt || true
+      - name: Upload build logs and experimental files (NOT a release)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: phase7-EXPERIMENTAL-NOT-FOR-INSTALL
+          path: ci-evidence/
+          if-no-files-found: error
+          retention-days: 7

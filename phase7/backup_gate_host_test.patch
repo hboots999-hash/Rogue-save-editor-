@@ -1,0 +1,57 @@
+--- a/tests/test_screen_behavior.cpp
++++ b/tests/test_screen_behavior.cpp
+@@ -90,8 +90,21 @@
+         assert(!fs::exists(temp/"sdmc:/3ds/PKSM-Rogue/drafts"));
+         key(screen,KEY_A); draw(screen);
+         assert(drawn("Confirm 2 of 2"));
++        // Before the first export, a non-directory backup target must block
++        // all modified drafts and preserve both the input and in-memory state.
++        const auto backupDir=temp/"sdmc:/3ds/PKSM-Rogue/backups";
++        { std::ofstream blocked(backupDir); blocked << "DO_NOT_REPLACE"; }
+         key(screen,KEY_A); draw(screen);
++        assert(drawn("backup FAILED: draft BLOCKED"));
++        assert(!fs::exists(temp/"sdmc:/3ds/PKSM-Rogue/drafts"));
++        assert(readSave(input)==src);
++        assert(readSave(backupDir)==std::vector<uint8_t>({'D','O','_','N','O','T','_','R','E','P','L','A','C','E'}));
++        fs::remove(backupDir);
++        // Re-stage and confirm after simulated I/O failure.
++        key(screen,KEY_X); key(screen,KEY_A); key(screen,KEY_A); draw(screen);
+         assert(drawn("Draft exported:"));
++        const auto originalBackup=backupDir/"import_001.sav";
++        assert(fs::exists(originalBackup) && readSave(originalBackup)==src);
+         const fs::path draft=temp/"sdmc:/3ds/PKSM-Rogue/drafts/rogue_001.sav";
+         assert(fs::exists(draft));
+         assert(readSave(draft)!=src && readSave(input)==src);
+@@ -138,6 +151,32 @@
+         const std::string unchanged((std::istreambuf_iterator<char>(sentinelCheck)),std::istreambuf_iterator<char>());
+         assert(unchanged==sentinel);
+         assert(readSave(input)==src);
++        assert(readSave(temp/"sdmc:/3ds/PKSM-Rogue/backups/import_001.sav")==src);
++        // A second screen session must create another distinct import backup.
++    }
++    {
++        RogueInspectScreen reloaded;
++        key(reloaded, KEY_X); key(reloaded, KEY_A); key(reloaded, KEY_A);
++        assert(fs::exists(temp/"sdmc:/3ds/PKSM-Rogue/backups/import_002.sav"));
++        assert(readSave(temp/"sdmc:/3ds/PKSM-Rogue/backups/import_002.sav")==src);
++        assert(readSave(input)==src);
++    }
++    // A file replaced after the screen was opened must fail the backup gate;
++    // the editor may not export from an older in-memory snapshot.
++    {
++        RogueInspectScreen changedUnderfoot;
++        auto swapped=src;
++        swapped.back() ^= 0x5A; // outside the parsed flash slots
++        { std::ofstream f(input,std::ios::binary|std::ios::trunc); assert(f);
++          f.write(reinterpret_cast<const char*>(swapped.data()),swapped.size()); }
++        key(changedUnderfoot, KEY_X); key(changedUnderfoot, KEY_A); key(changedUnderfoot, KEY_A);
++        draw(changedUnderfoot);
++        assert(drawn("SD import changed: draft BLOCKED"));
++        assert(!fs::exists(temp/"sdmc:/3ds/PKSM-Rogue/backups/import_003.sav"));
++        assert(!fs::exists(temp/"sdmc:/3ds/PKSM-Rogue/drafts/rogue_006.sav"));
++        assert(readSave(input)==swapped);
++        { std::ofstream f(input,std::ios::binary|std::ios::trunc); assert(f);
++          f.write(reinterpret_cast<const char*>(src.data()),src.size()); }
+     }
+     fs::current_path(fs::temp_directory_path());
+     fs::remove_all(temp);
