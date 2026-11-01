@@ -7,7 +7,7 @@
 
 namespace phase19 {
 enum class Screen : uint8_t {
-    Home, Party, PC, Pokemon, Edit, Bag, Money, Backups, Recovery,
+    Home, Party, PC, Pokemon, Edit, Bag, Money, Backups, Recovery, Import,
     Proposal, ConfirmOne, ConfirmTwo, Notice
 };
 enum class Key : uint8_t { Up, Down, Left, Right, A, B, X, L, R, Start };
@@ -33,7 +33,7 @@ static_assert(sizeof(State)<256,"Phase19 State must remain stack-safe on 3DS");
 
 inline unsigned count(const State& s) {
     switch(s.screen) {
-        case Screen::Home: return 6;
+        case Screen::Home: return 7;
         case Screen::Party: return s.demo.partyStatus==Availability::Ready?s.demo.partyCount:0;
         case Screen::PC: return s.demo.pcStatus==Availability::Ready && s.box<s.demo.pcBoxes ?
                                  s.demo.pcCounts[s.box]:0;
@@ -82,7 +82,7 @@ inline unsigned maximum(const State& s) {
             }
             case Group::Moves: return 1024; // Demo IDs only; Phase18 whitelist required
             case Group::PP: return 64;
-            case Group::Ability: return 1; // Phase18 encodes only binary slot
+            case Group::Ability: return 3; // Phase18 EX v2.1 uses two-bit slot
             case Group::Nature: return 24; // read-only; PID mutation forbidden
         }
     }
@@ -181,11 +181,17 @@ inline void press(State& s, Key k) {
         else if(k==Key::A || k==Key::X) {
             if(s.fromPC)openNotice(s,Screen::Pokemon,
                 "PC edit UNSUPPORTED: storage layout not verified.");
+            else if(!s.demo.synthetic)
+                openNotice(s,Screen::Pokemon,"Imported Pokemon are READ ONLY.");
             else if(s.demo.partyStatus!=Availability::Ready)
                 openNotice(s,Screen::Pokemon,"Party data unavailable.");
             else {s.group=Group::IV; s.field=0;s.screen=Screen::Edit;}
         }
         return;
+    }
+    if(s.screen==Screen::Import) {
+        if(k==Key::B) s.screen=Screen::Home;
+        return; // only native entry point performs explicitly requested copy reads
     }
     if(s.screen==Screen::Money) {
         if(k==Key::B) s.screen=Screen::Home;
@@ -222,7 +228,7 @@ inline void press(State& s, Key k) {
         return;
     }
     if(k==Key::Down) {
-        if(s.screen==Screen::Home) { if(s.homeRow+1<6) ++s.homeRow; }
+        if(s.screen==Screen::Home) { if(s.homeRow+1<7) ++s.homeRow; }
         else if(s.screen==Screen::Edit) { if(s.field+1<count(s)) ++s.field; }
         else if(s.selected+1<count(s)) ++s.selected;
         return;
@@ -237,7 +243,8 @@ inline void press(State& s, Key k) {
                 case 2: s.screen=Screen::Bag; break;
                 case 3: s.screen=Screen::Money; break;
                 case 4: s.screen=Screen::Backups; break;
-                default: s.screen=Screen::Recovery; break;
+                case 5: s.screen=Screen::Recovery; break;
+                default: s.screen=Screen::Import; break;
             }
             break;
         case Screen::Party:
