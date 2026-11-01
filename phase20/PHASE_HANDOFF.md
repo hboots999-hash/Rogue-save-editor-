@@ -44,3 +44,13 @@
 - [ ] **Restoration and installed save editing remain disabled regardless of above checks.**
 
 Latest workflow also attempts *optional* Azahar 3DSX and installed-CIA boot smoke with an isolated SD canary, which is NOT physical 3DS evidence. Tests: GitHub Actions workflow `phase20-readonly.yml` (strict C++17 and ASan/UBSan + devkitARM + separate CIA). Do not merge draft PR as a release.
+
+## 1 November 2026 — Offline copied-save editing integrated (still DRAFT)
+
+Phase20 now contains `offline_edit_v1.hpp` and a native 3DS UI action bridge in `main.cpp`. Without changing Phase19's read-only session model, the new separate controller intercepts deliberate A-presses on imported Money, existing Bag stack and existing non-egg Party Pokémon. It offers **money, existing quantity, individual IV, individual EV (510 budget) and existing move PP only**, with two A confirmations and B cancellation. All unverified nature, ability, species, move replacement, insertion and PC editing remain blocked.
+
+A successful final confirmation uses Phase18 **v2** `begin / beginMove / preview / verify`, with captured source SHA-256/counter and displayed-value consistency, followed by `rogue18::exportCopied` at the fixed SD import. This creates a new read-back-verified backup and distinct offline draft. The input is never overwritten; no installed title or authenticated VC write path is linked. Each exported candidate contains a **single edit** relative to the imported copy. Original UI values remain shown until a new import is explicitly requested.
+
+New `test_offline_edit_v1.cpp` checks the five offline edit classes where fixture values differ, exact-byte draft verification, immutable original/backup, stale file and hash refusal, invalid fields/bounds, unsupported imported edit gates, and two-confirmation UI cancellation/success through the actual guarded exporter. Latest Phase20 workflow also links offline export into native ARM11 with 4096-byte compile-time per-frame limit, runs strict and ASan/UBSan host suites, produces a separately titled non-release CIA and checks optional emulator startup. See `OFFLINE_EDITOR_GUIDE.md`.
+
+**Still outstanding:** independent physical 3DS stability and SD draft readback, private target-ROM compatibility, gameplay/stat recalculation, full save-reload persistence, and independent real recovery. Earlier Phase19 crash is not resolved merely by Phase20 CI. This remains experimental and NOT cleared for live game writing, injection or release. Keep PR #12 DRAFT.
