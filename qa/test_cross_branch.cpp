@@ -1,7 +1,10 @@
 // Isolated cross-branch synthetic contract checks. No ROMs or private saves.
 // Include Phase18's existing fixture without its standalone main().
 #define main qa_fixture_reference_main
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wreturn-type"
 #include "phase18/test_offline_engine.cpp"
+#pragma GCC diagnostic pop
 #undef main
 #include "phase18/editor_model.hpp"
 #include "phase19/read_only_import.hpp"
