@@ -13,8 +13,13 @@ for mode in strict sanitized; do
     extra=(-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie)
   fi
   gcc -Wall -Wextra -Werror "${extra[@]}" -c phase14/vendor/sha256.c -o "$tmp/sha.o"
-  g++ "${flags[@]}" "${extra[@]}" phase17/test_rollback_lab.cpp "$tmp/sha.o" -o "$tmp/lab"
+  g++ "${flags[@]}" "${extra[@]}" -c phase17/readonly_status_v1.cpp -o "$tmp/status.o"
+  g++ "${flags[@]}" "${extra[@]}" phase17/test_rollback_lab.cpp "$tmp/status.o" "$tmp/sha.o" -o "$tmp/lab"
   ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
     "$tmp/lab" "$tmp/two.sav"
+  gcc -std=c11 -Wall -Wextra -Wpedantic -Werror "${extra[@]}" -Iphase17 \
+    -c phase17/test_status_abi_c.c -o "$tmp/c-abi.o"
+  g++ "${extra[@]}" "$tmp/c-abi.o" "$tmp/status.o" -o "$tmp/c-abi"
+  ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 "$tmp/c-abi"
 done
 bash phase16/run_tests.sh
