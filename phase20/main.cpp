@@ -90,7 +90,51 @@ void offlineTop(const State& s,const phase20::OfflineFlow& f) {
         std::puts("\nOriginal is never overwritten.");
     }
 }
-void top(const State& s,const phase20::OfflineFlow& edit) {
+void batchTop(const phase20::BatchFlow& q) {
+    using phase20::BatchStage;
+    std::puts("MULTI-EDIT SD DRAFT - NO GAME IO");
+    std::puts("===============================");
+    std::printf("Queued edits: %u / %u\n",
+        unsigned(q.pending.edits.size()),unsigned(rogue18::v3::MaxEdits));
+    std::printf("Source SHA256: %02x%02x%02x%02x...\n",
+        unsigned(q.pending.expectedDigest[0]),unsigned(q.pending.expectedDigest[1]),
+        unsigned(q.pending.expectedDigest[2]),unsigned(q.pending.expectedDigest[3]));
+    if(q.stage==BatchStage::Review) {
+        const unsigned start=q.page*5;
+        for(unsigned i=start;i<q.pending.edits.size() && i<start+5;i++) {
+            const auto& e=q.pending.edits[i];
+            const char* kind=e.kind==rogue18::Kind::Money?"Money":
+               e.kind==rogue18::Kind::ExistingQuantity?"Item":
+               e.kind==rogue18::Kind::IVs?"IV":
+               e.kind==rogue18::Kind::EVs?"EV":"PP";
+            std::printf("%u %s[%u:%u] %u -> %u\n",
+                i+1,kind,e.slot+1,e.field+1,e.expectedValue,e.value);
+        }
+        std::puts("\nA review export, B browse");
+        std::puts("X remove last staged edit");
+        std::puts("R/Right next; Left prev");
+        std::puts("All edits share one source");
+    } else if(q.stage==BatchStage::ConfirmOne ||
+              q.stage==BatchStage::ConfirmTwo) {
+        std::printf("\nFinal batch confirmation %u/2\n",
+                    q.stage==BatchStage::ConfirmOne?1u:2u);
+        std::puts("ALL queued edits in ONE draft.");
+        std::puts("Will create immutable SD backup.");
+        std::puts("Original import unchanged.");
+        std::puts("A confirm; B review/cancel");
+        std::puts("\nNEVER installed-game writing!");
+    } else if(q.stage==BatchStage::Result) {
+        std::puts(q.success?"ONE BATCH DRAFT EXPORTED":"BATCH EXPORT REFUSED");
+        wrappedNotice(q.message);
+        std::puts("\nA continue, B review.");
+        std::puts("No live-game edit/restore.");
+    }
+}
+void top(const State& s,const phase20::OfflineFlow& edit,
+         const phase20::BatchFlow& batch) {
+    if(batch.stage!=phase20::BatchStage::Browse){
+        consoleClear();batchTop(batch);return;
+    }
     if(edit.stage!=phase20::EditStage::Idle){
         consoleClear();offlineTop(s,edit);return;
     }
@@ -110,7 +154,7 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             line(4,s.homeRow,"Backups");
             line(5,s.homeRow,"Recovery help");
             line(6,s.homeRow,"Inspect SD copy (read-only)");
-            std::puts(s.demo.synthetic?"\nFictional example data.":"\nValidated copy view (no edits).");
+            std::puts(s.demo.synthetic?"\nFictional example data.":"\nA offline edit; Y batch queue.");
             break;
         case Screen::Party:
             std::puts(s.demo.synthetic?"PARTY - DEMO":"PARTY - OFFLINE COPY");
@@ -277,7 +321,8 @@ void top(const State& s,const phase20::OfflineFlow& edit) {
             break;
     }
 }
-void bottom(const State& s,const phase20::OfflineFlow& edit) {
+void bottom(const State& s,const phase20::OfflineFlow& edit,
+            const phase20::BatchFlow& batch) {
     consoleClear();
     std::puts("PKSM ROGUE - SD COPY ONLY");
     std::puts("----------------------------");
@@ -287,8 +332,16 @@ void bottom(const State& s,const phase20::OfflineFlow& edit) {
     std::puts("X/Left: previous (context)");
     std::puts("START release: exit");
     std::puts("START+SELECT: Rosalina");
+    if(!s.demo.synthetic) {
+        if(batch.collecting)std::printf("Y: review queue (%u edits)\n",
+                                       unsigned(batch.pending.edits.size()));
+        else std::puts("Y: start multi-edit queue");
+    }
     std::puts("");
-    if(edit.stage!=phase20::EditStage::Idle) {
+    if(batch.stage!=phase20::BatchStage::Browse) {
+        std::puts("ONE multi-edit SD draft only.");
+        std::puts("No installed-game writer.");
+    } else if(edit.stage!=phase20::EditStage::Idle) {
         std::puts("Edits export distinct SD drafts.");
         std::puts("NO installed-game write/restore.");
     } else if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
@@ -327,6 +380,7 @@ int main() {
     static State state(active);
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
+    static phase20::BatchFlow batch{};
     static phase20::CopyObservation observation{};
     static P17ReadOnlyStatusV1 recoveryStatus{};
     (void)p17_readonly_status_init_blocked_v1(&recoveryStatus);
@@ -348,7 +402,11 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
+        if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
+           batch.stage==phase20::BatchStage::Browse) {
+            (void)phase20::batchShortcut(state,observation,batch);
+            redraw=true;
+        } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
                 std::string reason;
                 bool inspected=false;
@@ -360,6 +418,8 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    editing=phase20::OfflineFlow{};
+                    batch=phase20::BatchFlow{};
                     switchView(state,false);
                 } else {
                     std::snprintf(importStatus,sizeof(importStatus),"%s",reason.c_str());
@@ -367,15 +427,20 @@ int main() {
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
+                observation=phase20::CopyObservation{};
+                editing=phase20::OfflineFlow{};
+                batch=phase20::BatchFlow{};
                 switchView(state,true);
-            } else if(!phase20::takeOfflineKey(state,editing,observation,k)) {
+            } else if(!phase20::takeBatchKey(state,batch,observation,k) &&
+                      !phase20::takeOfflineKey(state,editing,observation,k,
+                                          nullptr,nullptr,&batch)) {
                 press(state,k);
             }
             redraw=true;
         }
         if(redraw) {
-            consoleSelect(&upper); top(state,editing);
-            consoleSelect(&lower); bottom(state,editing);
+            consoleSelect(&upper); top(state,editing,batch);
+            consoleSelect(&lower); bottom(state,editing,batch);
             redraw=false;
         }
         gspWaitForVBlank();
