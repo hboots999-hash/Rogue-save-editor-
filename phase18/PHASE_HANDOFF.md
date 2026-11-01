@@ -20,12 +20,20 @@
 | Item insertion | Append only; source-backed 80→450 upgrade formula, 50 key-item slots and nine-pocket order | **Rejected by default** until exact H168 upgrade byte and every item's pocket are verified | No generic mid-pocket insertion; source version not ROM matched |
 | Save delivery | Pure RAM candidate + optional copied-SD-only export | Immutable backup, no overwrite, full readback and stale checks | No live restore, no CMAC or actual hardware user test |
 
-| PC storage | Source-derived 14×30×80 section-5–13 candidate with checksum checks | **Read-only research status only**, PC editing blocked | Unconfirmed exact 2.1.2 build/actual populated PC |\n| Phase 19 interface | Versioned `SaveView`, capability gates, `beginRequest` optimistic locks | Read-only snapshot; unsupported editing visibly disabled | Integration and hardware tests belong to Phase19 |\n\n## Source changes
+| PC storage | Source-derived 14×30×80 section-5–13 candidate with checksum checks | **Read-only research status only**, PC editing blocked | Unconfirmed exact 2.1.2 build/actual populated PC |
+| Phase 19 interface | Versioned `SaveView`, capability gates, `beginRequest` optimistic locks | Read-only snapshot; unsupported editing visibly disabled | Integration and hardware tests belong to Phase19 |
+
+## Source changes
 
 - `phase18/offline_engine.hpp`: checked pure-memory engine and exact full-buffer candidate proof.
 - `phase18/offline_export.hpp`: fixed import path, verified immutable backup and distinct draft with source rechecks.
 - `phase18/test_offline_engine.cpp`: synthetic positive/negative/rollback suite.
-- `phase18/test_offline_export.cpp`: synthetic filesystem staging/regression suite.\n- `phase18/bag_rules.hpp`: source-backed capacity and pocket-order verification.\n- `phase18/pc_readonly.hpp`: conservative PC candidate inspector.\n- `phase18/editor_model.hpp`: versioned Phase19 read-only snapshot and guarded editing request builder.\n- `phase18/test_pc_readonly.cpp`, `phase18/test_editor_model.cpp`: PC corruption and model contract tests.\n- `phase18/SOURCE_FINDINGS.md`: upstream source-vs-observed H168 byte-offset audit.
+- `phase18/test_offline_export.cpp`: synthetic filesystem staging/regression suite.
+- `phase18/bag_rules.hpp`: source-backed capacity and pocket-order verification.
+- `phase18/pc_readonly.hpp`: conservative PC candidate inspector.
+- `phase18/editor_model.hpp`: versioned Phase19 read-only snapshot and guarded editing request builder.
+- `phase18/test_pc_readonly.cpp`, `phase18/test_editor_model.cpp`: PC corruption and model contract tests.
+- `phase18/SOURCE_FINDINGS.md`: upstream source-vs-observed H168 byte-offset audit.
 - `phase18/README.md`: safety model and integration instructions.
 - `.github/workflows/phase18-offline-editors.yml`: strict + sanitizer host suites and independent Python reader.
 
