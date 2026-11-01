@@ -59,6 +59,12 @@ int main() {
     key(s,Key::R); assert(s.box==1 && s.selected==0);
     key(s,Key::Down); key(s,Key::A);
     assert(s.fromPC && s.mon==1 && s.screen==Screen::Pokemon);
+    key(s,Key::A);assert(s.screen==Screen::Edit);
+    key(s,Key::R);key(s,Key::R);
+    assert(s.group==Group::Moves);
+    key(s,Key::Down);key(s,Key::A);
+    assert(s.screen==Screen::Proposal && s.proposal==pokemon(s).moves[1]);
+    key(s,Key::Up);finishBlocked(s,Screen::Edit);
     key(s,Key::B);key(s,Key::B);
     go(s,2);
     assert(s.screen==Screen::Bag);
@@ -107,6 +113,13 @@ int main() {
         assert(a.ability==b.ability && a.nature==b.nature);
     }
     for(unsigned i=0;i<5;i++) assert(s.demo.bag[i].quantity==immutable.bag[i].quantity);
+    for(unsigned box=0;box<2;box++) for(unsigned i=0;i<3;i++) {
+        const auto& a=s.demo.pc[box][i]; const auto& b=immutable.pc[box][i];
+        assert(a.species==b.species && a.level==b.level &&
+               a.iv==b.iv && a.ev==b.ev && a.moves==b.moves &&
+               a.ability==b.ability && a.nature==b.nature);
+    }
+
     key(s,Key::Start);
     assert(s.exitRequested);
     const auto scr=s.screen; key(s,Key::A);assert(s.screen==scr);
