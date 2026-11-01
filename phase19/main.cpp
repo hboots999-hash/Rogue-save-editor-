@@ -108,12 +108,20 @@ void top(const State& s) {
         }
         case Screen::Bag:
             std::puts("BAG / ITEMS - DEMO");
+        {
             std::printf("Status: %s\n",availabilityText(s.demo.bagStatus));
-            for(unsigned i=0;i<count(s);i++) {
+            const unsigned first=(s.selected/6u)*6u;
+            const unsigned stop=std::min(count(s),first+6u);
+            for(unsigned i=first;i<stop;i++) {
                 const auto& item=s.demo.bag[i];
-                std::printf("%c %-17s x%u\n",s.selected==i?'>':' ',item.name,item.quantity);
+                std::printf("%c %-16.16s x%-3u ID%u\n",
+                            s.selected==i?'>':' ',item.name[0]?item.name:"Item",
+                            item.quantity,item.id);
             }
-            std::puts("\nA: quantity proposal (demo)");
+            if(count(s))std::printf("%u-%u of %u stacks\n",first+1u,stop,count(s));
+            std::puts("\nL/R: page   A: quantity demo");
+            std::puts("No adding unknown item IDs.");
+        }
             break;
         case Screen::Money:
             std::printf("MONEY (%s)\n",availabilityText(s.demo.moneyStatus));
