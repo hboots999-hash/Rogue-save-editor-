@@ -68,5 +68,85 @@ int main(){
     assert(!inspectCopiedBuffer(damaged.data(),damaged.size(),baseline,reason));
     assert(baseline.synthetic && baseline.money==original);
     assert(live.money==40001 && live.party[0].species==25);
+
+    // Valid early-game save with no Pokémon in party: ACCEPT as EMPTY.
+    auto partyEmpty=bytes;
+    h168::Info originalInfo{};
+    assert(rogue18::validate(bytes.data(),bytes.size(),originalInfo));
+    for(unsigned bank=0;bank<2;bank++){
+        const size_t sector=originalInfo.banks[bank].sector[1];
+        h168::w32(partyEmpty.data(),sector+0x234,0);
+        h168::w16(partyEmpty.data(),sector+0xff6,
+                   h168::checksum(partyEmpty.data()+sector));
+    }
+    static Demo zeroParty{};
+    assert(inspectCopiedBuffer(partyEmpty.data(),partyEmpty.size(),zeroParty,reason));
+    assert(!zeroParty.synthetic && zeroParty.partyStatus==Availability::Empty);
+    assert(zeroParty.partyCount==0 && zeroParty.bagCount==3);
+    State emptyPartyUI(zeroParty);
+    press(emptyPartyUI,Key::A);
+    assert(emptyPartyUI.screen==Screen::Party && count(emptyPartyUI)==0);
+    press(emptyPartyUI,Key::A);
+    assert(emptyPartyUI.screen==Screen::Notice);
+    press(emptyPartyUI,Key::B);
+    assert(emptyPartyUI.screen==Screen::Party);
+
+    // Valid empty bag: ACCEPT as EMPTY while retaining the actual party.
+    auto bagEmpty=bytes;
+    for(unsigned bank=0;bank<2;bank++){
+        const size_t sector=originalInfo.banks[bank].sector[1];
+        std::memset(bagEmpty.data()+sector+0x578,0,450*4);
+        h168::w16(bagEmpty.data(),sector+0xff6,
+                   h168::checksum(bagEmpty.data()+sector));
+    }
+    static Demo zeroBag{};
+    assert(inspectCopiedBuffer(bagEmpty.data(),bagEmpty.size(),zeroBag,reason));
+    assert(!zeroBag.synthetic && zeroBag.bagStatus==Availability::Empty);
+    assert(zeroBag.bagCount==0 && zeroBag.partyCount==2);
+
+    // Both empty must also pass; reject neither because of missing inventory.
+    auto bothEmpty=partyEmpty;
+    for(unsigned bank=0;bank<2;bank++){
+        const size_t sector=originalInfo.banks[bank].sector[1];
+        std::memset(bothEmpty.data()+sector+0x578,0,450*4);
+        h168::w16(bothEmpty.data(),sector+0xff6,
+                   h168::checksum(bothEmpty.data()+sector));
+    }
+    static Demo zeroBoth{};
+    assert(inspectCopiedBuffer(bothEmpty.data(),bothEmpty.size(),zeroBoth,reason));
+    assert(zeroBoth.partyStatus==Availability::Empty);
+    assert(zeroBoth.bagStatus==Availability::Empty);
+    assert(zeroBoth.money==40001);
+
+    // Exact real FILE* reader: open generated disposable host-only file,
+    // verify parser did not rewrite even one byte of the input stream.
+    std::unique_ptr<FILE, int(*)(FILE*)> stream(std::tmpfile(),&std::fclose);
+    assert(stream);
+    assert(std::fwrite(bytes.data(),1,bytes.size(),stream.get())==bytes.size());
+    assert(std::fflush(stream.get())==0);
+    static Demo fromStream{};
+    assert(inspectReadOnlyStream(stream.get(),fromStream,reason));
+    assert(fromStream.money==40001 && fromStream.bag[0].id==113);
+    assert(std::fseek(stream.get(),0,SEEK_SET)==0);
+    std::vector<uint8_t> stillOriginal(bytes.size());
+    assert(std::fread(stillOriginal.data(),1,stillOriginal.size(),stream.get())==bytes.size());
+    assert(stillOriginal==bytes);
+
+    // Stream reader must reject an exact-size corrupted copy and keep view.
+    std::unique_ptr<FILE, int(*)(FILE*)> damagedStream(std::tmpfile(),&std::fclose);
+    assert(damagedStream);
+    assert(std::fwrite(damaged.data(),1,h168::Size,damagedStream.get())==h168::Size);
+    assert(std::fflush(damagedStream.get())==0);
+    // The earlier "damaged" buffer was resized to 263168, but its first
+    // 128KiB still contain the deliberately modified sector checksum.
+    assert(!inspectReadOnlyStream(damagedStream.get(),fromStream,reason));
+    assert(fromStream.money==40001 && fromStream.party[0].species==25);
+    std::unique_ptr<FILE, int(*)(FILE*)> wrappedStream(std::tmpfile(),&std::fclose);
+    assert(wrappedStream);
+    assert(std::fwrite(damaged.data(),1,damaged.size(),wrappedStream.get())==damaged.size());
+    assert(std::fflush(wrappedStream.get())==0);
+    assert(!inspectReadOnlyStream(wrappedStream.get(),fromStream,reason));
+    assert(reason.find("263168")!=std::string::npos);
+    assert(fromStream.money==40001 && fromStream.party[0].species==25);
     std::cout<<"PASS Phase19: pinned Phase18 H168 copied-data read only bridge, no writes\n";
 }
