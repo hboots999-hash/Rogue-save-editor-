@@ -66,7 +66,7 @@ Added phase19/read_only_import.hpp and generated-fixture test_readonly.cpp; upda
 
 The new entry accepts only exact 131072-byte H168 unwrapped copied input at sdmc:/3ds/PKSM-Rogue/imports/00000001.sav and rejects 263168-byte VC containers without truncation/unwrap. The Phase18 dual-bank parser validates both banks, counters, bag, party checksums before providing numeric species/moves/PP/IVs/EVs, accurate ability slot/effective nature, money and existing item values. Nicknames and level are intentionally unknown; no guessing. Real PC layout is unsupported; every real-data edit path returns READ ONLY. Existing synthetic UI mode remains intact.
 
-**Source dependency is PINNED** at Phase18 commit 596743d8eaa073759a736b5a8107db43f3a8c17b (read-only use from separate checkout; other branches unchanged). The PR is draft and isolated. CI and emulator startup are not evidence of successful on-device imported-save reading, and previous hardware validation covered the prior demo-only build. No live game archive, save writes, draft exporting, CMAC, restoration or authenticated container parsing is enabled. See READ_ONLY_IMPORT.md.
+**Source dependency is PINNED** at Phase18 commit ea7303e3d04e9c409febd44ee3e1f834de02cdc6 (read-only use from separate checkout; other branches unchanged). The PR is draft and isolated. CI and emulator startup are not evidence of successful on-device imported-save reading, and previous hardware validation covered the prior demo-only build. No live game archive, save writes, draft exporting, CMAC, restoration or authenticated container parsing is enabled. See READ_ONLY_IMPORT.md.
 
 
 ## 1 Nov 2026 — host-only development hardening (no new hardware tests)
@@ -78,7 +78,7 @@ The new entry accepts only exact 131072-byte H168 unwrapped copied input at sdmc
 - The native build workflow audits the linked ELF for presence of the Phase18 read-only validator and absence of project-specific Phase18 mutation/export functions. Generic library FS service symbols may still exist because libctru supplies them; their presence is not evidence of this app calling them.
 - "H168 structure checked" **does not mean ROM identity authenticated**. A structural decoder result never permits game-save writes, draft exporting or restore.
 
-Phase18 PR #8 has subsequently added an optional source_digest.hpp on its branch; the Phase19 dependency remains intentionally pinned at 596743d8eaa073759a736b5a8107db43f3a8c17b until separately reviewed. Do not automatically merge or repin.
+QA correction: Phase19 now pins audited Phase18 ea7303e3d04e9c409febd44ee3e1f834de02cdc6, including source_digest.hpp and layout_geometry.hpp. ModelApiVersion=1 is host-cross-checked; native code deliberately excludes the unsafe PC research implementation. Later repins require independent review.
 
 **The updated 3DSX is still awaiting its own physical-device check.** Earlier UI hardware passes applied to the preceding build. Keep Phase19 as an unmerged draft; do not test the CIA or the actual game save.
 
@@ -92,7 +92,7 @@ These changes were made without a physical 3DS:
 - **Imported real-copy safety latch:** `State.demoPreviewEnabled` is separate from `Demo.synthetic`; `switchView(state,false)` after a successful import clears all pending demo navigation/proposals and disables every edit. Explicit `Import -> X` repopulates the fictional fixture and re-enables mock previews. Failed import never sets the latch or loses current data.
 - **Navigation coverage:** `test_accessibility.cpp` covers all seven home entries, PC box selection, L-free group selection, 19-stack and 450-stack bag paging, cancel/back operations, and import-to-demo transitions. Host and adapter suites continue to exercise IV, EV, move ID refusal, PP, ability/nature refusal, money, recovery and backup confirmations.
 - **Rendering:** Native console uses an allocation-free word wrap helper from `screen_text.hpp`; statuses identify the source (demo vs copied save), numeric move IDs display with PP, unsupported real PC shows no fictitious box number. Additional emulator smoke captures opt-in import, missing-copy and exit-attempt screenshots where emulator keyboard mapping permits; screenshots do not prove button semantics or real hardware compatibility.
-- **Source/build:** The read-only Phase18 decoder remains pinned to `596743d8eaa073759a736b5a8107db43f3a8c17b`. Native CI checks linked ELF for absence of project edit/export symbols and bounds State to <256 bytes. The previous stack-crash defect must not recur.
+- **Source/build:** The read-only Phase18 decoder remains pinned to `ea7303e3d04e9c409febd44ee3e1f834de02cdc6`. Native CI checks linked ELF for absence of project edit/export symbols and bounds State to <256 bytes. The previous stack-crash defect must not recur.
 
 **Phase 20:** See [PHASE20_INTEGRATION_CONTRACT.md](PHASE20_INTEGRATION_CONTRACT.md) for current read-only APIs, unsupported real PC and identifier-name assumptions, required future edit intents, independent source fingerprints, hardware/recovery release gates and strict nonwriting policy.
 
@@ -110,3 +110,12 @@ This branch now additionally includes:
 - Azahar CI collects best-effort screenshots for import-menu navigation, missing-copy error and exit attempts, **not hardware proof**. Native exit is standalone START **release**, with START+SELECT reserved for Rosalina; emulator key mappings are not guaranteed.
 
 No code has enabled actual save editing, installed-game archive writes, draft exporting, authentication, restoration or injection. Phase18 and Phase17 branch commits were not changed. The updated 3DSX **must be retested on hardware when available**; the previous successful hardware screenshots apply only to an earlier synthetic version. Keep PR #7 DRAFT and unmerged.
+
+## Independent QA #10 follow-up — 1 Nov 2026
+
+- Resolved QA-01: pinned audited Phase18 `ea7303e3d04e9c409febd44ee3e1f834de02cdc6` instead of obsolete 596743d8. This includes modular adjacent-bank rollover, stricter Pokémon values, source SHA-256 and EX layout geometry. Phase18 branch unchanged.
+- Resolved Phase19 native PC stack hazard: `editor_model.hpp` transitively included PC read-only research code with a **37,104-byte native ARM11 frame**. A 4-KiB stack-frame CI guard first rejected it; Phase19 now compiles only Phase18's low-level reader on-device. Host-only integration compares its numeric fields, statuses, source digest and ModelApiVersion=1 to the newer Phase18 `SaveView`. Real PC is NOT supported; no direct Phase17/18 namespace/header co-inclusion.
+- Added SHA/model metadata to the bounded snapshot. Read-only imported state has two independent preview locks; 28-sector corruption, counter rollover/gaps, checksum-valid bad EV/ability/PP, empty party/bag, wrong-length and GNU simulated SD short-read/EIO tests reject unsafe copies without altering displayed data.
+- Native devkitPro application Makefile source pinned at `be2001fee08cf8ec7d3366e095e83f6f75da8942`; compiler enforces `-Werror=frame-larger-than=4096`, emits `STACK_USAGE.txt`, and ELF audit denies project-specific write/export symbols. Static snapshots, a static State and a 128-KiB heap file buffer avoid 3DS main-thread stack explosion. No recursive UI calls.
+- QA-07 still requires independent devkitPro toolchain/container version pinning for full bit-for-bit reproducibility. QA-08 duplicate `h168` across Phase17/18 remains an integration blocker; Phase20 should use isolated translation units and an explicitly versioned DTO boundary rather than including both headers in one file.
+- The Phase14 authenticated-container counter gap, privileged restoration, ROM identity, populated PC storage and physical test of the **new** 3DSX are not resolved by Phase19. PR #7 remains draft/unmerged.
