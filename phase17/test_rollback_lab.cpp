@@ -227,6 +227,7 @@ int main(int argc,char**argv) {
             {
                 phase17::Shadow tampered(source);
                 tampered.tamperOnFirstWrite=true;
+                tampered.tamperOffset=plan.slots.active+0x20;
                 assert(phase14::execute(tampered,signer,plan)==
                        phase14::Status::RecoveryRequired);
                 assert(tampered.journalPresent && !tampered.receiptWritten);
