@@ -102,6 +102,38 @@ inline bool emitOfflineReview(const Demo& d,const ReviewTarget& target,
     }
     return true;
 }
+// Draws explicitly selected IV/EV/PP field with > marker in the field list.
+// This is a visual list only; selecting a field cannot authorise an export.
+template <typename Emit>
+inline bool emitOfflineFields(const Demo& d,ReviewField kind,unsigned partySlot,
+                              unsigned selectedField,Emit emit) {
+    if(d.synthetic || d.partyStatus!=Availability::Ready ||
+       partySlot>=d.partyCount || partySlot>=d.party.size() ||
+       d.party[partySlot].egg)return false;
+    if(kind!=ReviewField::IV && kind!=ReviewField::EV &&
+       kind!=ReviewField::PP)return false;
+    const unsigned n=kind==ReviewField::PP?4u:6u;
+    if(selectedField>=n)return false;
+    const auto& p=d.party[partySlot];
+    const char* stats[]={"HP","Atk","Def","SpA","SpD","Spe"};
+    char line[64]{};
+    std::snprintf(line,sizeof(line),"Party #%u / species ID %u",partySlot+1u,p.species);
+    emit(line);
+    for(unsigned i=0;i<n;++i) {
+        if(kind==ReviewField::PP) {
+            std::snprintf(line,sizeof(line),"%c Move %u ID%u PP %u",
+                          selectedField==i?'>':' ',i+1u,p.moves[i],p.pp[i]);
+        }else{
+            const unsigned value=kind==ReviewField::IV?p.iv[i]:p.ev[i];
+            std::snprintf(line,sizeof(line),"%c %-3s %u",
+                          selectedField==i?'>':' ',stats[i],value);
+        }
+        emit(line);
+    }
+    emit("Up/Down: select  A: edit");
+    emit("B: back (no draft)");
+    return true;
+}
 template <typename Emit>
 inline bool emitOfflineResult(const OfflineResultNames& names,Emit emit) {
     if(!validatedResultNames(names)){
