@@ -12,6 +12,8 @@
 #include <cstdint>
 #include <cstring>
 #include <vector>
+#include <memory>
+#include <new>
 
 namespace rogue18 {
 constexpr size_t PcSectionData=0xff4;
@@ -49,19 +51,20 @@ inline PcInspection inspectPcCandidate(const uint8_t* raw,size_t n){
     if(!validate(raw,n,info))return out;
     // 36.8 KiB cannot safely live on the 3DS main-thread stack.
     // Heap allocation is confined to explicit opt-in research inspection.
-    std::vector<uint8_t> store(PcBytes,0);
+    std::unique_ptr<uint8_t[]> store(new(std::nothrow) uint8_t[PcBytes]);
+    if(!store)return out; // explicit low-heap failure, no exception or partial view
     const auto& bank=info.banks[info.active];
     for(unsigned i=0;i<PcSections;i++){
         const size_t offset=bank.sector[5+i];
         if(offset>=n || n-offset<PcSectionData)return out;
-        std::memcpy(store.data()+i*PcSectionData,raw+offset,PcSectionData);
+        std::memcpy(store.get()+i*PcSectionData,raw+offset,PcSectionData);
     }
     out.status=PcStatus::Corrupt;
     out.currentBox=store[0];
     if(out.currentBox>=PcBoxes)return out;
     for(unsigned box=0;box<PcBoxes;box++)for(unsigned slot=0;slot<PcSlotsPerBox;slot++){
         const size_t at=PcBoxArrayOffset+(box*PcSlotsPerBox+slot)*PcBoxStride;
-        const auto* p=store.data()+at;
+        const auto* p=store.get()+at;
         const bool hasSpecies=(p[19]&2u)!=0;
         if(!hasSpecies){
             // Do not treat arbitrary stale bytes or a shifted structure as
