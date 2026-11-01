@@ -25,14 +25,16 @@ struct Evidence {
     std::vector<uint16_t> verifiedInsertItemIds{};
     bool verifiedBagInsertion=false;
     bool verifiedAbilitySlot=false;
+    bool verifiedNatureModifier=false; // matching ROM's GetNature uses header byte +18
 };
 struct Mon {
     uint32_t pid=0,ot=0;
-    uint16_t species=0,checksum=0;
+    uint16_t species=0,heldItem=0,checksum=0;
     std::array<uint16_t,4> moves{};
     std::array<uint8_t,4> pp{};
     std::array<uint8_t,6> ivs{},evs{};
-    uint8_t abilitySlot=0,natureFromPid=0;
+    uint8_t abilitySlot=0,natureFromPid=0,effectiveNature=0;
+    uint8_t gigantamaxFactor=0,rawNatureModifier=0;
     bool egg=false;
 };
 struct Request {
@@ -45,6 +47,7 @@ struct Request {
     uint16_t expectedSpecies=0,expectedPokemonChecksum=0;
     std::array<uint8_t,6> stats{};
     uint8_t moveSlot=0,expectedPP=0,pp=0,abilitySlot=0,nature=0;
+    uint8_t expectedNature=0;
     uint16_t expectedMoveId=0,moveId=0;
 };
 struct Result {
@@ -111,7 +114,11 @@ inline bool decodeMon(const uint8_t* raw,size_t n,size_t start,Mon& result){
     result.pid=h168::r32(raw,start);
     result.ot=h168::r32(raw,start+4);
     result.checksum=h168::r16(raw,start+28);
-    result.species=h168::r16(p.data(),0);
+    // EX v2.1 growth 0: species occupies 11 bits, held item two fragments.
+    // Do not interpret the entire low u16 as a species when an item is held.
+    const uint32_t growth0=h168::r32(p.data(),0);
+    result.species=uint16_t(growth0&0x7ffu);
+    result.heldItem=uint16_t(((growth0>>11)&0x3ffu)|(((growth0>>26)&1u)<<10));
     if(!result.species)return false;
     for(unsigned i=0;i<4;i++){
         result.moves[i]=h168::r16(p.data(),12+2*i);
@@ -127,8 +134,13 @@ inline bool decodeMon(const uint8_t* raw,size_t n,size_t start,Mon& result){
     const uint32_t packed=h168::r32(p.data(),40);
     for(unsigned i=0;i<6;i++)result.ivs[i]=uint8_t((packed>>(5*i))&31u);
     result.egg=((packed>>30)&1u)!=0;
-    result.abilitySlot=uint8_t(packed>>31);
-    result.natureFromPid=uint8_t(result.pid%25); // informational only
+    result.gigantamaxFactor=uint8_t(packed>>31); // NOT the ability!
+    // EX v2.1 Misc+8 bitfield: abilityNum bits 29..30 (2-bit slot).
+    result.abilitySlot=uint8_t((h168::r32(p.data(),44)>>29)&3u);
+    result.natureFromPid=uint8_t(result.pid%25);
+    result.rawNatureModifier=uint8_t(raw[start+18]>>3);
+    result.effectiveNature=uint8_t(result.natureFromPid^result.rawNatureModifier);
+    if(result.effectiveNature>=25)return false;
     return true;
 }
 inline bool validateBankBag(const uint8_t* raw,const h168::Bank& bank){
@@ -177,8 +189,8 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
     if(!validate(raw,n,before))return blocked("Unrecognised/incomplete H168 dual-bank layout");
     const h168::Bank& bank=before.banks[before.active];
     if(req.expectedCounter!=bank.counter)return blocked("Stale active-bank counter");
-    if(req.kind==Kind::Nature)
-        return blocked("Nature edit unsupported: PID changes affect gender, shiny and cryptography");
+    // Nature is stored as a 5-bit XOR modifier in the unencrypted BoxPokemon
+    // header on EX v2.1. It must not be changed without matching-ROM evidence.
     Bytes draft(raw,raw+n);
     std::vector<size_t> allowed;
     const size_t s1=bank.sector[1];
@@ -263,12 +275,22 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
             width=2;
             allow(monAt+32+storedIndex(oldMon.pid,'A')*12+8+req.moveSlot,1);
         }else if(req.kind==Kind::AbilitySlot){
-            if(!evidence.verifiedAbilitySlot || req.abilitySlot>1)
-                return blocked("Ability mapping unsupported without independent ROM evidence");
-            uint32_t pack=h168::r32(monData.data(),40);
-            pack=(pack & ~(uint32_t(1)<<31)) | (uint32_t(req.abilitySlot)<<31);
-            h168::w32(monData.data(),40,pack);
-            field=monAt+32+storedIndex(oldMon.pid,'M')*12+4;width=4;
+            if(!evidence.verifiedAbilitySlot || req.abilitySlot>2)
+                return blocked("Ability ID/mapping unverified or slot out of range");
+            // Bits 29..30 in the MISC+8 word, not the gigantamax bit at
+            // MISC+4 bit31. This changes only the slot, not ability ID.
+            uint32_t abilities=h168::r32(monData.data(),44);
+            abilities=(abilities & ~(uint32_t(3)<<29)) |
+                      (uint32_t(req.abilitySlot)<<29);
+            h168::w32(monData.data(),44,abilities);
+            field=monAt+32+storedIndex(oldMon.pid,'M')*12+8;width=4;
+        }else if(req.kind==Kind::Nature){
+            if(!evidence.verifiedNatureModifier || req.nature>=25 ||
+               req.expectedNature!=oldMon.effectiveNature)
+                return blocked("Unverified nature encoding, stale expected nature or range");
+            draft[monAt+18]=uint8_t((draft[monAt+18]&7u) |
+                               ((oldMon.natureFromPid^req.nature)<<3));
+            field=monAt+18;width=1;
         }else return blocked("Unsupported operation");
         encode(draft.data(),monAt,monData);
         allow(monAt+28,2); // per-Pokémon decrypted-payload checksum
@@ -299,8 +321,14 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
         if(req.kind==Kind::Move &&
            (newMon.moves[req.moveSlot]!=req.moveId || newMon.pp[req.moveSlot]!=req.pp))
             return blocked("Move/PP readback mismatch");
-        if(req.kind==Kind::AbilitySlot && newMon.abilitySlot!=req.abilitySlot)
-            return blocked("Ability slot readback mismatch");
+        if(req.kind==Kind::AbilitySlot &&
+           (newMon.abilitySlot!=req.abilitySlot ||
+            newMon.gigantamaxFactor!=oldMon.gigantamaxFactor))
+            return blocked("Ability slot/Gigantamax readback mismatch");
+        if(req.kind==Kind::Nature &&
+           (newMon.effectiveNature!=req.nature || newMon.pid!=oldMon.pid ||
+            newMon.abilitySlot!=oldMon.abilitySlot))
+            return blocked("Nature readback mismatch");
     }
     if(req.kind==Kind::ExistingQuantity || req.kind==Kind::InsertItem){
         unsigned id=0,qty=0;
