@@ -91,6 +91,30 @@ int main(int argc,char** argv){
     CHECK(mon0.species==25 && mon1.species==676 && mon0.pid%24!=mon1.pid%24);
     CHECK(mon0.ivs[0]==10 && mon0.ivs[5]==15 && mon1.moves[1]==45);
     CHECK(mon1.natureFromPid==17);
+    // Every one of the 24 Gen III substructure orders must preserve the
+    // same canonical fields, 104-byte extension, and checksums after editing.
+    for(unsigned permutation=0;permutation<24;permutation++){
+        Bytes varied=b;
+        const size_t start=info.banks[info.active].sector[1]+0x238;
+        const auto clean=plaintext(varied.data(),start);
+        h168::w32(varied.data(),start,permutation);
+        encode(varied.data(),start,clean);
+        const size_t sec=info.banks[info.active].sector[1];
+        h168::w16(varied.data(),sec+0xff6,h168::checksum(varied.data()+sec));
+        h168::Info checked{};
+        CHECK(validate(varied.data(),varied.size(),checked));
+        Mon decoded{};
+        CHECK(partyAt(varied.data(),varied.size(),checked,0,decoded));
+        CHECK(decoded.pid==permutation && decoded.species==25);
+        CHECK(decoded.moves[0]==33 && decoded.ivs[0]==10 && decoded.evs[1]==252);
+        Request req=monRequest(varied,0,Kind::IVs);
+        req.stats={1,2,3,4,5,6};
+        auto p=propose(varied.data(),varied.size(),req);
+        CHECK(p.ok && sameInactive(varied,p.candidate));
+        CHECK(verifyExact(varied.data(),varied.size(),p.candidate.data(),
+                          p.candidate.size(),req));
+        CHECK(p.candidate[start+100]==0xa7 && p.candidate[start+103]==0x19);
+    }
 
     Request q{};
     q.kind=Kind::Money;q.expectedCounter=41;
