@@ -258,6 +258,7 @@ int main(int argc,char** argv){
     CHECK(capacityFromUpgrades(37)==450 && normalCapacityFromUpgrades(37)==400);
     CHECK(capacityFromUpgrades(200)==450);
     insertion.verifiedUpgradeCount=0;
+    insertion.verifiedH168BagUpgradeOffset=true;
     insertion.verifiedItemPockets={{113,1},{1,3},{5,7},{99,9}};
     CHECK(insertionCompatible(insertion.verifiedItemPockets,
                               std::vector<uint16_t>{113,1,5},99,0));
@@ -281,7 +282,16 @@ int main(int argc,char** argv){
     insertion.verifiedUpgradeCount=0;
     insertion.verifiedItemPockets={{113,1},{1,3},{5,9},{99,1}};
     CHECK(!propose(b.data(),b.size(),q,insertion).ok);
-
+    // Saved bag-upgrade candidate must match independently confirmed value;
+    // capacity cannot be faked via an unchecked Evidence count.
+    insertion.verifiedItemPockets={{113,1},{1,3},{5,7},{99,9}};
+    insertion.verifiedUpgradeCount=1;
+    CHECK(!propose(b.data(),b.size(),q,insertion).ok);
+    insertion.verifiedUpgradeCount=0;
+    insertion.verifiedH168BagUpgradeOffset=false;
+    CHECK(!propose(b.data(),b.size(),q,insertion).ok);
+    insertion.verifiedH168BagUpgradeOffset=true;
+    CHECK(propose(b.data(),b.size(),q,insertion).ok);
 
     const unsigned s1=info.banks[1].sector[1];
     auto corrupt=b;
