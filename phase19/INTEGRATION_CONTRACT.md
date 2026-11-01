@@ -1,47 +1,46 @@
-# Phase 19 integration contract — Phase 18 PR #8 review
+# Phase 19 integration contract — current READ-ONLY interface
 
-Status: **READ-ONLY DTO AND MOCK DRIVER IMPLEMENTED. REAL SAVE ADAPTER NOT LINKED.**
+**Status:** Active copied-SD reader wired to a **pinned** Phase18 H168 decoder. Host and Azahar work are experimental, and this newer import-enabled build has **not** been validated on the user's physical Nintendo 3DS. PR #7 remains DRAFT.
 
-## Interface boundary
+**Canonical future contract:** [PHASE20_INTEGRATION_CONTRACT.md](PHASE20_INTEGRATION_CONTRACT.md). This summary describes the implementation, not authorisation to write game saves.
 
-phase19/adapter.hpp provides ReadOnlyProvider (summary, partyCount, partyAt, bagCount, itemAt, pcBoxCount, pcBoxSize, pcAt), Availability (Ready/Empty/Unsupported/Invalid/Unverified), a bounded snapshot (up to 6 party, 450 existing bag stacks (6 per visible page), 14 boxes x 30 records), capture() and mockSnapshot(). The native app only creates mockSnapshot(). It never requests a live save or calls the Phase 18 exporter.
+## Current reader implementation
 
-A future independently audited provider may call capture() only on the result of Phase 18's strict H168 dual-bank validation, from an independently verified **read-only** copied input. capture() checks DTO counts, money ≤999999, item quantities 1–999, IVs 0–31, EVs 0–252 and sum ≤510, PP ≤64, binary ability slot and nature index ≤24. It fails closed when provider data is Invalid, Empty, Unsupported or Unverified. This DTO-level screening is **not** independent verification of the underlying ROM/save.
+- The default 3DSX launch is fictional sample data. The **seventh** home-menu option, “Inspect SD copy (read-only),” explicitly reads only `sdmc:/3ds/PKSM-Rogue/imports/00000001.sav` using `fopen(...,"rb")`.
+- Only an **independently prepared, unwrapped 131072-byte H168 copied** file is accepted. The 263168-byte GBA VC authenticated backup container is **not** parsed here, and must never be truncated or substituted for the installed game's save.
+- `inspectReadOnlyStream(FILE*, Demo&, reason)` checks exact file size, complete read, EOF/read errors; `inspectCopiedBuffer(raw,len,Demo&,reason)` calls `rogue18::validate` and populates bounded `ReadOnlyProvider` values. Failed inspections leave the existing visible snapshot unchanged.
+- Phase18 source pinned in GitHub CI at commit **596743d8eaa073759a736b5a8107db43f3a8c17b**, checked out separately; PR #8 is not merged or changed. Structural validity is not proof of ROM identity or game-playability.
 
-Captured snapshots always have synthetic=false: State::canPreview() rejects all edits, including money and item proposals. No method in ReadOnlyProvider or State can stage a real edit, export a draft, request a title ID, access SD or restore data. Real edits require an entirely separate audited capability design and new release-gate approvals.
+## Available validated structure fields
 
-## Mapping table for a future approved Phase 18 read-only provider
-
-| Phase19 display | Phase18 source | State and restrictions |
+| Domain | Source | UI |
 | --- | --- | --- |
-| Summary money / counter | h168::Info.money; active bank counter from rogue18::validate | Read-only when validation passes; no direct live GBA VC service in this build |
-| Party count | h168::Info.partyCount, maximum 6 | Validated party only; cannot infer PC from this |
-| Pokémon species | rogue18::Mon.species from rogue18::partyAt | Use numeric IDs unless exact ROM name lookup verified |
-| Pokémon level/name | Not provided by rogue18::Mon | Leave 0/unknown or implement independent verified mapping; never substitute synthetic nicknames |
-| IV / EV | Mon.ivs / Mon.evs | View-only for actual saves; bounds and 510 EV sum verified |
-| Move IDs + PP | Mon.moves / Mon.pp | Move ID substitution requires Evidence.verifiedMoveIds; PP editing is not enabled by this UI |
-| Ability | Mon.abilitySlot (1 bit) | This is **not** a general ability ID; ability edits require verifiedAbilitySlot, not enabled |
-| Nature | Mon.natureFromPid, PID % 25 | Display only; Phase18 rejects mutation |
-| Egg state | Mon.egg | Do not expose editing for eggs |
-| Bag existing item ID/quantity | h168::item() under active bank | Per-stack quantity view; no item insertion without separate pocket/ID verification |
-| PC contents | No validated Phase18 PC parser | Availability::Unsupported, zero selectable real PC entries |
-| Backup status | Separate Phase16 hardware evidence | Availability::Unverified until a separately verified inventory provider exists |
-| Restoration | Separate authenticated restoration phase | UI blocks; no restoration calls or CMAC signing |
+| Money / active bank | `h168::Info.money`; `banks[active].counter` | Read only, 0–999999 |
+| Party 0–6 | `rogue18::partyAt`, `rogue18::Mon` | Numeric species, IVs, EVs, move IDs, PP, ability **slot**, effective nature, egg |
+| Pokémon names / levels | Not exposed by current pinned `Mon` | Unknown, shown as Species ID and Lv? |
+| IV/EV | `Mon.ivs` / `Mon.evs` | IV 0–31; EV 0–252 and total ≤510 |
+| PP/moves | `Mon.pp` / `Mon.moves` | Numeric only; no verified ROM move-ID name mapping |
+| Ability / nature | `Mon.abilitySlot`, `Mon.effectiveNature` | Ability **2-bit index 0–3**, not Gmax or an ability ID; effective nature 0–24 |
+| Existing bag 0–450 | `h168::item`, `Info.items` | ID and quantity 1–999; no insertion or pocket assumptions |
+| PC storage | No independently proven Phase18 layout | **Unsupported**, never fictitiously populated for imported copies |
+| Backup/restoration | Not wired to this UI | **Unverified/disabled** |
 
-## Controls and unsupported operations
+A **legitimate empty party, empty bag, or both** is accepted and displayed as EMPTY. Invalid, unsupported, corrupt, missing, wrong-sized and wrapped inputs fail closed.
 
-Up/Down selects entries, Left/Right changes proposal by ±10, Up/Down proposal ±1, X resets, A opens/reviews, B cancels, START exits, L/R cycles PC boxes or edit groups. PC boxes and bag stacks are paged six entries per view; L/R switches PC boxes or pages the bag. The native executable shows no real save contents.
+## UI trust boundary and controls
 
-IVs, EVs, unchanged/read-only move IDs, PP, money and existing bag quantity each show a synthetic proposal where supported. The final A confirmation **always reports BLOCKED** and leaves the snapshot unchanged. New move IDs, ability slot mutation, PID-derived nature mutation, PC editing, bag item insertion and all actual real-data edits remain unsupported. No-op proposals show an invalid message rather than succeeding.
+`ReadOnlyProvider` offers only `summary, partyCount, partyAt, bagCount, itemAt, pcBoxCount, pcBoxSize, pcAt` and explicit `Availability` status. `captureInto` populates an external fixed-size `Demo` snapshot. `State` holds a **const reference**, not a stack-allocated copy (mandatory `sizeof(State)<256`). `State.demoPreviewEnabled` is **an independent session flag**; `switchView(state,false)` permanently blocks proposals for an imported view until the explicit fictional demo reset. `populateMock` overwrites the entire previous snapshot before restoring mock fixture records.
 
-## Integration and release gates
+- R / D-pad Right moves to next PC box, edit category or bag page.
+- X / D-pad Left reverses without needing the broken L shoulder button.
+- D-pad Up/Down changes selection; A opens; B cancels/returns.
+- In **fictional proposal** mode only, Up/Down changes ±1, Left/Right ±10, X resets; two confirmations lead to **BLOCKED**, never a saved change.
+- START **alone on release** exits. START+SELECT is reserved for **Rosalina**, tested in either key order. L is optional.
 
-- Confirm the exact H168 ROM and validated read-only copy. The Phase18 callback must first run rogue18::validate and respect the active counter, Pokémon identity and checksums.
-- Establish exact move/item metadata, PC layout and ability mapping before adding any write capability. Unknowns must report Unsupported.
-- Any eventual edit request must capture the old party ID/PID/OT/checksum/old field values and counter, then pass an independent full candidate verification and backup/stale-source/recovery review.
-- Phase16 backup/journal evidence does not enable restoration in Phase19. Authenticated GBA VC CMAC signing, rollback and physical gameplay/persistence proof remain separate approvals.
-- Do not alter Phase18 or Phase14–17 branches, merge or expose a live writer.
+Every real-data Pokémon, money or item interaction is **read-only**. PC edits, new move IDs, ability/nature modifications, item insertion, draft exporting, live title archive access, CMAC and save restoration are **disabled**.
 
-## Test evidence accounting
+## Tests, unknowns and Phase20
 
-Host tests use equivalent D-pad, A/B/X/L/R/START key events and mock/invalid provider cases. devkitPro 3DSX/ELF, experimental CIA and isolated Azahar smoke use the Phase19 workflow. A passing emulator smoke test does not prove a game-load or real handheld navigation. Independent Nintendo 3DS manual button testing is still outstanding.
+Strict host and sanitizer tests cover all mock screens and proposal cancellations, read-only imported-data guards, synthetic/broken-L alternatives, Rosalina key chord, typed status/empty data, exact read-only stream canary, corrupt historical sectors, 450-stack paging, console line wrapping, and no oversized `State`. Native devkitPro build audits the ELF for project-specific writer functions; Azahar runs isolated boot/interaction attempts and unchanged SD canary, **not** physical 3DS verification.
+
+For Phase20, require the separately authored [contract](PHASE20_INTEGRATION_CONTRACT.md): actual ROM identity and correct move/item/ability mappings, independently established PC parser, reliable backup/recovery and authenticated container, verified immutable source fingerprint and exact byte-diff evidence, plus renewed physical hardware acceptance before **any** edit/restore capability is considered. Do not edit Phase17 or Phase18 branches or merge this draft without those gates.
