@@ -2,6 +2,8 @@
 // Non-playable synthetic Phase18 -> Phase19 -> Phase20 + Phase17 public ABI.
 // No installed games, no external ROM, no private save, no write service.
 #include "phase20/read_only_v1.hpp"
+// Full research model stays HOST-ONLY, never in the Phase20 ARM11 entry point.
+#include "phase18/editor_model.hpp"
 #define main phase18_test_fixture_main
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
@@ -28,6 +30,26 @@ int main() {
     assert(summary.party==2 && summary.items==3);
     assert(summary.sourceSha256==rogue18::sourceDigest(source.data(),source.size()));
     assert(summary.activeCounter==41 && displayed.activeCounter==41);
+    // Independently cross-check the lightweight native DTO against the full
+    // Phase18 host-only model, including versioned source fingerprint.
+    const auto research=rogue18::inspectReadOnly(source.data(),source.size(),false);
+    assert(research.valid && research.apiVersion==rogue18::ModelApiVersion);
+    assert(research.money==summary.money &&
+           research.activeCounter==summary.activeCounter &&
+           research.party.size()==summary.party && research.items.size()==summary.items);
+    assert(research.sourceSha256==summary.sourceSha256);
+    for(size_t i=0;i<research.party.size();++i) {
+        const auto& a=research.party[i].value;
+        const auto& b=displayed.party[i];
+        assert(a.species==b.species && a.natureFromPid<=24 &&
+               a.effectiveNature==b.nature && a.abilitySlot==b.ability);
+        for(unsigned j=0;j<6;j++)
+            assert(a.ivs[j]==b.iv[j] && a.evs[j]==b.ev[j]);
+    }
+    for(size_t i=0;i<research.items.size();++i)
+        assert(research.items[i].itemId==displayed.bag[i].id &&
+               research.items[i].quantity==displayed.bag[i].quantity);
+
 
     phase19::State ui(displayed);
     ui.homeRow=3;
