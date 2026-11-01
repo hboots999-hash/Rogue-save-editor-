@@ -308,7 +308,7 @@ int main(int argc,char** argv){
     {
         auto wrongKey=b;
         const size_t sec0=info.banks[info.active].sector[0];
-        wrongKey[sec0+0x4c]^=1;
+        wrongKey[sec0+0x4c+3]^=0x80; // force decoded money out of range
         h168::w16(wrongKey.data(),sec0+0xff6,
                    h168::checksum(wrongKey.data()+sec0));
         h168::Info check{};
