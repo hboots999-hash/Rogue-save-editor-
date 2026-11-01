@@ -36,6 +36,8 @@ template<class Signer> bool stableMac(Signer& signer,const Digest& digest,Mac& o
 }
 struct Layout {size_t active=0, target=0; uint32_t counter=0;};
 inline bool layout(const Bytes& b,Layout& l) {
+    // A failed recheck must not leak a previously selected slot/counter.
+    l=Layout{};
     using namespace rogue_live;
     if(b.size()<ContainerMin || b.size()>MaxContainer) return false;
     const auto a=parseHeader(b.data(),HeaderSize,0);
@@ -67,8 +69,11 @@ template<class Signer> bool authenticate(const Bytes& image,Signer& signer,Layou
         Mac actual{}; h168::Info info{};
         if(!stableMac(signer,slotHash(image,off),actual) ||
            std::memcmp(actual.data(),image.data()+off+0x10,actual.size()) ||
-           !h168::inspect(image.data()+off+rogue_live::HeaderSize,h168::Size,info))
+           !h168::inspect(image.data()+off+rogue_live::HeaderSize,h168::Size,info)) {
+            // Header selection alone is NOT authenticated save identity.
+            l=Layout{};
             return false;
+        }
     }
     return true;
 }
