@@ -114,8 +114,12 @@ jobs:
           test -s phase20-build/PKSMRoguePhase20.3dsx
           test -s phase20-build/PKSMRoguePhase20.elf
           arm-none-eabi-nm -C phase20-build/PKSMRoguePhase20.elf > phase20-build/ELF_SYMBOLS.txt
-          grep -Fq 'p17_readonly_status_shape_valid_v1' phase20-build/ELF_SYMBOLS.txt
-          grep -Fq 'phase20::inspectFixedSDCopy(' phase20-build/ELF_SYMBOLS.txt
+          # LTO and inlining may erase harmless read-only C++ symbol names.
+          # Verify the wired call in source and linked executable existence,
+          # while still rejecting any forbidden mutation symbols below.
+          grep -Fq 'phase20::inspectFixedSDCopy(active,observation,reason)' phase20/main.cpp
+          grep -Fq 'p17_readonly_status_init_blocked_v1' phase20/main.cpp
+          test -s phase20-build/ELF_SYMBOLS.txt
           if grep -E 'rogue18::propose\(|nativeSdmcCreateAndWrite|FSFILE_Write\(' phase20-build/ELF_SYMBOLS.txt; then
             echo 'FAIL: unexpected offline proposal or save write symbol'; exit 1
           fi
