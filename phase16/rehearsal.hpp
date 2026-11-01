@@ -163,15 +163,9 @@ Result verifyAfterRestart(Device& device,Store& store) {
     if(plan.before!=original){
         result.code=Code::BackupMismatch;return result;
     }
-    phase14::Layout layout{},futureLayout{};
-    if(!phase14::validatePlan(plan,device) ||
-       !phase14::authenticate(plan.before,device,layout) ||
-       !phase14::authenticate(plan.after,device,futureLayout) ||
-       futureLayout.active!=layout.target ||
-       futureLayout.counter!=layout.counter+1){
-        result.code=Code::CandidateInvalid;return result;
-    }
-    result.currentCounter=layout.counter;
+    // A physical PxiFS0 MAC service is bound to an OPEN read-only file
+    // handle. Read twice first so native calculate() has a valid live handle.
+    // A host fake signer has no handle and would not detect this ordering bug.
     phase14::Bytes now,again;
     if(!device.read(now) || !device.read(again)){
         result.code=Code::RecheckReadError;return result;
@@ -182,9 +176,18 @@ Result verifyAfterRestart(Device& device,Store& store) {
     if(now!=original){
         result.code=Code::LiveNowDifferent;return result;
     }
+    phase14::Layout layout{},futureLayout{};
     if(!phase14::authenticate(now,device,layout)){
         result.code=Code::LiveAuthenticationFailed;return result;
     }
+    if(!phase14::validatePlan(plan,device) ||
+       !phase14::authenticate(plan.before,device,layout) ||
+       !phase14::authenticate(plan.after,device,futureLayout) ||
+       futureLayout.active!=layout.target ||
+       futureLayout.counter!=layout.counter+1){
+        result.code=Code::CandidateInvalid;return result;
+    }
+    result.currentCounter=layout.counter;
     result.code=Code::Verified;result.liveSafe=true;
     return result;
 }
