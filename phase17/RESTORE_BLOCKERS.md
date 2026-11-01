@@ -14,6 +14,12 @@
 | Game data editors | Phase 18 has its own offline branch, and Phase 19 separate UI branch, both synthetic-safe | Verify each feature against exact H168 build, expected game mechanics and in-game persistence separately |
 | Recovery refusal | Phase 17 simulates unrelated memory mutation and fails closed | Native corruption, unexpected saves between staging/writing and power cuts must require manual recovery and never auto-restore a stale image |
 
+## 1 November 2026 — Separate read-only recovery evidence gate
+
+`phase17/recovery_evidence_gate.hpp` now provides a **pure-memory, non-writable** classification for independently obtained full backups, exact journal bytes, current live save and the two terminal receipt-file presence checks. Unknown/unreadable storage state, missing or damaged records, mismatched full backup, stale/changed live data, terminal receipt files, invalid MAC/plan and unauthenticated candidate images all fail closed. Its sole success result is `ReadyForRamOnly`: it is **not** a permission to restore or a transaction plan. The gate has no FS service, no data output to write and no path to the native write adapter.
+
+New host regression cases cover good record, unreadable/missing files, terminal receipts, unchecked receipt lookup, stale raw bytes/after-image, different backup, corrupt/truncated journal, independently invalid candidate despite a valid journal digest, and unusable console signer. The existing Phase 17 hardware diagnostic stays unchanged. **Future production integration would require** native read-only record enumeration, exclusive journal creation, robust signed/hash-bound terminal receipts and durable chunked writes; none is claimed implemented or enabled by this addition.
+
 ## Immediate safe next hardware test
 
 Phase 17 standalone 3DSX/CIA reads the *existing* Phase 16 private SD files **read-only**, repeats current live slot CMAC, then simulates restore, torn writes, interrupted rollbacks and recoveries only on heap vectors. No SD file, live GBA VC or AGB_FIRM write function is called. Tests should stop and display an error if the live container changed since Phase 16.
