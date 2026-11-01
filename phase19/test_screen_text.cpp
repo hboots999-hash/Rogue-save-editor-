@@ -28,5 +28,29 @@ int main(){
     assert(firstVisible(6)==6 && lastVisible(6,19)==12);
     assert(firstVisible(18)==18 && lastVisible(18,19)==19);
     assert(firstVisible(449)==444 && lastVisible(449,450)==450);
+    // Error messages and export filenames must never scroll off the 3DS
+    // console and hide A/B recovery prompts.
+    auto capped=[](const char* message,unsigned width,unsigned height){
+        std::vector<std::string> result;
+        forEachBoundedLine(message,width,height,[&](const char* p,unsigned n){
+            result.emplace_back(p,n);
+        });
+        for(const auto& line:result)assert(line.size()<=width);
+        return result;
+    };
+    std::string lengthy(12000,'X');
+    auto longLines=capped(lengthy.c_str(),31,9);
+    assert(longLines.size()==9 && longLines.back()=="[MORE TEXT OMITTED]");
+    auto exact=capped("1234567890",5,2);
+    assert(exact.size()==2 && exact[0]=="12345" && exact[1]=="67890");
+    auto truncated=capped("first second third fourth fifth sixth",8,2);
+    assert(truncated.size()==2 && truncated.back()=="[MORE TE");
+    auto newline=capped("A\\nB\\nC\\nD",31,3);
+    assert(newline.size()==3 && newline.back()=="[MORE TEXT OMITTED]");
+    assert(capped("anything",31,0).empty());
+    assert(capped("anything",0,6).empty());
+    assert(capped(nullptr,31,6).empty());
+    assert(firstVisible(0xffffffffu)==4294967292u);
+    assert(lastVisible(0xffffffffu,450u)==450u);
     std::cout<<"PASS 3DS console status text wrapping and safe pagination (450 items)\n";
 }
