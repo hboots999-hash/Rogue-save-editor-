@@ -56,6 +56,7 @@ public:
     int writes=0, shortWriteAt=0, powerLossAt=0;
     bool journalPresent=false;
     bool receiptWritten=false;
+    bool failReceipt=false; // Simulate lost/failed terminal receipt in RAM only.
     bool tamperOnFirstWrite=false;
     explicit Shadow(Bytes initial):live(std::move(initial)) {}
     bool writesAllowed()const{return true;} // ONLY this private vector
@@ -94,7 +95,7 @@ public:
         return !partial;
     }
     bool finish(Status status) {
-        if(!journalPresent)return false;
+        if(!journalPresent || failReceipt)return false;
         receiptWritten=status==Status::Restored || status==Status::RolledBack;
         return receiptWritten;
     }
