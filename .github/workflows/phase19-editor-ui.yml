@@ -102,6 +102,20 @@ jobs:
           make -C phase19-build -j2
           test -s phase19-build/PKSMRoguePhase19.3dsx
           test -s phase19-build/PKSMRoguePhase19.elf
+          # Native symbol check: forbid Phase18 proposal/export and offline SD
+          # write entrypoints in the final linked binary. Generic libctru
+          # FS service symbols may exist in the runtime and are NOT proof
+          # that this program uses a write path.
+          arm-none-eabi-nm -C phase19-build/PKSMRoguePhase19.elf \
+            > phase19-build/ELF_SYMBOLS.txt
+          if grep -E 'rogue18::propose\\(|h168::nativeSdmcCreateAndWrite\\(|h168::export|h168::import|FSUSER_OpenArchive\\(' \
+              phase19-build/ELF_SYMBOLS.txt; then
+            echo 'FAIL: unexpected save edit/export/archive entrypoint linked'
+            exit 1
+          fi
+          grep -Fq 'rogue18::validate(' phase19-build/ELF_SYMBOLS.txt
+          grep -Fq 'phase19::inspectFixedSDCopy(' phase19-build/ELF_SYMBOLS.txt
+          echo 'PASS: read-only decoder linked; mutation/export entrypoints absent'
           sha256sum phase19-build/PKSMRoguePhase19.{3dsx,elf} > phase19-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
