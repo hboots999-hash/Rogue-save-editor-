@@ -1,7 +1,7 @@
 // Phase 19 standalone UI model; GPL-3.0-or-later.
 // Deliberately has NO filesystem, save-service, ROM or restoration interface.
 #pragma once
-#include <array>
+#include "adapter.hpp"
 #include <cstdint>
 #include <algorithm>
 
@@ -11,36 +11,8 @@ enum class Screen : uint8_t {
     Proposal, ConfirmOne, ConfirmTwo, Notice
 };
 enum class Key : uint8_t { Up, Down, Left, Right, A, B, X, L, R, Start };
-enum class Group : uint8_t { IV, EV, Moves, Ability, Nature };
+enum class Group : uint8_t { IV, EV, Moves, PP, Ability, Nature };
 
-struct Pokemon {
-    const char* name;
-    unsigned species, level;
-    std::array<unsigned, 6> iv, ev;
-    std::array<unsigned, 4> moves;
-    unsigned ability, nature;
-};
-struct Item { const char* name; unsigned id, quantity; };
-struct Demo {
-    unsigned money = 42000;
-    std::array<Pokemon, 3> party {{
-        {"Volcarona",637,72,{{31,10,30,31,31,31}},{{0,0,0,252,4,252}},{{53,483,94,247}},1,10},
-        {"Swampert",260,68,{{31,31,31,4,31,25}},{{252,252,4,0,0,0}},{{89,127,182,57}},0,3},
-        {"Gardevoir",282,65,{{27,1,24,31,30,31}},{{0,0,4,252,0,252}},{{94,85,247,347}},1,15}
-    }};
-    std::array<std::array<Pokemon, 3>, 2> pc {{
-        {{{"Gengar",94,60,{{31,5,20,31,15,31}},{{0,0,0,252,4,252}},{{94,247,109,399}},0,10},
-          {"Lucario",448,62,{{31,31,20,15,25,31}},{{0,252,4,0,0,252}},{{370,245,396,197}},1,3},
-          {"Metagross",376,64,{{31,31,31,5,31,10}},{{252,252,4,0,0,0}},{{309,89,428,418}},0,2}}},
-        {{{"Garchomp",445,67,{{31,31,31,3,15,31}},{{0,252,4,0,0,252}},{{89,200,242,337}},1,3},
-          {"Milotic",350,55,{{31,2,31,31,31,18}},{{252,0,252,4,0,0}},{{57,58,105,392}},0,5},
-          {"Breloom",286,56,{{31,31,23,8,20,31}},{{4,252,0,0,0,252}},{{147,183,317,264}},1,3}}}
-    }};
-    std::array<Item, 5> bag {{
-        {"Rare Candy",68,25}, {"Poke Ball",4,50}, {"Ultra Ball",2,30},
-        {"Potion",13,18}, {"Repel",86,12}
-    }};
-};
 struct State {
     Screen screen = Screen::Home;
     Screen returnTo = Screen::Home;
@@ -52,19 +24,22 @@ struct State {
     unsigned proposal = 0;
     const char* notice = "";
     // Synthetic sample is immutable throughout every transition. No real save is loaded.
-    const Demo demo{};
+    const Demo demo;
+    State():demo(mockSnapshot()){}
+    explicit State(const Demo& source):demo(source){}
 };
 
 inline unsigned count(const State& s) {
     switch(s.screen) {
         case Screen::Home: return 6;
-        case Screen::Party: return static_cast<unsigned>(s.demo.party.size());
-        case Screen::PC: return static_cast<unsigned>(s.demo.pc[s.box].size());
-        case Screen::Bag: return static_cast<unsigned>(s.demo.bag.size());
+        case Screen::Party: return s.demo.partyStatus==Availability::Ready?s.demo.partyCount:0;
+        case Screen::PC: return s.demo.pcStatus==Availability::Ready && s.box<s.demo.pcBoxes ?
+                                 s.demo.pcCounts[s.box]:0;
+        case Screen::Bag: return s.demo.bagStatus==Availability::Ready?s.demo.bagCount:0;
         case Screen::Backups: return 3;
         case Screen::Recovery: return 5;
         case Screen::Edit: return s.group == Group::IV || s.group == Group::EV ? 6u :
-                                  s.group == Group::Moves ? 4u : 1u;
+                                  (s.group == Group::Moves || s.group == Group::PP) ? 4u : 1u;
         default: return 0;
     }
 }
@@ -80,6 +55,7 @@ inline unsigned original(const State& s) {
             case Group::IV: return m.iv[s.field];
             case Group::EV: return m.ev[s.field];
             case Group::Moves: return m.moves[s.field];
+            case Group::PP: return m.pp[s.field];
             case Group::Ability: return m.ability;
             case Group::Nature: return m.nature;
         }
@@ -87,7 +63,8 @@ inline unsigned original(const State& s) {
     return 0;
 }
 inline unsigned minimum(const State& s) {
-    return s.proposalFrom == Screen::Edit && s.group == Group::Moves ? 1u : 0u;
+    return s.proposalFrom == Screen::Edit && s.group == Group::Moves ? 1u :
+           s.proposalFrom == Screen::Bag ? 1u : 0u;
 }
 inline unsigned maximum(const State& s) {
     if(s.proposalFrom == Screen::Money) return 999999;
@@ -101,9 +78,10 @@ inline unsigned maximum(const State& s) {
                 for(unsigned i=0;i<6;i++) if(i!=s.field) other+=m.ev[i];
                 return std::min(252u, other <= 510u ? 510u-other : 0u);
             }
-            case Group::Moves: return 1024;
-            case Group::Ability: return 255;
-            case Group::Nature: return 24;
+            case Group::Moves: return 1024; // Demo IDs only; Phase18 whitelist required
+            case Group::PP: return 64;
+            case Group::Ability: return 1; // Phase18 encodes only binary slot
+            case Group::Nature: return 24; // read-only; PID mutation forbidden
         }
     }
     return 0;
@@ -117,6 +95,27 @@ inline const char* recoveryMessage(unsigned code) {
         default: return "Restore denied: CMAC and rollback are not approved.";
     }
 }
+inline bool canPreview(const State& s) {
+    if(!s.demo.synthetic) return false; // no edits of real-data views
+    if(s.proposalFrom==Screen::Money)
+        return s.demo.moneyStatus==Availability::Ready;
+    if(s.proposalFrom==Screen::Bag)
+        return s.demo.bagStatus==Availability::Ready &&
+               s.selected<s.demo.bagCount;
+    if(s.proposalFrom==Screen::Edit)
+        return !s.fromPC && s.demo.partyStatus==Availability::Ready &&
+               s.mon<s.demo.partyCount && !pokemon(s).egg &&
+               s.group!=Group::Ability && s.group!=Group::Nature;
+    return false;
+}
+inline bool validProposal(const State& s) {
+    if(!canPreview(s) || s.proposal==original(s) ||
+       s.proposal<minimum(s) || s.proposal>maximum(s))return false;
+    // Phase18 cannot accept new move IDs without independently verified
+    // ROM-specific allowlists. This demo has none: PP-only is previewable.
+    if(s.proposalFrom==Screen::Edit && s.group==Group::Moves)return false;
+    return true;
+}
 inline void openNotice(State& s, Screen ret, const char* message) {
     s.returnTo=ret; s.notice=message; s.screen=Screen::Notice;
 }
@@ -124,6 +123,14 @@ inline void startProposal(State& s, Screen from) {
     s.proposalFrom=from;
     // Backup actions are confirmations, never proposals of save-byte changes.
     if(from==Screen::Backups) { s.screen=Screen::ConfirmOne; return; }
+    if(!s.demo.synthetic) {
+        openNotice(s,from,"Real-data view: edits require independently approved backend.");
+        return;
+    }
+    if(!canPreview(s)) {
+        openNotice(s,from,"UNSUPPORTED: PC/ability/nature edits are not verified.");
+        return;
+    }
     s.proposal=original(s);
     s.screen=Screen::Proposal;
 }
@@ -141,11 +148,12 @@ inline void press(State& s, Key k) {
         return;
     }
     if(s.screen==Screen::ConfirmOne || s.screen==Screen::ConfirmTwo) {
-        if(k==Key::B) { s.screen=s.proposalFrom; return; }
+        if(k==Key::B) { s.screen=s.proposalFrom==Screen::Backups ?
+                                      Screen::Backups:Screen::Proposal; return; }
         if(k==Key::A) {
             if(s.screen==Screen::ConfirmOne) s.screen=Screen::ConfirmTwo;
             else openNotice(s,s.proposalFrom,
-                "BLOCKED: demo only. No files or live saves changed.");
+                "BLOCKED: demonstration only. No save or backup changed.");
         }
         return;
     }
@@ -156,7 +164,11 @@ inline void press(State& s, Key k) {
             case Key::Right: adjust(s,10); break;
             case Key::Left: adjust(s,-10); break;
             case Key::X: s.proposal=original(s); break;
-            case Key::A: s.screen=Screen::ConfirmOne; break;
+            case Key::A:
+                if(validProposal(s))s.screen=Screen::ConfirmOne;
+                else openNotice(s,Screen::Proposal,
+                    "INVALID/UNVERIFIED: unchanged value or unsupported move ID.");
+                break;
             case Key::B: s.screen=s.proposalFrom; break;
             default: break;
         }
@@ -164,7 +176,13 @@ inline void press(State& s, Key k) {
     }
     if(s.screen==Screen::Pokemon) {
         if(k==Key::B) s.screen=s.fromPC?Screen::PC:Screen::Party;
-        else if(k==Key::A || k==Key::X) { s.group=Group::IV; s.field=0; s.screen=Screen::Edit; }
+        else if(k==Key::A || k==Key::X) {
+            if(s.fromPC)openNotice(s,Screen::Pokemon,
+                "PC edit UNSUPPORTED: storage layout not verified.");
+            else if(s.demo.partyStatus!=Availability::Ready)
+                openNotice(s,Screen::Pokemon,"Party data unavailable.");
+            else {s.group=Group::IV; s.field=0;s.screen=Screen::Edit;}
+        }
         return;
     }
     if(s.screen==Screen::Money) {
@@ -176,12 +194,13 @@ inline void press(State& s, Key k) {
         if(k==Key::B) { s.screen=Screen::Pokemon; return; }
         if(k==Key::L || k==Key::R) {
             unsigned g=static_cast<unsigned>(s.group);
-            g=(g+(k==Key::R?1u:4u))%5u;
+            g=(g+(k==Key::R?1u:5u))%6u;
             s.group=static_cast<Group>(g); s.field=0; return;
         }
     } else if(s.screen==Screen::PC) {
         if(k==Key::L || k==Key::R) {
-            s.box=(s.box+(k==Key::R?1u:1u))%2u;
+            if(s.demo.pcStatus!=Availability::Ready || !s.demo.pcBoxes)return;
+            s.box=(s.box+(k==Key::R?1u:s.demo.pcBoxes-1u))%s.demo.pcBoxes;
             s.selected=0; return;
         }
     }
@@ -213,12 +232,19 @@ inline void press(State& s, Key k) {
             break;
         case Screen::Party:
         case Screen::PC:
+            if(!count(s)) {
+                openNotice(s,s.screen,"No validated Pokemon available for this view.");
+                break;
+            }
             s.fromPC=s.screen==Screen::PC; s.mon=s.selected;
             s.screen=Screen::Pokemon;
             break;
         case Screen::Edit: startProposal(s,Screen::Edit); break;
         case Screen::Recovery: openNotice(s,Screen::Recovery,recoveryMessage(s.selected)); break;
-        case Screen::Bag: startProposal(s,Screen::Bag); break;
+        case Screen::Bag:
+            if(!count(s))openNotice(s,Screen::Bag,"Bag unavailable or empty.");
+            else startProposal(s,Screen::Bag);
+            break;
         case Screen::Backups:
             if(s.selected==1) openNotice(s,Screen::Backups,
                 "Backup status UNKNOWN. Check GodMode9/Checkpoint outside this demo.");
