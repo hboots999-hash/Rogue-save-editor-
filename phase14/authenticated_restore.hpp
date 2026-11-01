@@ -52,7 +52,10 @@ inline bool layout(const Bytes& b,Layout& l) {
         return false;
     const uint32_t low=std::min(a.timesSaved,z.timesSaved);
     const uint32_t high=std::max(a.timesSaved,z.timesSaved);
-    if(high==UINT32_MAX || high-low!=1u) return false;
+    // The staged target increments the active counter. Disallow the final
+    // increment that would produce UINT32_MAX, which this same layout policy
+    // rejects on readback, as well as the overflowing case.
+    if(high>=UINT32_MAX-1u || high-low!=1u) return false;
     const auto chosen=a.timesSaved>z.timesSaved?a:z;
     if(std::memcmp(b.data()+0x40,b.data()+SlotSize+0x40,16)) return false;
     l.active=chosen.offset; l.target=l.active?0:SlotSize; l.counter=chosen.timesSaved;
