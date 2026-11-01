@@ -16,7 +16,7 @@ This branch diverges from `feature/phase7-native-ci` and intentionally does **no
 
 `phase9/profiles/confirmed_h168_save_layout_READ_ONLY.md` documents an earlier private read-only H168 copy inspection (28/28 sector checksums, dual keys, 104-byte party stride). The exact user's **private save/ROM is not in CI** and was not available for this phase's independent fixture testing. That evidence is more relevant than vanilla Emerald's 100-byte party assumption.
 
-The upstream [pret/pokeemerald Pokémon layout](https://github.com/pret/pokeemerald/blob/master/include/pokemon.h) describes 48 encrypted bytes, 24 shuffles, 30 IV bits, an egg bit and a binary ability slot. It is **not** an authoritative ID database for Emerald Rogue 2.1.2. The Rogue EX-v2.1 source stores a **three-way ability index** separately from the **Gigantamax flag**, as explained in [SOURCE_FINDINGS.md](SOURCE_FINDINGS.md). The observed private H168 save's section-1 money and bag offsets differ from that public source, so do not assume all other offsets match.
+The upstream [pret/pokeemerald Pokémon layout](https://github.com/pret/pokeemerald/blob/master/include/pokemon.h) describes 48 encrypted bytes, 24 shuffles, 30 IV bits, an egg bit and a binary ability slot. It is **not** an authoritative ID database for Emerald Rogue 2.1.2. The Rogue EX-v2.1 source stores a **three-way ability index** separately from the **Gigantamax flag**, as explained in [SOURCE_FINDINGS.md](SOURCE_FINDINGS.md). The public source's old offset comments predate its 104-byte party records; field-size calculations reproduce the historically observed H168 money (0x4A8) and bag (0x578) positions. The ROM's bag upgrade byte and content metadata still require independent private-build verification.
 
 No official v2.1.2 move table, custom ability mapping or verified bag pocket insertion semantics has been independently extracted from the **matching embedded ROM SHA-256** `111b0008bcec519c59a02de57895a924fee5d3633c8b8fbb394a497153778ca3`. The fingerprint identifies the observed supplied ROM; it is not permission to edit a different build.
 
@@ -46,3 +46,22 @@ See `PHASE_HANDOFF.md` here for status and integration requirements. Never put p
 ## Phase19 data-model contract
 
 `phase18/editor_model.hpp` defines `ModelApiVersion=1`, `SaveView`, `EditorCapabilities`, `PartyView`, `ItemView`, `inspectReadOnly` and `beginRequest`. Use the current copied-save view to build request guards (counter, identity, checksum, old values), then alter only desired target fields after explicit user confirmation. PC parsing is an **optional read-only research candidate**; the layout remains unproven against the exact installed v2.1.2 ROM. See [SOURCE_FINDINGS.md](SOURCE_FINDINGS.md) for the public-source differences.
+
+
+## Additional Phase20 guardrails
+
+The live-save code remains untouched. Phase18's original `Request`/RAM proposal
+API is extended without changing its operation enum: `Request.expectedDigest`
+can pin the whole original copied save using portable SHA-256, and every
+request created from Phase19's `SaveView` pins this digest automatically.
+`beginMoveRequest(view,partySlot,moveSlot,request)` selects any existing
+move (0–3) with slot-specific optimistic locks. Unverified move identifiers,
+ability meaning, nature behaviour, bag inserts and PC edits remain disabled.
+The bank validator also handles a legitimate UINT32_MAX-to-zero save counter
+rollover, preserving the actual newest sector bank.
+
+The source geometry reconciliation and strict feature status are recorded in
+[SOURCE_FINDINGS.md](SOURCE_FINDINGS.md) and
+[PHASE20_FEATURE_MATRIX.md](PHASE20_FEATURE_MATRIX.md).
+Synthetic C++ and ARM11 compile tests do not establish real ROM compatibility
+or gameplay-correct recalculation of cached IV/EV/nature-dependent party stats.
