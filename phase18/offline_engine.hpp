@@ -5,6 +5,7 @@
 #pragma once
 #include "../phase10/preview/offline.hpp"
 #include "bag_rules.hpp"
+#include "source_digest.hpp"
 #include <array>
 #include <algorithm>
 #include <cstddef>
@@ -45,6 +46,7 @@ struct Mon {
 struct Request {
     Kind kind=Kind::Money;
     uint32_t expectedCounter=0; // active-bank optimistic lock; required
+    Digest256 expectedDigest{}; // optional for direct callers; Phase19 always pins SHA-256
     unsigned slot=0;             // party index or bag index
     uint32_t expectedMoney=0,money=0;
     uint16_t expectedItemId=0,expectedQuantity=0,itemId=0,quantity=0;
@@ -192,6 +194,8 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
                       const Evidence& evidence=Evidence{}){
     h168::Info before{};
     if(!validate(raw,n,before))return blocked("Unrecognised/incomplete H168 dual-bank layout");
+    if(hasDigest(req.expectedDigest) && sourceDigest(raw,n)!=req.expectedDigest)
+        return blocked("Source SHA-256 differs from displayed copy");
     const h168::Bank& bank=before.banks[before.active];
     if(req.expectedCounter!=bank.counter)return blocked("Stale active-bank counter");
     // Nature is stored as a 5-bit XOR modifier in the unencrypted BoxPokemon
