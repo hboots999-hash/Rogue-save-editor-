@@ -113,7 +113,7 @@ jobs:
           cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
-          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_copy_v1.hpp} phase20-build/include/phase18/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
           test -s phase20-build/build/main.su
           cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
