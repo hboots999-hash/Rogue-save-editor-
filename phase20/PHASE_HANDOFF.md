@@ -9,7 +9,7 @@
 | --- | --- | --- |
 | Phase17 PR #9 | `e3fd4971071de91285a4c42b3717b1d1f70999e9` | Public `readonly_status_v1.h` C ABI, fixed-size status, zero capability bits; producer remains separate |
 | Phase18 PR #8 | `9569c2ac3f7693ee9d9bed5b30a84f79cb8c2d91` | Isolated `rogue18::raw_v1` parser namespace, `SaveView` model v1 and source SHA-256 |
-| Phase19 PR #7 | `ac81e99941e8e5bfaf28f43c3359087472ad30f0` | L-free 3DS UI, guarded copied-save importer, no real-data edit states, Rosalina START+SELECT safe exit |
+| Phase19 PR #7 | `e0b19c562b9b2ddf7148e01ecb84a88f1d04c921` | L-free 3DS UI, guarded copied-save importer, no real-data edit states, Rosalina START+SELECT safe exit |
 | Original independent QA | `8c5cc54fd96607a5706e8934c3ebbccf23c88f95` | Prior negative tests, release-gate register and documented Phase14 concerns |
 
 **Re-pin when Phase17/18/19 fixes are finished; existing CI evidence is only for the exact SHA set tested.**
@@ -35,7 +35,7 @@
 
 ## Acceptance gate for following milestone
 
-- [ ] Pinned exact-sha combined host strict and sanitizers pass.
+- [ ] Pinned exact-sha combined host strict and sanitizers pass; first run caught incompatible old Phase19 model, corrected SHA in subsequent CI.
 - [ ] Native ARM11 compiled/link outputs and separate-title experimental CIA pass title-ID safety tests.
 - [ ] Clear deterministic namespace boundary without alias hacks after Phase19 upstream adopts explicit versioned types.
 - [ ] Phase17 independent recovery evidence compatible with host+native, without live-save write.
