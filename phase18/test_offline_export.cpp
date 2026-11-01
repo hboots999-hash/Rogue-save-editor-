@@ -75,6 +75,49 @@ int main(int argc,char** argv){
     CHECK(!exportCopied(original.data(),original.size(),imp.c_str(),root.c_str(),q).ok);
     CHECK(!fs::exists(root/"drafts/phase18_draft_004.sav"));
     CHECK(read(imp)==original);
+    // Every v2 supported offline operation must be verified through the
+    // actual immutable-copy exporter, not just the RAM candidate generator.
+    const auto snapshot=v2::inspect(original.data(),original.size());
+    CHECK(snapshot.data.valid);
+    for(const Kind operation:{Kind::ExistingQuantity,Kind::IVs,Kind::EVs,Kind::Move}){
+        Request guarded{};
+        if(operation==Kind::Move)
+            CHECK(v2::beginMove(snapshot,0,1,guarded));
+        else CHECK(v2::begin(snapshot,operation,
+                            operation==Kind::EVs?1u:0u,guarded));
+        switch(operation){
+        case Kind::ExistingQuantity:guarded.quantity=guarded.expectedQuantity+1;break;
+        case Kind::IVs:guarded.stats={31,30,29,28,27,26};break;
+        case Kind::EVs:guarded.stats={0,0,0,0,252,252};break;
+        case Kind::Move:guarded.pp=guarded.expectedPP-1;break;
+        default:CHECK(false);
+        }
+        auto proposal=v2::preview(original.data(),original.size(),guarded);
+        CHECK(proposal.ok);
+        auto saved=exportCopied(original.data(),original.size(),
+                                imp.c_str(),root.c_str(),guarded);
+        CHECK(saved.ok && saved.changed==proposal.changedOffsets.size());
+        const auto restored=read(root/"drafts"/saved.draftName);
+        CHECK(restored==proposal.candidate);
+        CHECK(v2::verify(original.data(),original.size(),
+                         restored.data(),restored.size(),guarded));
+        CHECK(read(imp)==original);
+    }
+    Request forbidden{};
+    CHECK(v2::beginMove(snapshot,0,0,forbidden));
+    forbidden.moveId=600;
+    CHECK(!exportCopied(original.data(),original.size(),imp.c_str(),
+                        root.c_str(),forbidden).ok);
+    forbidden.kind=Kind::InsertItem;
+    CHECK(!exportCopied(original.data(),original.size(),imp.c_str(),
+                        root.c_str(),forbidden).ok);
+    forbidden.kind=Kind::Nature;
+    CHECK(!exportCopied(original.data(),original.size(),imp.c_str(),
+                        root.c_str(),forbidden).ok);
+    forbidden.kind=Kind::AbilitySlot;
+    CHECK(!exportCopied(original.data(),original.size(),imp.c_str(),
+                        root.c_str(),forbidden).ok);
+    CHECK(read(imp)==original);
     fs::remove_all(root);
     std::cout<<"PASS Phase18 SD import: untouched source, immutable backups, fresh readback, exact draft, stale/unsupported/path rejection\n";
 }
