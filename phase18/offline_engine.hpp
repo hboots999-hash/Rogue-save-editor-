@@ -5,6 +5,7 @@
 #pragma once
 #include "../phase10/preview/offline.hpp"
 #include "bag_rules.hpp"
+#include "layout_geometry.hpp"
 #include "source_digest.hpp"
 #include <array>
 #include <algorithm>
@@ -29,6 +30,7 @@ struct Evidence {
     // Capacity-upgrade byte address is not yet confirmed for private H168.
     // Explicit independent evidence is required; 255 means unverified.
     unsigned verifiedUpgradeCount=255;
+    bool verifiedH168BagUpgradeOffset=false;
     std::vector<std::pair<uint16_t,uint8_t>> verifiedItemPockets{};
     bool verifiedAbilitySlot=false;
     bool verifiedNatureModifier=false; // matching ROM's GetNature uses header byte +18
@@ -154,7 +156,7 @@ inline bool validateBankBag(const uint8_t* raw,const h168::Bank& bank){
     const size_t s1=bank.sector[1];
     bool gap=false;
     for(unsigned i=0;i<450;i++){
-        const size_t off=s1+0x578+i*4;
+        const size_t off=s1+layout::BagArray+i*layout::ItemSlotStride;
         const uint16_t id=h168::r16(raw,off);
         if(!id){gap=true;continue;}
         if(gap)return false;
@@ -171,11 +173,11 @@ inline bool validate(const uint8_t* raw,size_t n,h168::Info& info){
     for(const auto& bank:info.banks){
         if(!validateBankBag(raw,bank))return false;
         const size_t s1=bank.sector[1];
-        const uint32_t count=h168::r32(raw,s1+0x234);
-        if(count>6 || (h168::r32(raw,s1+0x4a8)^bank.key)>999999u)return false;
+        const uint32_t count=h168::r32(raw,s1+layout::PartyCount);
+        if(count>6 || (h168::r32(raw,s1+layout::Money)^bank.key)>999999u)return false;
         for(unsigned i=0;i<count;i++){
             Mon m{};
-            if(!decodeMon(raw,n,s1+0x238+104*i,m))return false;
+            if(!decodeMon(raw,n,s1+layout::PartyStart+layout::PartyStride*i,m))return false;
         }
     }
     return true;
@@ -184,7 +186,7 @@ inline bool partyAt(const uint8_t* raw,size_t n,const h168::Info& info,
                     unsigned index,Mon& mon){
     if(!info.valid || index>=info.partyCount)return false;
     const size_t s1=info.banks[info.active].sector[1];
-    return decodeMon(raw,n,s1+0x238+104*index,mon);
+    return decodeMon(raw,n,s1+layout::PartyStart+layout::PartyStride*index,mon);
 }
 inline Result blocked(const char* reason){return {false,reason,{},{}};}
 // Creates an edited 128-KiB RAM vector only. Does not export or import files.
@@ -216,7 +218,7 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
     if(req.kind==Kind::Money){
         if(before.money!=req.expectedMoney || req.money>999999u ||
            before.money==req.money)return blocked("Money guard, range or no-op");
-        field=s1+0x4a8;width=4;
+        field=s1+layout::Money;width=4;
         h168::w32(draft.data(),field,req.money^bank.key);
     }else if(req.kind==Kind::ExistingQuantity){
         unsigned id=0,qty=0;
@@ -224,7 +226,7 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
            id!=req.expectedItemId || qty!=req.expectedQuantity ||
            req.quantity<1 || req.quantity>999 || qty==req.quantity)
             return blocked("Existing item guard, range or no-op");
-        field=s1+0x578+req.slot*4+2;width=2;
+        field=s1+layout::BagArray+req.slot*layout::ItemSlotStride+2;width=2;
         h168::w16(draft.data(),field,uint16_t(req.quantity^uint16_t(bank.key)));
     }else if(req.kind==Kind::InsertItem){
         if(!evidence.verifiedBagInsertion ||
@@ -244,10 +246,14 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
             if(!h168::item(raw,before,i,id,qty))return blocked("Unverified existing item");
             existingIds.push_back(static_cast<uint16_t>(id));
         }
+        if(!evidence.verifiedH168BagUpgradeOffset ||
+           evidence.verifiedUpgradeCount>BagMaxUpgrades ||
+           layout::bagUpgradeCandidate(raw,s1)!=evidence.verifiedUpgradeCount)
+            return blocked("Unverified or stale H168 bag upgrade field");
         if(!insertionCompatible(evidence.verifiedItemPockets,existingIds,
                                 req.itemId,evidence.verifiedUpgradeCount))
             return blocked("Bag pocket ordering/capacity evidence missing or exceeded");
-        field=s1+0x578+req.slot*4;width=4;
+        field=s1+layout::BagArray+req.slot*layout::ItemSlotStride;width=4;
         h168::w16(draft.data(),field,req.itemId);
         h168::w16(draft.data(),field+2,uint16_t(req.quantity^uint16_t(bank.key)));
     }else{
@@ -256,7 +262,7 @@ inline Result propose(const uint8_t* raw,size_t n,const Request& req,
            oldMon.species!=req.expectedSpecies ||
            oldMon.checksum!=req.expectedPokemonChecksum)
             return blocked("Pokémon identity/checksum guard or egg rejected");
-        monAt=s1+0x238+104*req.slot;
+        monAt=s1+layout::PartyStart+layout::PartyStride*req.slot;
         monData=plaintext(raw,monAt);
         monEdit=true;
         if(req.kind==Kind::IVs){
