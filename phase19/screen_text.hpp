@@ -70,4 +70,26 @@ inline void forEachBoundedLine(const char* raw,unsigned width,unsigned maxLines,
         ++lines;
     }
 }
+// Hardware console-safe, allocation-free wrapper. An arbitrarily long SD
+// error or exported filename must NOT scroll critical warnings off screen.
+// Reserves the final line for a visible truncation warning when needed.
+template <typename Emit>
+inline void forEachWrappedLineBounded(const char* raw,unsigned width,
+                                      unsigned maxLines,Emit emit) {
+    if(!raw || !width || !maxLines)return;
+    unsigned observed=0;
+    const char* held=nullptr;
+    unsigned heldSize=0;
+    forEachWrappedLine(raw,width,[&](const char* text,unsigned n) {
+        if(observed+1u<maxLines)emit(text,n);
+        else if(observed+1u==maxLines){held=text;heldSize=n;}
+        if(observed<maxLines+1u)++observed;
+    });
+    if(observed>=maxLines){
+        if(observed>maxLines){
+            constexpr const char note[]="[message truncated]";
+            emit(note,width<sizeof(note)-1u?width:sizeof(note)-1u);
+        } else if(held)emit(held,heldSize);
+    }
+}
 } // namespace phase19
