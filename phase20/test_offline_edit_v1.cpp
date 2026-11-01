@@ -12,6 +12,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iostream>
+#include <new>
+#include <stdexcept>
 #include <vector>
 namespace fs=std::filesystem;
 
@@ -36,6 +38,16 @@ static rogue18::ExportResult hostSubmit(
     return phase20::exportGuarded(c.source->data(),c.source->size(),
         display,captured,choice,c.import.c_str(),c.root.c_str());
 }
+static rogue18::ExportResult failAllocation(
+    const phase19::Demo&,const phase20::CopyObservation&,
+    const phase20::EditChoice&,void*) {
+    throw std::bad_alloc{};
+}
+static rogue18::ExportResult failUnexpected(
+    const phase19::Demo&,const phase20::CopyObservation&,
+    const phase20::EditChoice&,void*) {
+    throw std::runtime_error("simulated exporter exception");
+}
 int main(){
     using namespace phase20;
     const auto original=fixture();
@@ -53,14 +65,14 @@ int main(){
         {OfflineKind::Money,0,0,40002},
         {OfflineKind::ExistingItem,0,0,display.bag[0].quantity+1u},
         {OfflineKind::IV,0,0,(display.party[0].iv[0]+1u)%32u},
-        {OfflineKind::EV,0,0,0},
+        {OfflineKind::EV,0,0,display.party[0].ev[0]+1u},
         {OfflineKind::PP,0,0,display.party[0].pp[0]>0?
                                          display.party[0].pp[0]-1u:1u}
     };
     unsigned completed=0;
     for(const auto& choice:examples){
-        if(choice.kind==OfflineKind::EV &&
-           choice.value==display.party[0].ev[0])continue;
+        assert(choice.kind!=OfflineKind::EV ||
+               choice.value!=display.party[0].ev[0]);
         rogue18::Request request{};
         assert(requestForCopy(original.data(),original.size(),
                               display,captured,choice,request,message));
@@ -77,7 +89,7 @@ int main(){
         assert(!output.draftName.empty() && !output.backupName.empty());
         completed++;
     }
-    assert(completed>=4u);
+    assert(completed==5u); // every supported class gets a real distinct draft
     // Every request is fingerprint pinned to the first displayed import.
     auto stale=original;
     stale.back()^=0x20; // normally unchecksummed trailing sector
@@ -87,6 +99,14 @@ int main(){
     assert(!exportGuarded(stale.data(),stale.size(),display,captured,
                           examples[0],input.c_str(),root.c_str()).ok);
     assert(readBytes(input)==original);
+    // Missing and truncated SD import must fail closed without a new draft.
+    fs::remove(input);
+    assert(!exportGuarded(original.data(),original.size(),display,captured,
+                          examples[0],input.c_str(),root.c_str()).ok);
+    writeBytes(input,std::vector<uint8_t>(131071u,0));
+    assert(!exportGuarded(original.data(),original.size(),display,captured,
+                          examples[0],input.c_str(),root.c_str()).ok);
+    writeBytes(input,original);
     // The exporter re-reads the actual fixed source and refuses changed input.
     writeBytes(input,stale);
     assert(!exportGuarded(original.data(),original.size(),display,captured,
@@ -153,6 +173,23 @@ int main(){
     assert(takeOfflineKey(state,flow,captured,phase19::Key::B));
     assert(flow.stage==EditStage::Idle);
     assert(state.screen==phase19::Screen::Money);
+    // Fault-injected failures must not escape into native console event loop.
+    // They MUST NOT report a successful draft or change the source.
+    for(const auto callback:{&failAllocation,&failUnexpected}) {
+        flow=OfflineFlow{};
+        flow.stage=EditStage::ConfirmTwo;
+        flow.choice={OfflineKind::Money,0,0,display.money+1};
+        flow.original=display.money;
+        flow.proposed=display.money+1;
+        assert(takeOfflineKey(state,flow,captured,phase19::Key::A,
+                              callback,nullptr));
+        assert(flow.stage==EditStage::Result && !flow.succeeded);
+        assert(std::string(flow.result).find("EXPORT")!=std::string::npos ||
+               std::string(flow.result).find("OUT OF MEMORY")!=std::string::npos);
+        assert(readBytes(input)==original);
+        assert(takeOfflineKey(state,flow,captured,phase19::Key::B));
+        assert(flow.stage==EditStage::Idle);
+    }
     state.demoPreviewEnabled=true;
     assert(!takeOfflineKey(state,flow,captured,phase19::Key::A));
     state.demoPreviewEnabled=false;
