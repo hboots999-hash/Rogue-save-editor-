@@ -93,6 +93,22 @@ int main(){
     press(pc,Key::R);assert(pc.box==1);
     press(pc,Key::A);assert(pc.screen==Screen::Pokemon);
     press(pc,Key::A);assert(pc.screen==Screen::Notice); // no PC editing
+    // Page across a larger validated mock PC box using D-pad down edges.
+    f.sample.pcCounts[0]=12;
+    for(unsigned i=3;i<12;i++)f.sample.pc[0][i]=f.sample.pc[0][0];
+    real=capture(f);
+    assert(real.pcStatus==Availability::Ready && real.pcCounts[0]==12);
+    State paged(real);
+    paged.homeRow=1;press(paged,Key::A);
+    for(unsigned i=0;i<40;i++)press(paged,Key::Down);
+    assert(paged.selected==11 && count(paged)==12);
+    press(paged,Key::A);
+    assert(paged.screen==Screen::Pokemon && paged.mon==11);
+    press(paged,Key::B);
+    assert(paged.selected==11);
+    press(paged,Key::R);
+    assert(paged.selected==0 && paged.box==1);
+
     f.sample.pc[1][1].nature=26;
     real=capture(f);
     assert(real.pcStatus==Availability::Invalid && real.pcBoxes==0);
