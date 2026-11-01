@@ -11,6 +11,9 @@
 #undef main
 #include "ui.hpp"
 #include "read_only_import.hpp"
+// Host-only comparison against the Phase18 heap-backed versioned API.
+// NEVER include this in 3DS native main: PC research uses a 37 KiB stack frame.
+#include "phase18/editor_model.hpp"
 #include <cassert>
 #include <cstring>
 #include <iostream>
@@ -68,6 +71,37 @@ int main(){
     assert(inspectCopiedBuffer(bytes.data(),bytes.size(),live,reason));
     assert(!live.synthetic);
     assert(live.sourceModelApi==rogue18::ModelApiVersion);
+    static_assert(Phase18ReadModelApiV1==rogue18::ModelApiVersion,
+                  "Native decoder and reviewed Phase18 SaveView differ");
+    const auto model=rogue18::inspectReadOnly(bytes.data(),bytes.size(),false);
+    assert(model.valid && model.confidence==rogue18::DataConfidence::StructurallyValidated);
+    assert(model.apiVersion==Phase18ReadModelApiV1);
+    assert(model.sourceSha256==live.sourceSha256);
+    assert(model.activeCounter==live.activeCounter && model.money==live.money);
+    assert(model.party.size()==live.partyCount && model.items.size()==live.bagCount);
+    for(unsigned i=0;i<live.partyCount;i++) {
+        const auto& mon=model.party[i].value;
+        assert(mon.species==live.party[i].species);
+        assert(mon.abilitySlot==live.party[i].ability);
+        assert(mon.effectiveNature==live.party[i].nature);
+        for(unsigned j=0;j<6;j++) {
+            assert(mon.ivs[j]==live.party[i].iv[j]);
+            assert(mon.evs[j]==live.party[i].ev[j]);
+        }
+        for(unsigned j=0;j<4;j++) {
+            assert(mon.moves[j]==live.party[i].moves[j]);
+            assert(mon.pp[j]==live.party[i].pp[j]);
+        }
+    }
+    for(unsigned i=0;i<live.bagCount;i++) {
+        assert(model.items[i].itemId==live.bag[i].id);
+        assert(model.items[i].quantity==live.bag[i].quantity);
+    }
+    assert(model.capabilities.copiedSaveOnly);
+    assert(!model.capabilities.liveWrite && !model.capabilities.restore);
+    assert(!model.capabilities.pcEdit && !model.capabilities.insertItem);
+    assert(!model.capabilities.arbitraryMoveId && !model.capabilities.nature);
+
     assert(rogue18::hasDigest(live.sourceSha256));
     assert(live.sourceSha256==rogue18::sourceDigest(bytes.data(),bytes.size()));
     assert(live.moneyStatus==Availability::Ready && live.money==40001);
