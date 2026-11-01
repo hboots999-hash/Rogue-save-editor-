@@ -71,3 +71,27 @@ jobs:
             exit 1
           fi
           test ! -f phase18/*.sav
+
+  native-model-compile:
+    name: 3DS devkitPro header integration (compile only)
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install 3DS development headers
+        run: |
+          set -eu
+          dkp-pacman -S --noconfirm --needed 3ds-dev
+      - name: Compile Phase19-compatible model and SD-only exporter for ARM11
+        run: |
+          set -eu
+          "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp \
+            -I"${DEVKITPRO}/libctru/include" -Iphase18 -D__3DS__ \
+            -c phase18/native_compile.cpp -o /tmp/phase18-native.o
+          "${DEVKITARM}/bin/arm-none-eabi-nm" /tmp/phase18-native.o > /tmp/symbols.txt
+          if grep 'FSPXI_' /tmp/symbols.txt; then
+            echo "Unexpected live game PxiFS symbol in Phase18 object"; exit 1
+          fi
+          test -s /tmp/phase18-native.o
