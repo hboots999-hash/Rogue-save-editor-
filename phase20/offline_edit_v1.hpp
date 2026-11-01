@@ -211,8 +211,14 @@ inline bool offlineVisible(const phase19::State& state,
            state.demo.sourceSha256==observation.sourceSha256 &&
            state.demo.activeCounter==observation.activeCounter;
 }
+// Host-only QA may inject the SAME guarded export path with a temporary
+// source directory. Production always defaults to the hard-coded native
+// SDMC import + immutable backup/draft location.
+using OfflineSubmit = rogue18::ExportResult(*)(
+    const phase19::Demo&,const CopyObservation&,const EditChoice&,void*);
 inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
-                           const CopyObservation& observation,phase19::Key key) {
+                           const CopyObservation& observation,phase19::Key key,
+                           OfflineSubmit submit=nullptr,void* testContext=nullptr) {
     using phase19::Key;
     if(flow.stage==EditStage::Idle) {
         if(!offlineVisible(state,observation) || key!=Key::A)return false;
@@ -304,7 +310,9 @@ inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
         case EditStage::ConfirmTwo:
             if(key==Key::B)flow.stage=EditStage::Value;
             if(key==Key::A) {
-                const auto saved=exportFixedSDCopy(state.demo,observation,flow.choice);
+                const auto saved=submit ?
+                    submit(state.demo,observation,flow.choice,testContext) :
+                    exportFixedSDCopy(state.demo,observation,flow.choice);
                 flow.succeeded=saved.ok;
                 if(saved.ok)
                     std::snprintf(flow.result,sizeof(flow.result),
