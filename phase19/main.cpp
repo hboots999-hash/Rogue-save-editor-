@@ -1,9 +1,11 @@
-/* Phase 19 isolated native 3DS UI; GPL-3.0-or-later.
- * Synthetic data only. NO filesystem, imported save, installed-title access, or restore.
+/* Phase 19: synthetic demo and opt-in read-only SD copy. GPL-3.0-or-later.
+ * No live GBA VC title access, game archive, save edit, or restoration.
  */
 #include <3ds.h>
 #include <cstdio>
 #include "ui.hpp"
+#include "read_only_import.hpp"
+#include <string>
 using namespace phase19;
 namespace {
 const char* names[6]={"HP","Atk","Def","SpA","SpD","Spe"};
@@ -23,9 +25,10 @@ void line(unsigned i,unsigned selected,const char* str) {
 }
 void top(const State& s) {
     consoleClear();
-    std::puts("PKSM ROGUE - PHASE 19 UI DEMO");
+    std::puts("PKSM ROGUE - PHASE 19 COPY VIEW");
     std::puts("==============================");
-    std::puts("SYNTHETIC ONLY / NO SAVE WRITES");
+    std::puts(s.demo.synthetic?"SYNTHETIC DEMO - NO SAVE WRITES":
+              "IMPORTED SD COPY - READ ONLY");
     std::puts("");
     switch(s.screen) {
         case Screen::Home:
@@ -36,14 +39,16 @@ void top(const State& s) {
             line(3,s.homeRow,"Money");
             line(4,s.homeRow,"Backups");
             line(5,s.homeRow,"Recovery help");
-            std::puts("\nFictional example data only.");
+            line(6,s.homeRow,"Inspect SD copy (read-only)");
+            std::puts(s.demo.synthetic?"\nFictional example data.":"\nValidated copy view (no edits).");
             break;
         case Screen::Party:
             std::puts("PARTY - demonstration roster");
             std::printf("Status: %s\n",availabilityText(s.demo.partyStatus));
             for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.party[i];
-                std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
+                if(m.level)std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
+                else std::printf("%c %u %-14s Lv?\n",i==s.selected?'>':' ',i+1u,m.name);
             }
             break;
         case Screen::PC: {
@@ -65,15 +70,17 @@ void top(const State& s) {
         }
         case Screen::Pokemon: {
             const auto& m=pokemon(s);
-            std::printf("%s  Lv%u (Species %u)\n",m.name,m.level,m.species);
-            std::printf("Source: %s\n",s.fromPC?"PC demo":"Party demo");
+            if(m.level)std::printf("%s Lv%u (Species %u)\n",m.name,m.level,m.species);
+            else std::printf("%s Lv? (Species %u)\n",m.name,m.species);
+            std::printf("Source: %s\n",s.fromPC?"PC demo":
+                        s.demo.synthetic?"Party demo":"Copied SD import");
             std::printf("Ability slot %u  Nature %u\n",m.ability,m.nature);
             std::puts("\nStat       IV     EV");
             for(unsigned i=0;i<6;i++)
                 std::printf("%-7s   %2u    %3u\n",names[i],m.iv[i],m.ev[i]);
             std::puts("\nMove IDs:");
             for(unsigned i=0;i<4;i++) std::printf("%u: %u  ",i+1u,m.moves[i]);
-            std::puts(s.fromPC?"\n\nPC fields: READ ONLY":"\n\nA: explore party edit demo");
+            std::puts(s.fromPC||!s.demo.synthetic?"\n\nREAD ONLY: editing disabled":"\n\nA: explore party edit demo");
             break;
         }
         case Screen::Edit: {
@@ -107,7 +114,7 @@ void top(const State& s) {
             break;
         }
         case Screen::Bag:
-            std::puts("BAG / ITEMS - DEMO");
+            std::puts(s.demo.synthetic?"BAG / ITEMS - DEMO":"BAG / ITEMS - READ ONLY");
         {
             std::printf("Status: %s\n",availabilityText(s.demo.bagStatus));
             const unsigned first=(s.selected/6u)*6u;
@@ -119,7 +126,7 @@ void top(const State& s) {
                             item.quantity,item.id);
             }
             if(count(s))std::printf("%u-%u of %u stacks\n",first+1u,stop,count(s));
-            std::puts("\nL/R: page   A: quantity demo");
+            std::puts(s.demo.synthetic?"\nL/R: page   A: quantity demo":"\nL/R: page   No editing");
             std::puts("No adding unknown item IDs.");
         }
             break;
@@ -128,7 +135,7 @@ void top(const State& s) {
             if(s.demo.moneyStatus==Availability::Ready)
                 std::printf("\nCurrent amount: %u\n",s.demo.money);
             else std::puts("\nNo verified value to display.");
-            std::puts("\nA: propose amount");
+            std::puts(s.demo.synthetic?"\nA: demo proposal":"\nImported balance is READ ONLY");
             break;
         case Screen::Backups:
             std::puts("BACKUPS / SAFE MODE");
@@ -149,6 +156,17 @@ void top(const State& s) {
             line(3,s.selected,"Backup not verified");
             line(4,s.selected,"Restore not approved");
             std::puts("\nA: show recovery guidance");
+            break;
+        case Screen::Import:
+            std::puts("INSPECT COPIED SD SAVE ONLY");
+            std::puts("\nA: validate fixed offline import");
+            std::puts("X: switch back to demo mode");
+            std::puts("B: return to main menu");
+            std::puts("\nRequired exact file (128 KiB):");
+            std::puts("/3ds/PKSM-Rogue/imports/");
+            std::puts("00000001.sav");
+            std::puts("\nNo installed game is opened.");
+            std::puts("263168-byte VC wrapper blocked.");
             break;
         case Screen::Proposal:
             std::puts("EDIT PROPOSAL - NOT APPLIED");
@@ -186,7 +204,7 @@ void bottom(const State& s) {
     std::puts("----------------------------");
     std::puts("D-Pad: navigate/adjust");
     std::puts("A: select     B: cancel");
-    std::puts("L/R: PC box or edit category");
+    std::puts("L/R: PC box, bag page, edit group");
     std::puts("START: exit");
     std::puts("");
     if(s.screen==Screen::Proposal || s.screen==Screen::ConfirmOne ||
@@ -194,7 +212,7 @@ void bottom(const State& s) {
         std::puts("Final confirmation = BLOCKED.");
     else if(s.screen==Screen::Backups)
         std::puts("Backups/restore NOT ACTIVE.");
-    else std::puts("No real save file is opened.");
+    else std::puts(s.demo.synthetic?"DEMO: no game save opened.":"SD COPY VIEW / NO WRITES.");
     std::puts("\nEXPERIMENTAL - NOT A RELEASE");
 }
 bool toKey(u32 keys,Key& key) {
@@ -219,12 +237,31 @@ int main() {
     consoleInit(GFX_BOTTOM,&lower);
     // Hardware finding: never allocate large UI sample snapshots on ARM11
     // main-thread stack. The model references a process-lifetime static fixture.
-    static State state;
+    static Demo active{};
+    populateMock(active);
+    static State state(active);
+    static char importStatus[200]{};
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
         hidScanInput();
         Key k=Key::X;
-        if(toKey(hidKeysDown(),k)) { press(state,k); redraw=true; }
+        if(toKey(hidKeysDown(),k)) {
+            if(state.screen==Screen::Import && k==Key::A) {
+                std::string reason;
+                if(inspectFixedSDCopy(active,reason)) {
+                    state.selected=0;
+                    state.homeRow=0;
+                    state.screen=Screen::Home;
+                } else {
+                    std::snprintf(importStatus,sizeof(importStatus),"%s",reason.c_str());
+                    openNotice(state,Screen::Import,importStatus);
+                }
+            } else if(state.screen==Screen::Import && k==Key::X) {
+                populateMock(active);
+                state.selected=0;state.homeRow=0;state.screen=Screen::Home;
+            } else press(state,k);
+            redraw=true;
+        }
         if(redraw) {
             consoleSelect(&upper); top(state);
             consoleSelect(&lower); bottom(state);
