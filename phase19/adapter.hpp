@@ -26,10 +26,10 @@ struct Demo {
     Availability backupStatus=Availability::Unverified;
     unsigned partyCount=0,pcBoxes=0,bagCount=0,money=0;
     unsigned activeCounter=0; // displayed only, no optimistic lock authorisation
-    std::array<unsigned,2> pcCounts{{0,0}};
+    std::array<unsigned,14> pcCounts{};
     std::array<Pokemon,6> party{};
-    std::array<std::array<Pokemon,30>,2> pc{};
-    std::array<Item,8> bag{};
+    std::array<std::array<Pokemon,30>,14> pc{};
+    std::array<Item,450> bag{};
 };
 
 // Provider interface: Phase18 integrator will implement only after independent
@@ -124,7 +124,7 @@ inline Demo capture(const ReadOnlyProvider& p) {
                 if(out.pcStatus!=Availability::Ready)break;
             }
             if(out.pcStatus!=Availability::Ready){
-                out.pcBoxes=0;out.pcCounts={{0,0}};
+                out.pcBoxes=0;out.pcCounts.fill(0);
             }else if(n==0)out.pcStatus=Availability::Empty;
         }
     }
@@ -136,7 +136,7 @@ inline Demo mockSnapshot() {
     Demo d{};
     d.synthetic=true;
     d.partyStatus=d.pcStatus=d.moneyStatus=d.bagStatus=Availability::Ready;
-    d.partyCount=3;d.pcBoxes=2;d.pcCounts={{3,3}};d.bagCount=5;d.money=42000;
+    d.partyCount=3;d.pcBoxes=2;d.pcCounts[0]=3;d.pcCounts[1]=3;d.bagCount=5;d.money=42000;
     d.party[0]={"Volcarona",637,72,{{31,10,30,31,31,31}},{{0,0,0,252,4,252}},
                 {{53,483,94,247}},{{15,10,10,15}},1,10,false};
     d.party[1]={"Swampert",260,68,{{31,31,31,4,31,25}},{{252,252,4,0,0,0}},
