@@ -4,7 +4,7 @@
 // Source provenance: phase10/preview/offline.hpp, GPL-3.0-or-later.
 // Keep this isolated until an independently reviewed shared API is merged.
 // No Phase13/14 restore-preflight adapter is included.
-// GPL-3.0-or-later. Never opens installed-title archives, AGBSAVE or extdata.
+// GPL-3.0-or-later. Never opens installed-title archives or system save extdata.
 #pragma once
 #include <array>
 #include <cstdint>
