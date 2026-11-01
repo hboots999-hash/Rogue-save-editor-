@@ -1,0 +1,67 @@
+name: Phase 18 — H168 offline editor pure-memory safety tests
+on:
+  push:
+    branches:
+      - feature/phase18-offline-editors
+  pull_request:
+    paths:
+      - 'phase18/**'
+      - 'phase10/preview/offline.hpp'
+      - '.github/workflows/phase18-offline-editors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: Host C++17 (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [strict, asan-ubsan]
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile with strict diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++17 -Wall -Wextra -Werror -pedantic -g"
+          if [[ "${{ matrix.mode }}" == "asan-ubsan" ]]; then
+            FLAGS="$FLAGS -O1 -fsanitize=address,undefined -fno-omit-frame-pointer"
+          else
+            FLAGS="$FLAGS -O2"
+          fi
+          g++ $FLAGS -Iphase18 phase18/test_offline_engine.cpp -o /tmp/pksm-phase18-test
+      - name: Run deterministic structural, editing and rollback regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/pksm-phase18-test /tmp/phase18_nonplayable.sav
+      - name: Cross-check test fixture with independent read-only Python decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase9/tools/inspect_gbavc_save.py /tmp/phase18_nonplayable.sav > /tmp/phase18-inspected.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/phase18-inspected.json'))
+          assert p['read_only'] and p['bytes']==131072
+          assert p['current_bank']==1
+          assert [x['sectors_checksum_valid'] for x in p['banks']]==[14,14]
+          assert p['current']['money']==40001
+          assert p['current']['party_count']==2
+          assert p['current']['occupied_bag_slots']==3
+          assert p['current']['party'][1]['species_id']==676
+          assert all(x['checksum_valid'] for x in p['current']['party'])
+          print("PASS independent Phase9 Python decoder: 28 sectors / rotated bank / expanded species / 104-byte stride")
+          PY
+      - name: Reject privileged save services in offline module
+        run: |
+          set -euo pipefail
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/test_offline_engine.cpp; then
+            echo "Phase18 pure-memory code must contain no privileged filesystem APIs"
+            exit 1
+          fi
+          test ! -f phase18/*.sav
