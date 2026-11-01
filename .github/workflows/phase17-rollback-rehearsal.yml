@@ -32,6 +32,36 @@ jobs:
           grep -Fq 'constexpr bool LiveWritesEnabled = false;' phase14/authenticated_restore.hpp
           if grep -En 'FSPXI_WriteFile|FS_OPEN_WRITE.*GBA|LiveWritesEnabled = true' phase17/{main.cpp,rollback_lab.hpp}; then exit 1; fi
           if git ls-files | grep -Ei '\.(sav|cia|gba|rom|3ds)$'; then exit 1; fi
+  abi-boundary:
+    name: Versioned C ABI with independently compiled Phase18 consumer
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 9569c2ac3f7693ee9d9bed5b30a84f79cb8c2d91
+          path: dependencies/phase18
+      - name: Verify isolated ABI, no duplicated h168 and no writer symbols
+        shell: bash
+        run: |
+          set -euo pipefail
+          CXXFLAGS="-std=c++17 -Wall -Wextra -Wpedantic -Werror -O2"
+          g++ $CXXFLAGS -Iphase17 -c phase17/readonly_status_v1.cpp -o /tmp/status.o
+          g++ $CXXFLAGS -Iphase17 -Idependencies/phase18 \
+            -Idependencies/phase18/phase18 \
+            -c phase17/test_phase18_abi_boundary.cpp -o /tmp/phase18_consumer.o
+          g++ $CXXFLAGS /tmp/phase18_consumer.o /tmp/status.o -o /tmp/phase18_abi
+          /tmp/phase18_abi
+          nm -C /tmp/status.o | grep -F p17_readonly_status_shape_valid_v1
+          if nm -C /tmp/status.o | grep -E 'FSPXI_WriteFile|phase14::execute|phase14::recover|rogue18::propose'; then
+            echo 'BLOCK: write/recovery operation referenced by the public ABI' >&2
+            exit 1
+          fi
+          echo 'PASS: public Phase17 ABI can link to pinned Phase18 consumer without header collisions'
   native:
     name: devkitPro builds a real 3DSX and ELF with game writes blocked
     runs-on: ubuntu-latest
