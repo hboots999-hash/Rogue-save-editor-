@@ -50,10 +50,9 @@ int main(){
     State s(real);
     press(s,Key::A);assert(s.screen==Screen::Party);
     press(s,Key::A);assert(s.screen==Screen::Pokemon);
-    press(s,Key::A);assert(s.screen==Screen::Edit);
     press(s,Key::A);assert(s.screen==Screen::Notice);
-    assert(s.returnTo==Screen::Edit);
-    press(s,Key::B);press(s,Key::B);press(s,Key::B);press(s,Key::B);
+    assert(s.returnTo==Screen::Pokemon);
+    press(s,Key::B);press(s,Key::B);press(s,Key::B);
     assert(s.screen==Screen::Home);
     s.homeRow=3;press(s,Key::A);press(s,Key::A);
     assert(s.screen==Screen::Notice);
