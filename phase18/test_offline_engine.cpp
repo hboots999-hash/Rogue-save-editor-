@@ -31,14 +31,18 @@ static Bytes fixture(){
             b[base+103]=0x19;
             std::array<uint8_t,48> p{};
             h168::w16(p.data(),0,uint16_t(i?676:25)); // expanded species allowed
-            h168::w16(p.data(),2,1);
+            // 11-bit species, a held item occupying 10+1 separate bits.
+            uint32_t growth0=(i?676u:25u)|(uint32_t(99)<<11);
+            h168::w32(p.data(),0,growth0);
             h168::w16(p.data(),12,33);
             h168::w16(p.data(),14,45);
             p[20]=15;p[21]=25;
             p[24]=4;p[25]=252;p[27]=252;
             uint32_t packed=0;
             for(unsigned v=0;v<6;v++)packed|=uint32_t(10+v)<<(5*v);
+            if(i)packed|=uint32_t(1)<<31; // Gigantamax bit, NOT ability
             h168::w32(p.data(),40,packed);
+            if(i)h168::w32(p.data(),44,uint32_t(2)<<29); // hidden ability index
             encode(b.data(),base,p);
         }
         const uint16_t ids[]={113,1,5};
@@ -91,6 +95,8 @@ int main(int argc,char** argv){
     CHECK(mon0.species==25 && mon1.species==676 && mon0.pid%24!=mon1.pid%24);
     CHECK(mon0.ivs[0]==10 && mon0.ivs[5]==15 && mon1.moves[1]==45);
     CHECK(mon1.natureFromPid==17);
+    CHECK(mon0.heldItem==99 && mon1.heldItem==99);
+    CHECK(mon1.abilitySlot==2 && mon1.gigantamaxFactor==1);
     // Every one of the 24 Gen III substructure orders must preserve the
     // same canonical fields, 104-byte extension, and checksums after editing.
     for(unsigned permutation=0;permutation<24;permutation++){
@@ -213,8 +219,33 @@ int main(int argc,char** argv){
     back=monRequest(ab.candidate,0,Kind::AbilitySlot);back.abilitySlot=0;
     undone=propose(ab.candidate.data(),ab.candidate.size(),back,ability);
     CHECK(undone.ok && undone.candidate==b);
-    q.abilitySlot=2;CHECK(!propose(b.data(),b.size(),q,ability).ok);
-    q=monRequest(b,0,Kind::Nature);q.nature=20;
+    q.abilitySlot=3;CHECK(!propose(b.data(),b.size(),q,ability).ok);
+    // Ability slot mutation must never alter Gigantamax flag on mon1.
+    q=monRequest(b,1,Kind::AbilitySlot);q.abilitySlot=1;
+    ab=propose(b.data(),b.size(),q,ability);
+    CHECK(ab.ok);
+    CHECK(validate(ab.candidate.data(),ab.candidate.size(),after));
+    CHECK(partyAt(ab.candidate.data(),ab.candidate.size(),after,1,changed));
+    CHECK(changed.abilitySlot==1 && changed.gigantamaxFactor==1);
+    CHECK(changed.heldItem==99);
+    q=monRequest(b,0,Kind::Nature);q.expectedNature=mon0.effectiveNature;
+    q.nature=20;
+    CHECK(!propose(b.data(),b.size(),q,ability).ok);
+    ability.verifiedNatureModifier=true;
+    auto nature=propose(b.data(),b.size(),q,ability);
+    CHECK(nature.ok && sameInactive(b,nature.candidate));
+    CHECK(validate(nature.candidate.data(),nature.candidate.size(),after));
+    CHECK(partyAt(nature.candidate.data(),nature.candidate.size(),after,0,changed));
+    CHECK(changed.effectiveNature==20 && changed.natureFromPid==mon0.natureFromPid);
+    CHECK(changed.pid==mon0.pid && changed.ot==mon0.ot);
+    CHECK(changed.ivs==mon0.ivs && changed.abilitySlot==mon0.abilitySlot);
+    CHECK(changed.checksum==mon0.checksum); // header-only nature edit
+    back=monRequest(nature.candidate,0,Kind::Nature);
+    back.expectedNature=20;back.nature=mon0.effectiveNature;
+    undone=propose(nature.candidate.data(),nature.candidate.size(),back,ability);
+    CHECK(undone.ok && undone.candidate==b);
+    q.expectedNature=99;CHECK(!propose(b.data(),b.size(),q,ability).ok);
+    q.expectedNature=mon0.effectiveNature;q.nature=25;
     CHECK(!propose(b.data(),b.size(),q,ability).ok);
 
     q={};q.kind=Kind::InsertItem;q.expectedCounter=41;
