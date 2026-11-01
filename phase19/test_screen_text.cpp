@@ -45,7 +45,7 @@ int main(){
     assert(exact.size()==2 && exact[0]=="12345" && exact[1]=="67890");
     auto truncated=capped("first second third fourth fifth sixth",8,2);
     assert(truncated.size()==2 && truncated.back()=="[MORE TE");
-    auto newline=capped("A\\nB\\nC\\nD",31,3);
+    auto newline=capped("A\nB\nC\nD",31,3);
     assert(newline.size()==3 && newline.back()=="[MORE TEXT OMITTED]");
     assert(capped("anything",31,0).empty());
     assert(capped("anything",0,6).empty());
