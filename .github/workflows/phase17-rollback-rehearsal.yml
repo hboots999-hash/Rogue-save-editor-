@@ -1,4 +1,4 @@
-name: Phase 17 memory-only rollback rehearsal from existing Phase 17 journal
+name: Phase 17 memory-only rollback rehearsal from existing Phase 16 journal
 on:
   push:
     branches: [feature/phase17-rollback-rehearsal]
@@ -134,7 +134,7 @@ jobs:
         with:
           name: phase17-H168-RAM-ROLLBACK-3DSX
           path: binary
-      - name: Package CIA with existing isolated Phase 10 title ID
+      - name: Package independently titled Phase17 CIA (separate from Phase16 and game)
         shell: bash
         run: |
           set -euo pipefail
@@ -213,7 +213,7 @@ jobs:
             xdotool key Return || true
             wait "$pid" || true
             find installed-test -type f -name "*.app" -printf "%p %s bytes\n" > evidence/installed-files.txt || true
-            app=$(find installed-test -type f -name "*.app" -path "*0f73a400*" -print -quit)
+            app=$(find installed-test -type f -name "*.app" -path "*0f73a600*" -print -quit)
             if [ -z "$app" ]; then echo INSTALL_FAILED; exit 4; fi
             app=$(realpath "$app")
             printf "%s\n" "$app" > evidence/installed-path.txt
