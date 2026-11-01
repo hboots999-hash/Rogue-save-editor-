@@ -1,0 +1,162 @@
+name: Phase 18 — H168 offline editor pure-memory safety tests
+on:
+  push:
+    branches:
+      - feature/phase18-offline-editors
+  pull_request:
+    paths:
+      - 'phase18/**'
+      - 'phase10/preview/offline.hpp'
+      - '.github/workflows/phase18-offline-editors.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  host:
+    name: Host C++17 (${{ matrix.mode }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        mode: [strict, asan-ubsan]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 132ef904c453dd5e793f9069fd55b5ac045bdced
+          path: dependencies/phase17
+          persist-credentials: false
+      - name: Compile with strict diagnostics
+        shell: bash
+        run: |
+          set -euo pipefail
+          FLAGS="-std=c++17 -Wall -Wextra -Werror -pedantic -g"
+          if [[ "${{ matrix.mode }}" == "asan-ubsan" ]]; then
+            FLAGS="$FLAGS -O1 -fsanitize=address,undefined -fno-omit-frame-pointer"
+          else
+            FLAGS="$FLAGS -O2"
+          fi
+          g++ $FLAGS -Iphase18 phase18/test_offline_engine.cpp -o /tmp/pksm-phase18-test
+          g++ $FLAGS -Iphase18 phase18/test_offline_export.cpp -o /tmp/pksm-phase18-export-test
+          g++ $FLAGS -Iphase18 phase18/test_pc_readonly.cpp -o /tmp/pksm-phase18-pc-test
+          g++ $FLAGS -Iphase18 phase18/test_editor_model.cpp -o /tmp/pksm-phase18-model-test
+          g++ $FLAGS -Iphase18 phase18/test_integrity.cpp -o /tmp/pksm-phase18-integrity-test
+          g++ $FLAGS -Iphase18 phase18/test_integration_v2.cpp -o /tmp/pksm-phase18-v2-test
+          g++ $FLAGS -Iphase18 phase18/test_multi_v3.cpp -o /tmp/pksm-phase18-v3-test
+          g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_multi_v3_faults.cpp -o /tmp/pksm-phase18-v3-fault-test
+          g++ $FLAGS -Iphase18 phase18/test_phase20_matrix.cpp -o /tmp/pksm-phase18-phase20-matrix-test
+          g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_sd_faults.cpp -o /tmp/pksm-phase18-sd-fault-test
+          g++ $FLAGS -Iphase18 phase18/test_boundaries_v2.cpp -o /tmp/pksm-phase18-boundaries-test
+          g++ $FLAGS -Iphase18 phase18/test_v3_adversarial.cpp -o /tmp/pksm-phase18-v3-adversarial-test
+          g++ $FLAGS -DROGUE18_TEST_IO_FAULTS -Iphase18 phase18/test_v3_export_faults.cpp -o /tmp/pksm-phase18-v3-sd-fault-test
+          P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
+          for attempt in 1 2 3; do
+            g++ $FLAGS $P17 -Iphase18 phase18/test_unified_v2.cpp -o "/tmp/pksm-phase18-unified-$attempt"
+            "/tmp/pksm-phase18-unified-$attempt"
+          done
+      - name: Run deterministic structural, editing and rollback regressions
+        shell: bash
+        run: |
+          set -euo pipefail
+          /tmp/pksm-phase18-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-export-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-pc-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-model-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-integrity-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-v2-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-v3-test
+          /tmp/pksm-phase18-v3-fault-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-phase20-matrix-test
+          /tmp/pksm-phase18-sd-fault-test /tmp/phase18_nonplayable.sav
+          /tmp/pksm-phase18-boundaries-test
+          /tmp/pksm-phase18-v3-adversarial-test
+          /tmp/pksm-phase18-v3-sd-fault-test /tmp/phase18_nonplayable.sav
+      - name: Cross-check test fixture with independent read-only Python decoder
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 phase9/tools/inspect_gbavc_save.py /tmp/phase18_nonplayable.sav > /tmp/phase18-inspected.json
+          python3 - <<'PY'
+          import json
+          p=json.load(open('/tmp/phase18-inspected.json'))
+          assert p['read_only'] and p['bytes']==131072
+          assert p['current_bank']==1
+          assert [x['sectors_checksum_valid'] for x in p['banks']]==[14,14]
+          assert p['current']['money']==40001
+          assert p['current']['party_count']==2
+          assert p['current']['occupied_bag_slots']==3
+          assert p['current']['party'][1]['species_id'] & 0x7ff == 676  # original reader reports packed growth u16
+          assert all(x['checksum_valid'] for x in p['current']['party'])
+          print("PASS independent Phase9 Python decoder: 28 sectors / rotated bank / expanded species / 104-byte stride")
+          PY
+      - name: Reject privileged save services in offline module
+        run: |
+          set -euo pipefail
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE|LiveWritesEnabled)' phase18/offline_engine.hpp phase18/offline_export.hpp phase18/pc_readonly.hpp phase18/editor_model.hpp phase18/test_offline_engine.cpp phase18/test_offline_export.cpp phase18/test_pc_readonly.cpp phase18/test_editor_model.cpp phase18/test_integrity.cpp phase18/source_digest.hpp phase18/layout_geometry.hpp phase18/bag_rules.hpp phase18/integration_v2.hpp phase18/test_integration_v2.cpp phase18/test_unified_v2.cpp phase18/raw_v1.hpp phase18/multi_edit_v3.hpp phase18/multi_export_v3.hpp phase18/test_multi_v3.cpp; then
+            echo "Phase18 pure-memory code must contain no privileged filesystem APIs"
+            exit 1
+          fi
+          test ! -f phase18/*.sav
+
+  native-model-compile:
+    name: 3DS devkitPro header integration (compile only)
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          ref: 132ef904c453dd5e793f9069fd55b5ac045bdced
+          path: dependencies/phase17
+          persist-credentials: false
+      - name: Install 3DS development headers
+        run: |
+          set -eu
+          dkp-pacman -S --noconfirm --needed 3ds-dev
+      - name: Compile Phase19-compatible model and SD-only exporter for ARM11
+        run: |
+          set -eu
+          "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -Wframe-larger-than=4096 -fstack-usage \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -Werror=frame-larger-than=4096 -fstack-usage \
+            -I"${DEVKITPRO}/libctru/include" -Iphase18 -D__3DS__ \
+            -c phase18/native_compile.cpp -o /tmp/phase18-native.o
+          "${DEVKITARM}/bin/arm-none-eabi-nm" /tmp/phase18-native.o > /tmp/symbols.txt
+          if grep 'FSPXI_' /tmp/symbols.txt; then
+            echo "Unexpected live game PxiFS symbol in Phase18 object"; exit 1
+          fi
+          test -s /tmp/phase18-native.o
+          "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -Werror=frame-larger-than=4096 -fstack-usage \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp \
+            -I"${DEVKITPRO}/libctru/include" -Iphase18 -D__3DS__ \
+            -c phase18/native_multi_v3.cpp -o /tmp/phase18-multi-native.o
+          test -s /tmp/phase18-multi-native.o
+          P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
+          "${DEVKITARM}/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror \
+            -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -Werror=frame-larger-than=4096 -fstack-usage \
+            -I"${DEVKITPRO}/libctru/include" $P17 -Iphase18 -D__3DS__ \
+            -c phase18/test_unified_v2.cpp -o /tmp/phase18-unified-native.o
+          test -s /tmp/phase18-unified-native.o
+          # GCC emits .su files for actually generated ARM code, including
+          # v2 exportCopied, not only the lightweight read-only model.
+          ls -l /tmp/phase18-native.su /tmp/phase18-unified-native.su
+          python3 - <<'PY'
+          import glob
+          frames=[]
+          for file in glob.glob('/tmp/phase18-*-native.su')+['/tmp/phase18-native.su']:
+              for line in open(file):
+                  parts=line.rstrip().rsplit(chr(9),2)  # split exact GCC tabs, preserve spaces in C++ signatures
+                  if len(parts)>=3:
+                      try: frames.append((int(parts[1]),parts[2],parts[0]))
+                      except ValueError: pass
+          assert frames, "No ARM11 stack-frame evidence emitted"
+          frames.sort(reverse=True)
+          print("Largest compiled ARM11 frames:",frames[:10])
+          assert frames[0][0]<=4096, "Large ARM11 stack frame"
+          PY
+          echo "Phase18 ARM11 stack-usage report (compiler estimates, not hardware measurement):"
+          find /tmp -maxdepth 1 -name 'phase18-*.su' -print -exec cat {} \;

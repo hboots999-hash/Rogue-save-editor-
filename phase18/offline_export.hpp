@@ -1,0 +1,84 @@
+// Phase 18: offline SD-import copy to separately named, verified SD draft.
+// NEVER accepts a game archive; NEVER writes to source import or live title.
+// GPL-3.0-or-later. Reuses Phase10 exclusive no-overwrite SDMC functions.
+#pragma once
+#include "integration_v2.hpp"
+#include "raw_v1_sd.hpp"
+#include <cstring>
+#include <memory>
+#include <string>
+
+namespace rogue18 {
+struct ExportResult {
+    bool ok=false;
+    std::string reason,backupName,draftName;
+    size_t changed=0;
+    ExportResult(bool good=false,std::string why={},std::string backup={},
+                 std::string draft={},size_t count=0)
+      : ok(good),reason(why),backupName(backup),draftName(draft),changed(count) {}
+};
+// Strict Phase10 import location, not a caller-selected game-save destination.
+// On native 3DS the root is limited to this application's own SD folder.
+// This API never consumes a title ID or an archive handle.
+inline bool approvedPaths(const char* root,const char* sourcePath){
+    if(!root || !sourcePath)return false;
+    const std::string dir(root);
+    if(dir.empty() || dir.find("..")!=std::string::npos ||
+       dir.back()=='/' || dir.find('\\')!=std::string::npos)return false;
+#ifdef __3DS__
+    if(dir!="sdmc:/3ds/PKSM-Rogue")return false;
+#endif
+    return std::string(sourcePath)==dir+"/imports/00000001.sav";
+}
+inline ExportResult exportCopied(const uint8_t* expectedCopy,size_t n,
+                                 const char* sourcePath,const char* root,
+                                 const Request& req){
+    if(!expectedCopy || n!=h168::Size || !approvedPaths(root,sourcePath))
+        return {false,"Only the fixed offline SD import path is supported"};
+    auto read=h168::readExact(sourcePath);
+    if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
+        return {false,"Stale or missing offline source: blocked"};
+    // A 3DS may otherwise hold the 128 KiB readback buffer throughout
+    // preview/verify, each of which constructs another independent draft.
+    read.reset();
+    const auto prepared=v2::preview(expectedCopy,n,req);
+    if(!prepared.ok)return {false,"Edit rejected: "+prepared.reason};
+    if(!v2::verify(expectedCopy,n,prepared.candidate.data(),
+                    prepared.candidate.size(),req))
+        return {false,"Byte-exact candidate proof failed"};
+    read=h168::readExact(sourcePath);
+    if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
+        return {false,"Stale source before backup"};
+    read.reset();
+    if(!h168::directory(root))return {false,"Offline SD folder unavailable"};
+    const std::string backups=std::string(root)+"/backups";
+    if(!h168::directory(backups.c_str()))return {false,"Backup directory unavailable"};
+    std::string backup,reason;
+    if(!h168::uniqueWrite(backups,"phase18_original_",expectedCopy,backup,reason))
+        return {false,"Immutable backup creation/readback failed"+
+                (backup.empty()?std::string{}:std::string(" [attempted backups/")+backup+"]")+
+                ": "+reason,backup};
+    read=h168::readExact(sourcePath);
+    if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
+        return {false,"Stale after backup: draft not created",backup};
+    read.reset();
+    const std::string drafts=std::string(root)+"/drafts";
+    if(!h168::directory(drafts.c_str()))
+        return {false,"Draft directory unavailable",backup};
+    std::string draft;
+    if(!h168::uniqueWrite(drafts,"phase18_draft_",prepared.candidate.data(),
+                           draft,reason))
+        return {false,"Draft creation/readback failed"+
+                (draft.empty()?std::string{}:std::string(" [attempted drafts/")+draft+"]")+
+                ": "+reason,backup,draft};
+    read=h168::readExact(sourcePath);
+    if(!read || std::memcmp(read.get(),expectedCopy,n)!=0)
+        return {false,"Source changed after export: do not use draft",backup,draft};
+    read.reset();
+    auto stored=h168::readExact((drafts+"/"+draft).c_str());
+    if(!stored || !v2::verify(expectedCopy,n,stored.get(),h168::Size,req))
+        return {false,"Stored draft failed byte-exact proof",backup,draft};
+    return {true,"OFFLINE SD draft only; NEVER restore without separate release gates",
+            backup,draft,prepared.changedOffsets.size()};
+}
+} // namespace rogue18
