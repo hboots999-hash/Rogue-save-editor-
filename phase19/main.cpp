@@ -53,10 +53,13 @@ void top(const State& s) {
                 std::puts("Real PC layout not established.");
                 std::puts("No PC editing is permitted.");
             }
-            for(unsigned i=0;i<count(s);i++) {
+            const unsigned first=(s.selected/6u)*6u;
+            const unsigned stop=std::min(count(s),first+6u);
+            for(unsigned i=first;i<stop;i++) {
                 const auto& m=s.demo.pc[s.box][i];
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
+            if(count(s))std::printf("Viewing %u-%u / %u\n",first+1u,stop,count(s));
             std::puts("\nL/R: box; A: detail (read-only)");
             break;
         case Screen::Pokemon: {
