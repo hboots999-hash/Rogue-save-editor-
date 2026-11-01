@@ -46,6 +46,37 @@ struct OfflineApprovalGate {
         return ApprovalEvent::None;
     }
 };
+// A review is tied to the exact displayed source and intended field.
+// On every re-import / reset, the caller must call cancel(). We ALSO
+// revalidate at each frame to fail closed on unexpected source mutation.
+struct OfflineReviewSession {
+    ReviewTarget target{};
+    OfflineApprovalGate gate{};
+    bool active=false;
+    bool begin(const Demo& d,const ReviewTarget& desired) {
+        cancel();
+        if(!reviewDisplayMatches(d,desired))return false;
+        target=desired;
+        active=true;
+        return true;
+    }
+    void cancel() {
+        gate.reset();
+        target=ReviewTarget{};
+        active=false;
+    }
+    ApprovalEvent poll(const Demo& d,bool a,bool x,bool b,bool select) {
+        if(!active)return ApprovalEvent::None;
+        if(!reviewDisplayMatches(d,target)) {
+            cancel();
+            return ApprovalEvent::Cancelled;
+        }
+        const auto out=gate.poll(a,x,b,select);
+        if(out==ApprovalEvent::Cancelled)cancel();
+        return out;
+    }
+};
+
 // Export-result metadata: *display* only. Never implies a valid game save,
 // successful disk sync/close, CMAC, restore or installed-title update.
 struct OfflineResultNames {
