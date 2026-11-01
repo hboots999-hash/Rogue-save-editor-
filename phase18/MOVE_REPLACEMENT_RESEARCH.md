@@ -14,7 +14,11 @@ Official public source tag: [Pokabbie/pokeemerald-rogue EX-v2.1](https://github.
 - `src/pokemon.c` (blob `5d0fcbd6adc05dd694507efe25569860351a56f6`) defines a single byte of PP bonuses: each move uses a **two-bit counter 0–3**, shifted by two bits per slot. `CalculatePPWithBonus` returns `basePP + floor(basePP * 20 * PPUpCount / 100)`. `SetMonMoveSlot` initializes new PP from `gBattleMoves[move].pp` without itself clearing old PP Ups; the research engine deliberately takes the conservative alternate policy **clear only the replaced slot's PP Ups, set PP to the new proven basePP**. No proof yet that this policy matches the target game after loading.
 - The H168 structural format already verified synthetically in Phase18 stores the encrypted A substructure as four u16 IDs then four u8 PP, and the encrypted G substructure contains the bonus byte. The Pokémon payload checksum and its active sector checksum must both be recalculated.
 
-The actual *installed* 2.1.2 ROM's binary SHA-256, variant, move-ID table, base PP, learnability rules and exact PP-Up reset semantics are **NOT available**. An arbitrary caller-provided `verifiedMoveIds` allowlist or a plausible EX-v2.1 name is not a ROM attestation. Matching a logo, title ID, or save game code is insufficient.
+**Update 2026-11-01:** a GodMode9 CIA copy supplied by the user was inspected locally and its 32 MiB GBA ROM SHA-256 **is now known**: `111b0008bcec519c59a02de57895a924fee5d3633c8b8fbb394a497153778ca3`. Its fixed-width indexed move-name table and two 936-row compiled battle-move tables have been located and independently SHA-256 hashed; 40 ordinary moves have conflicting PP across the two ROM-resident variants. The complete metadata and offsets are in [EXACT_ROM_2_1_2_METADATA_HANDOFF.md](EXACT_ROM_2_1_2_METADATA_HANDOFF.md). The variant-selection path, learnability rules, exact PP-Up reset semantics and in-game load/re-save validation are **NOT yet proved**. An arbitrary caller-provided `verifiedMoveIds` allowlist or a plausible EX-v2.1 name is not a ROM attestation. Matching a logo, title ID, or save game code is insufficient.
+
+## Actual 2.1.2 ROM metadata, without game upload
+
+A safe offline extractor is now available at `phase18/tools/extract_2_1_2_move_catalog.py`. It requires the **exact full-ROM SHA** above and exports only a local `move_id,name,pp_variant_a,pp_variant_b,pp_agreement,research_ui_candidate_only` CSV, never a ROM copy or a save. It is tested with synthetic CIA and name records; the source CIA/ROM bytes and local output CSV are **not committed**. A total of 807 ordinary IDs (excluding Struggle) are potential *read-only* UI catalogue candidates because both PP variants agree. **40 additional ordinary IDs disagree** and are blocked pending mode selection. This evidence is not permission to replace moves.
 
 ## Versioned production-safe interface
 
@@ -29,13 +33,13 @@ bool selected = rogue18::move_v1::begin(
     source, copiedBytes, 131072, partySlot, moveSlot, req);
 // partySlot 0..5, moveSlot 0..3, must be occupied non-egg Pokémon
 // req.replacementMoveId would be filled from an EXACT-ROM-certified catalog.
-// Currently there is deliberately no such catalog or production setter.
+// A SHA-bound local research catalogue now exists, but NO production setter.
 auto proposal = rogue18::move_v1::preview(copiedBytes, 131072, req);
 // proposal.ok ALWAYS FALSE until a reviewed, fingerprint-pinned future API.
 static_assert(!rogue18::move_v1::ExactRomMoveTableApproved);
 ```
 
-`capability()` reports `mayPreviewReplacement=false`, `mayExportReplacement=false` and `mayWriteInstalledGame=false`. `verify()` always returns false and `preview()` always rejects. **Do not expose a selectable move-replacement menu in Phase20 yet; present “Matching-ROM move database required” as a disabled capability.** Even after the table has been verified, move replacement must remain an offline copied-save operation, with all live restoration gates separate and OFF.
+`capability()` reports `mayPreviewReplacement=false`, `mayExportReplacement=false` and `mayWriteInstalledGame=false`. `verify()` always returns false and `preview()` always rejects. **Do not expose a selectable move-replacement menu in Phase20 yet; present “Move database verified; PP variant and gameplay safety pending” as a disabled capability.** Even after the table has been verified, move replacement must remain an offline copied-save operation, with all live restoration gates separate and OFF.
 
 The request pins the entire original copied save SHA-256, active bank counter, party slot, move slot, original PID/OT/species/payload checksum, original move ID/current PP and original **full PP-Up bonuses byte**. This prevents stale requests and a later slot swap masquerading as the originally selected Pokémon.
 
