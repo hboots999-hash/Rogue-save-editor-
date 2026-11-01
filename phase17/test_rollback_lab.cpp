@@ -75,6 +75,8 @@ int main(int argc,char**argv) {
             assert(report.explicitRollbacks==1);
             assert(report.shortWriteRollbacks==4);
             assert(report.crashRestarts==4);
+            assert(report.failedRollbackRetries==4);
+            assert(report.interruptedRollbackRetries==4);
             assert(report.foreignChangeBlocks==1);
             // The RAM-only harness does not alter input sources or immutable records.
             assert(source==plan.before);
@@ -100,7 +102,7 @@ int main(int argc,char**argv) {
         }
     }
     std::cout<<"PASS Phase17 "<<cases<<" plan types, RAM-only restore, "
-             <<"explicit undo, 4 short writes, 4 crash/restart rollbacks, "
+             <<"explicit undo, 4 short writes, 4 crash/restart rollbacks, 8 interrupted recovery retries, "
              <<"foreign-byte refusal, MAC/journal corruption guards. "
              <<"NO LIVE WRITE ON 3DS.\n";
 }
