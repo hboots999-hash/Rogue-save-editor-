@@ -1,4 +1,4 @@
-name: Phase20 combined READ-ONLY integration (synthetic, no installed-save writes)
+name: Phase20 copied-save OFFLINE editor integration (no installed-game writes)
 on:
   push:
     branches: [feature/phase20-readonly-integration]
@@ -11,7 +11,7 @@ permissions:
   contents: read
 jobs:
   combined-host:
-    name: P17 ABI + P18 parser + P19 viewer, strict and ASan/UBSan
+    name: P17 ABI + P18 guarded offline exporter + P19 UI, strict and ASan/UBSan
     runs-on: ubuntu-latest
     timeout-minutes: 22
     steps:
@@ -45,6 +45,11 @@ jobs:
             echo 'FAIL: forbidden mutation/native save operation in Phase20'; exit 1
           fi
           grep -Fq 'std::fopen(phase19::OfflineImportPath,"rb")' phase20/read_only_v1.hpp
+          grep -Fq 'phase19::OfflineImportPath,"sdmc:/3ds/PKSM-Rogue"' phase20/offline_edit_v1.hpp
+          grep -Fq 'ARCHIVE_SDMC' dependencies/phase18/phase18/raw_v1_sd.hpp
+          if grep -E 'ARCHIVE_USER_SAVEDATA|ARCHIVE_SAVEDATA|AGBSAVE|FSPXI_' phase20/{main.cpp,offline_edit_v1.hpp,read_only_v1.hpp}; then
+            echo 'FAIL: prohibited installed-game archive'; exit 1
+          fi
       - name: Compile and run combined host contract twice (strict, sanitizers)
         shell: bash
         run: |
@@ -64,6 +69,14 @@ jobs:
               dependencies/phase17/phase17/readonly_status_v1.cpp \
               -o /tmp/phase20/$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase17/phase17 \
+              -Idependencies/phase18 -Idependencies/phase18/phase18 \
+              -Idependencies/phase19 -Idependencies/phase19/phase19 \
+              phase20/test_offline_edit_v1.cpp \
+              dependencies/phase17/phase17/readonly_status_v1.cpp \
+              -o /tmp/phase20/offline-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/offline-$mode
             # QA-08: compile the actual Phase17 legacy header and Phase18 v2
             # in one TU, repeatedly. Fail the build on any collision.
             P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
@@ -116,21 +129,25 @@ jobs:
           sed -i '/^CXXFLAGS[[:space:]]*:=/s/$/ -Werror=frame-larger-than=4096 -fstack-usage/' phase20-build/Makefile
           grep -Fq -- '-Werror=frame-larger-than=4096 -fstack-usage' phase20-build/Makefile
           sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRoguePhase20/g' phase20-build/Makefile
-          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase 20 Read Only\n' >> phase20-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase20 Offline Draft\n' >> phase20-build/Makefile
           cp phase20/main.cpp phase20-build/source/main.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
-          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp} phase20-build/include/phase20/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
-          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp} phase20-build/include/phase18/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
           test -s phase20-build/build/main.su
           cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
           head -n 30 phase20-build/STACK_USAGE.txt
-          # Require the new Phase20 ABI to remain read-only and small.
-          if grep -R -E '#include.*(editor_model|pc_readonly|offline_export)\\.hpp' phase20-build/include/phase20/ phase20-build/source/; then
-            echo 'FAIL: research/editor header reached ARM11 Phase20'; exit 1
+          # The exporter is deliberately limited to immutable SD copies.
+          # Native ARM11 stack-usage cap applies to ALL transitive sources,
+          # including editor_model and optional PC research code now heap-backed.
+          grep -Fq 'return rogue18::exportCopied(raw,n,sourcePath,root,request);' phase20/offline_edit_v1.hpp
+          grep -Fq 'ARCHIVE_SDMC' phase20-build/include/phase18/raw_v1_sd.hpp
+          if grep -R -E 'ARCHIVE_USER_SAVEDATA|ARCHIVE_SAVEDATA|AGBSAVE|FSPXI_' phase20-build/source/ phase20-build/include/phase20/; then
+            echo 'FAIL: installed-game write dependency'; exit 1
           fi
           test -s phase20-build/PKSMRoguePhase20.3dsx
           test -s phase20-build/PKSMRoguePhase20.elf
@@ -141,13 +158,16 @@ jobs:
           grep -Fq 'phase20::inspectFixedSDCopy(active,observation,reason)' phase20/main.cpp
           grep -Fq 'p17_readonly_status_init_blocked_v1' phase20/main.cpp
           test -s phase20-build/ELF_SYMBOLS.txt
-          if grep -E 'rogue18::propose\(|nativeSdmcCreateAndWrite|FSFILE_Write\(' phase20-build/ELF_SYMBOLS.txt; then
-            echo 'FAIL: unexpected offline proposal or save write symbol'; exit 1
+          # SDMC immutable backup and draft writes ARE now allowed. No
+          # installed-title / AGB VC transport or restoration symbols allowed.
+          if grep -E 'AGBSAVE|FSPXI_|ARCHIVE_USER_SAVEDATA|rogue_restore::execute' phase20-build/ELF_SYMBOLS.txt; then
+            echo 'FAIL: unexpected installed-save restore symbol'; exit 1
           fi
+          grep -Fq 'phase20::exportFixedSDCopy' phase20/offline_edit_v1.hpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: phase20-3DSX-ELF-READONLY-EXPERIMENTAL
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
           path: |
             phase20-build/PKSMRoguePhase20.3dsx
             phase20-build/PKSMRoguePhase20.elf
@@ -155,7 +175,7 @@ jobs:
             phase20-build/STACK_USAGE.txt
           retention-days: 7
   experimental-cia:
-    name: Isolated Phase20 CIA metadata and package (not release)
+    name: Isolated Phase20 offline CIA metadata and package (not release)
     needs: [native-3ds]
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -165,7 +185,7 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: phase20-3DSX-ELF-READONLY-EXPERIMENTAL
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
           path: binary
       - uses: actions/checkout@v4
         with:
@@ -186,13 +206,13 @@ jobs:
             dependencies/phase19/phase19/rsf > experimental/phase20.rsf
           # Note: Phase19 dependency is checked out below to guarantee pinned RSF.
           /tmp/makerom-tools/makerom -f cia \
-            -o experimental/PKSMRogue-Phase20-READONLY-NOT-RELEASE.cia \
+            -o experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia \
             -target t -elf binary/PKSMRoguePhase20.elf -rsf experimental/phase20.rsf \
             -desc app:4 -exefslogo
-          test -s experimental/PKSMRogue-Phase20-READONLY-NOT-RELEASE.cia
+          test -s experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia
           python3 - <<'PY'
           from pathlib import Path
-          raw=Path("experimental/PKSMRogue-Phase20-READONLY-NOT-RELEASE.cia").read_bytes()
+          raw=Path("experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia").read_bytes()
           assert raw.count(bytes.fromhex("000400000f73a700"))>=2
           for old in ("0004000007d7ba00","000400000f73a400","000400000f73a500","000400000f73a600"):
               assert bytes.fromhex(old) not in raw, old
@@ -200,15 +220,15 @@ jobs:
           PY
           sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
           printf '%s\n' \
-            'NOT FOR INSTALLATION AS A RELEASE. PHASE20 READONLY EXPERIMENT.' \
-            'Separate title 000400000F73A700. No installed-save writer.' \
-            'Only reads fixed 128KiB offline SD copy after A confirmation.' \
+            'NOT FOR INSTALLATION AS A RELEASE. PHASE20 OFFLINE COPY EDITOR EXPERIMENT.' \
+            'Separate title 000400000F73A700. No installed-game save writer.' \
+            'Reads fixed 128KiB SD copy and exports immutable backup plus separate SD draft.' \
             'Phase17 status defaults NOT CHECKED. No producer/live access.' \
-            'ROM identity and game-edit safety unverified.' \
+            'ROM identity and edited draft gameplay/persistence unverified.' \
             > experimental/READ_ME_FIRST.txt
       - uses: actions/upload-artifact@v4
         with:
-          name: phase20-CIA-READONLY-NOT-RELEASE
+          name: phase20-CIA-OFFLINE-NOT-RELEASE
           path: experimental/
           retention-days: 7
   azahar-smoke:
@@ -222,11 +242,11 @@ jobs:
           persist-credentials: false
       - uses: actions/download-artifact@v4
         with:
-          name: phase20-3DSX-ELF-READONLY-EXPERIMENTAL
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
           path: binary
       - uses: actions/download-artifact@v4
         with:
-          name: phase20-CIA-READONLY-NOT-RELEASE
+          name: phase20-CIA-OFFLINE-NOT-RELEASE
           path: experimental
       - name: Isolated emulator launch and screenshot evidence (best effort)
         continue-on-error: true
@@ -248,7 +268,7 @@ jobs:
           export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
           export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
           export BIN="$(realpath binary/PKSMRoguePhase20.3dsx)"
-          export CIA="$(realpath experimental/PKSMRogue-Phase20-READONLY-NOT-RELEASE.cia)"
+          export CIA="$(realpath experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia)"
           xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
             set -u
             openbox > evidence/wm.log 2>&1 &
