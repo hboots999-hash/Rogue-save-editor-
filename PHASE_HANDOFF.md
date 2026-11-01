@@ -1,3 +1,43 @@
+**Phase 16 physical console restart test (1 Nov 2026): PASS.** User's on-device screenshot shows `RESTART VERIFICATION PASS`, 263168-byte untouched backup, 526400-byte rehearsal journal, prior save counter 49, and `Live unchanged? YES`. This is application-restart verification, not proof of power-loss resilience, safe live restoration, or rollback. The live-write gate remains disabled.
+
+**1 November 2026 — PHASE 16 REAL 3DS INITIAL JOURNAL REHEARSAL PASSED; RESTART CHECK PENDING.** User supplied three hardware photographs of the Phase 16 diagnostic running on their physical Nintendo 3DS. First screen: `Full backup: NOT PRESENT`, `Trial journal: NOT PRESENT`, `LIVE CMAC: BOTH SLOTS VERIFIED`. Second: explicit A→A confirmation for creating a private, immutable full SD backup and trial journal. Third: `Full backup: PRESENT: preserved`, `Trial journal: PRESENT: preserved`, `LIVE CMAC: BOTH SLOTS VERIFIED`, `RESULT: SD JOURNAL VERIFIED`, `Backup bytes: 263168`, `Journal bytes: 526400`, `Prior counter: 49`, `Live unchanged? YES`. The Phase 16 implementation requires successful full-length native SD write/flush/reopen/byte-for-byte comparison for both files and verifies the newly signed candidate in RAM before returning this result. This provides genuine physical hardware evidence for initial recovery-file creation and candidate CMAC checks. **NOT YET SHOWN:** exiting/relaunching and pressing Y for `RESTART VERIFICATION PASS`, independent GodMode9 inspection, cold power cycle durability, real game restore, rollback or gameplay resave. No installed game-write operation was enabled. Neither save content nor journal bytes are included in the public repository; images remain in the private conversation. Do not merge or enable direct restoration on this evidence alone.
+
+**1 November 2026 — PHASE 16 FINAL CORRECTED CI: ALL FIVE JOBS PASS; PHYSICAL FULL JOURNAL PENDING.** [GitHub Actions run 41256134768](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41256134768) passed: disk-backed synthetic recovery/partial-file/restart/corruption host tests under normal and sanitizers, inherited Phase 11–15 tests, native devkitPro ELF/3DSX, Azahar 3DSX UI startup, CIA packaging, and **installed-CIA Azahar UI launch**. The Phase 16 code was corrected to **reopen a read-only live PXI file before computing a CMAC during post-restart verification**; the host MAC double now requires an open/read handle, preventing a previously missed native-only failure. Hardware CMAC generation for the proposed after-image, full container SD backup + 526400-byte journal write/readback, application-restart verification and gameplay/restore safety are **NOT YET TESTED ON PHYSICAL 3DS**. User test package is private conversation artifact, not added to public repo. Writes to installed game are still hard-disabled; existing read-only Phase 15 physical evidence is preserved. Phase 16 experimental PR #6 stays draft.
+
+# Phase 16 handoff — verified-format SD recovery rehearsal (live writes disabled)
+
+Date: 1 November 2026
+Branch: `feature/phase16-recovery-journal-rehearsal`
+Base: `feature/phase15-readonly-hardware-validation`
+Parent Phase 15 draft PR: https://github.com/hboots999-hash/Rogue-save-editor-/pull/5
+
+## Implementation
+- `phase16/rehearsal.hpp` generates a narrow money +1 candidate **in RAM**, validates it against a fresh exact, authenticated two-slot GBA VC snapshot, derives an authentic Phase 14 journal format, and **only creates separate SD files**. No GBA VC file write.
+- `phase16/native_store.hpp` exclusively creates `/3ds/PKSM-Rogue/phase16/original_container.bin` and `rehearsal_only.rec`; flushed 32KiB chunks, handles closed, full exact independent SD readback and no overwrite/remove.
+- `phase16/main.cpp` is a standalone 3DSX/CIA UI: X validates existing live container CMAC; A,A creates unique-once immutable trial files; Y after an app restart reopens files, checks journal hash/plan/CMAC, compares independent original backup and two fresh live reads; START exits.
+- `phase16/test_rehearsal.cpp` disk-backed nonplayable synthetic tests: full original and Phase 14-format journal, restart through fresh disk store, corruption/truncation/different backup, unchanged original, source changes, read/MAC/storage failures, partial files and non-overwrite. `phase16/run_tests.sh` executes both normal and ASan/UBSan, then Phase 15/14 inherited tests.
+- CI `.github/workflows/phase16-recovery-journal.yml` builds native 3DSX/ELF, Azahar UI and separate experimental CIA installation. No production game-write symbols are linked from the UI.
+
+## Evidence and limitations
+- Phase 15 physical on-device evidence **already established** two authentic existing-slot CMACs and 256-byte SD scratch creation/readback on the user's 3DS (counter 49 and 48, 263168-byte live full container).
+- Phase 16 host regression and devkitPro native compilation: PASS on [CI run 41255772775](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41255772775). Emulator and CIA packaging test status must be checked on the latest successful CI before claiming PASS.
+- Phase 16 full-size 263168-byte backup and 526400-byte journal write/readback, **candidate newly signed CMAC**, post-app-restart readback and full live unchanged verification: **NOT YET TESTED ON HARDWARE**. Host mock signing is not a console signature.
+- Does NOT establish safe hardware interruption durability, recoverability in case of corrupted original live save, AGB_FIRM acceptance of altered saves, gameplay persistence or actual rollback. Phase 14 `LiveWritesEnabled` remains strictly false and all game opens use `FS_OPEN_READ`.
+
+## On-device test instructions
+1. Independently back up installed game with GodMode9/Checkpoint. Do not upload private ROM/save/CMAC.
+2. Prefer the new experimental Phase 16 3DSX through Homebrew Launcher. Its CIA uses experimental Title ID `000400000F73A400`, NOT Emerald Rogue Title ID `0004000007D7BA00`.
+3. X -> expected live `BOTH SLOTS VERIFIED`. A then A -> expected `SD JOURNAL VERIFIED`, original 263168 bytes and journal 526400 bytes. Neither is a playable `.sav`.
+4. Exit with START and relaunch the same app, then Y -> expected `RESTART VERIFICATION PASS`. Inspect SD:/3ds/PKSM-Rogue/phase16 files in GodMode9 and leave them alone. If any error: stop and provide a photo; do not overwrite/delete.
+5. Independently confirm game still loads. No in-game change should occur. Do not restore or inject journal or candidate.
+
+## Future integration
+Phase 16 is based on Phase 15, and Phase 15 is based on Phase 14. Do not merge experimental PRs blindly. Phase 17 needs verification of the actual safe native journal path, write exclusivity, full-container and raw independent backups, authenticated write+rollback on expendable game progress, torn-write/power-loss recovery, game launch and re-save; explicit gates and review before allowing live writes. The Phase16 test files must never be repurposed as a production journal without a separate review.
+
+---
+
+## Prior Phase 15 / 14 handoff (preserved)
+
 **31 October 2026 — PHASE 15 PHYSICAL 3DS LIVE AUTHENTICATION VERIFICATION PASS (READ ONLY).** User supplied two photographs of the diagnostic running on an actual 3DS. Initial screen: Phase 15 H168 v2.1.2, no writes/restore, no Phase14 recovery record. After Y: `RESULT: BOTH SLOTS VERIFIED`, `Container bytes: 263168`, `Two identical reads: YES`, Slot 0 `HDR Y RAW Y CMAC Y` wrapper counter **49**, Slot 1 `HDR Y RAW Y CMAC Y` wrapper counter **48**, latest slot **0** counter **49**. This establishes physical ability to read a full GBA VC container twice and independently validate its **existing** file-bound console CMAC tags through the live 3DS service. It **does not** validate signing a *new* altered slot, true SD journal durability, installation/rollback or actual restored game playback. Live writes remain disabled. User then showed the `A → A` SD-only test confirmation and subsequent screen reporting `SD SCRATCH VERIFIED: probe_001.bin`. This is **on-hardware PASS for unique 256-byte native SD file creation, flushed write, new-handle readback, and byte equality as checked by the application**. The screenshot does not independently show GodMode9 file size or prove persistence across a power cycle, and it does not validate the much larger Phase 14 recovery journal or game restoration. Preserve experimental Phase 15 PR #5 as draft. No private save content, CID, CMAC or screenshots committed to repo.
 
 # Phase 15 handoff — read-only H168 hardware CMAC diagnostic
