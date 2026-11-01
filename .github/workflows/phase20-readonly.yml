@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ac81e99941e8e5bfaf28f43c3359087472ad30f0
+          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
           path: dependencies/phase19
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
@@ -89,7 +89,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ac81e99941e8e5bfaf28f43c3359087472ad30f0
+          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
           path: dependencies/phase19
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
@@ -144,7 +144,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: ac81e99941e8e5bfaf28f43c3359087472ad30f0
+          ref: e0b19c562b9b2ddf7148e01ecb84a88f1d04c921
           path: dependencies/phase19
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
