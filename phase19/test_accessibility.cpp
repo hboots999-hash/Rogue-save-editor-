@@ -85,5 +85,23 @@ int main(){
     StartExitGate stand{};
     assert(!stand.tick(true,false,false,false));
     assert(stand.tick(false,true,false,false));
+    // Maximum supported copied inventory: 450 stacks; no broken L needed.
+    static Demo full{};
+    populateMock(full);
+    full.bagCount=450;
+    for(unsigned i=5;i<450;i++)full.bag[i]={"Item",1000u+i,1};
+    State huge(full);
+    gotoHome(huge,2);
+    for(unsigned i=0;i<100;i++)press(huge,Key::R);
+    assert(huge.selected==444 && firstVisible(huge.selected)==444);
+    for(unsigned i=0;i<10;i++)press(huge,Key::Down);
+    assert(huge.selected==449 && lastVisible(huge.selected,450)==450);
+    press(huge,Key::X);
+    assert(huge.selected==438); // previous page's first visible stack
+    press(huge,Key::Right);assert(huge.selected==444);
+    press(huge,Key::Left);assert(huge.selected==438);
+    press(huge,Key::A);assert(huge.screen==Screen::Proposal);
+    press(huge,Key::B);assert(huge.screen==Screen::Bag);
+    press(huge,Key::B);assert(huge.screen==Screen::Home);
     std::cout<<"PASS: L-free navigation, 19-stack pagination, isolated copy gate, Rosalina input\n";
 }
