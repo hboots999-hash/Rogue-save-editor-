@@ -32,7 +32,7 @@
 ## Test/evidence accounting
 
 - **Historical relevant evidence:** `phase9/profiles/confirmed_h168_save_layout_READ_ONLY.md` documents a prior private real-save read-only inspection and 28/28 sector checksums. It does NOT authorize all feature writes.
-- **Phase18 evidence target:** deterministic rotated-bank fixture with two 104-byte Pokémon, expanded species, XOR key diversity and 28 independent sector checks; roundtrips/negative controls and Phase9 Python cross-decoder. Actions workflow must show an explicit PASS before claiming it ran successfully.
+- **Phase18 host CI PASS (1 Nov 2026):** [run 41257531814](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41257531814) on source commit `d319753579c0e592873274eb14c3f594525b0fb7`: **both** strict C++17 and ASan/UBSan jobs passed deterministic rotated-bank fixture with two 104-byte Pokémon, **all 24 PID block permutations**, expanded species, differing XOR keys, exact rollback, guarded edits/stale/corrupt cases, 28 independent sector checks, phase10 immutable SD-only backup/draft roundtrips and Phase9 Python cross-decoder.
 - **Not tested by this phase:** actual private H168 save, exact ROM move/ability/pocket semantics, emulator gameplay, device installation/SD flush, save persistence, Luma privileged reads/writes, CMAC signing, live restore or rollback.
 
 ## Blocking issues and follow-up
