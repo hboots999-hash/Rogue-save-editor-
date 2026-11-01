@@ -11,8 +11,9 @@ const char* groupName(Group g) {
     switch(g) {
         case Group::IV: return "Individual Values";
         case Group::EV: return "Effort Values";
-        case Group::Moves: return "Moves";
-        case Group::Ability: return "Ability";
+        case Group::Moves: return "Move IDs";
+        case Group::PP: return "Move PP";
+        case Group::Ability: return "Ability slot (RO)";
         case Group::Nature: return "Nature";
     }
     return "Unknown";
@@ -39,30 +40,36 @@ void top(const State& s) {
             break;
         case Screen::Party:
             std::puts("PARTY - demonstration roster");
-            for(unsigned i=0;i<s.demo.party.size();i++) {
+            std::printf("Status: %s\n",availabilityText(s.demo.partyStatus));
+            for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.party[i];
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
             break;
         case Screen::PC:
-            std::printf("PC BOX %u/2 - DEMO ONLY\n",s.box+1u);
-            for(unsigned i=0;i<s.demo.pc[s.box].size();i++) {
+            std::printf("PC BOX %u/%u - %s\n",s.box+1u,s.demo.pcBoxes,
+                        availabilityText(s.demo.pcStatus));
+            if(s.demo.pcStatus!=Availability::Ready) {
+                std::puts("Real PC layout not established.");
+                std::puts("No PC editing is permitted.");
+            }
+            for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.pc[s.box][i];
                 std::printf("%c %u %-14s Lv%u\n",i==s.selected?'>':' ',i+1u,m.name,m.level);
             }
-            std::puts("\nL/R: change box");
+            std::puts("\nL/R: box; A: detail (read-only)");
             break;
         case Screen::Pokemon: {
             const auto& m=pokemon(s);
             std::printf("%s  Lv%u (Species %u)\n",m.name,m.level,m.species);
             std::printf("Source: %s\n",s.fromPC?"PC demo":"Party demo");
-            std::printf("Ability %u  Nature %u\n",m.ability,m.nature);
+            std::printf("Ability slot %u  Nature %u\n",m.ability,m.nature);
             std::puts("\nStat       IV     EV");
             for(unsigned i=0;i<6;i++)
                 std::printf("%-7s   %2u    %3u\n",names[i],m.iv[i],m.ev[i]);
             std::puts("\nMove IDs:");
             for(unsigned i=0;i<4;i++) std::printf("%u: %u  ",i+1u,m.moves[i]);
-            std::puts("\n\nA: edit menu (preview only)");
+            std::puts(s.fromPC?"\n\nPC fields: READ ONLY":"\n\nA: explore party edit demo");
             break;
         }
         case Screen::Edit: {
@@ -75,11 +82,12 @@ void top(const State& s) {
                     case Group::IV: v=m.iv[i];break;
                     case Group::EV: v=m.ev[i];break;
                     case Group::Moves: v=m.moves[i];break;
+                    case Group::PP: v=m.pp[i];break;
                     case Group::Ability: v=m.ability;break;
                     case Group::Nature: v=m.nature;break;
                 }
                 const char* n=s.group==Group::IV||s.group==Group::EV?names[i]:
-                    s.group==Group::Moves?"Move":"Value";
+                    (s.group==Group::Moves || s.group==Group::PP)?"Slot":"Value";
                 std::printf("%c %-7s %u: %u\n",s.field==i?'>':' ',n,i+1u,v);
             }
             if(s.group==Group::EV) {
@@ -87,19 +95,27 @@ void top(const State& s) {
                 std::printf("\nEV total: %u / 510\n",sum);
             }
             std::puts("\nL/R category; A propose");
-            std::puts("No proposed change is saved.");
+            if(s.group==Group::Nature)std::puts("PID nature changes: UNSUPPORTED");
+            else if(s.group==Group::Ability)std::puts("Ability mapping: NOT VERIFIED");
+            else if(s.group==Group::Moves)std::puts("New move IDs: NOT VERIFIED");
+            else std::puts("Proposal is DEMO ONLY.");
+            std::puts("Nothing can be applied.");
             break;
         }
         case Screen::Bag:
             std::puts("BAG / ITEMS - DEMO");
-            for(unsigned i=0;i<s.demo.bag.size();i++) {
+            std::printf("Status: %s\n",availabilityText(s.demo.bagStatus));
+            for(unsigned i=0;i<count(s);i++) {
                 const auto& item=s.demo.bag[i];
                 std::printf("%c %-17s x%u\n",s.selected==i?'>':' ',item.name,item.quantity);
             }
             std::puts("\nA: quantity proposal (demo)");
             break;
         case Screen::Money:
-            std::printf("MONEY (DEMO)\n\nCurrent amount: %u\n",s.demo.money);
+            std::printf("MONEY (%s)\n",availabilityText(s.demo.moneyStatus));
+            if(s.demo.moneyStatus==Availability::Ready)
+                std::printf("\nCurrent amount: %u\n",s.demo.money);
+            else std::puts("\nNo verified value to display.");
             std::puts("\nA: propose amount");
             break;
         case Screen::Backups:
@@ -107,7 +123,9 @@ void top(const State& s) {
             line(0,s.selected,"Request backup (disabled)");
             line(1,s.selected,"Check existing backups");
             line(2,s.selected,"Restore (disabled)");
-            std::puts("\nNothing on SD is accessed.");
+            std::puts("\nPhase16 verification is external.");
+            std::puts("This UI has no backup reader.");
+            std::puts("Status: NOT CHECKED IN APP.");
             std::puts("Retain independent GodMode9");
             std::puts("and Checkpoint original backups.");
             break;
@@ -138,8 +156,8 @@ void top(const State& s) {
                 std::puts("\nBackup creation is disabled.");
             else std::printf("\nBefore: %u\nProposal: %u\n",original(s),s.proposal);
             std::printf("\nConfirmation %u/2\n",s.screen==Screen::ConfirmOne?1u:2u);
-            std::puts("A: acknowledge DEMO ONLY");
-            std::puts("B: cancel (nothing changes)");
+            std::puts("A: continue to BLOCKED notice");
+            std::puts("B: return to review (no write)");
             std::puts("\nNO FILES WILL BE WRITTEN.");
             break;
         case Screen::Notice:
