@@ -19,6 +19,9 @@ struct State {
     Screen proposalFrom = Screen::Home;
     unsigned homeRow = 0, selected = 0, box = 0, mon = 0;
     bool fromPC = false, exitRequested = false;
+    // Independent session gate. Imported data cannot enter mock edit flow even
+    // if its synthetic flag is accidentally toggled by a later adapter bug.
+    bool demoPreviewEnabled = false;
     Group group = Group::IV;
     unsigned field = 0;
     unsigned proposal = 0;
@@ -26,10 +29,27 @@ struct State {
     // Non-owning read-only snapshot view: no 64-KiB demo in the 3DS thread stack.
     // Caller keeps externally supplied provider snapshot alive during UI use.
     const Demo& demo;
-    State():demo(mockSnapshotRef()){}
-    explicit State(const Demo& source):demo(source){}
+    State():demo(mockSnapshotRef()),demoPreviewEnabled(true){}
+    explicit State(const Demo& source):demo(source),demoPreviewEnabled(source.synthetic){}
 };
 static_assert(sizeof(State)<256,"Phase19 State must remain stack-safe on 3DS");
+inline void switchView(State& s, bool toFictionalDemo) {
+    // Called only after explicit native import success or explicit mock reset.
+    s.demoPreviewEnabled=toFictionalDemo;
+    s.screen=Screen::Home;
+    s.returnTo=s.proposalFrom=Screen::Home;
+    s.homeRow=s.selected=s.box=s.mon=s.field=s.proposal=0;
+    s.fromPC=false;
+    s.group=Group::IV;
+    s.notice="";
+}
+constexpr unsigned PageRows=6;
+inline unsigned firstVisible(unsigned selected) {
+    return (selected/PageRows)*PageRows;
+}
+inline unsigned lastVisible(unsigned selected,unsigned total) {
+    return std::min(total,firstVisible(selected)+PageRows);
+}
 
 inline unsigned count(const State& s) {
     switch(s.screen) {
@@ -98,7 +118,7 @@ inline const char* recoveryMessage(unsigned code) {
     }
 }
 inline bool canPreview(const State& s) {
-    if(!s.demo.synthetic) return false; // no edits of real-data views
+    if(!s.demo.synthetic || !s.demoPreviewEnabled) return false; // two independent gates
     if(s.proposalFrom==Screen::Money)
         return s.demo.moneyStatus==Availability::Ready;
     if(s.proposalFrom==Screen::Bag)
@@ -125,8 +145,8 @@ inline void startProposal(State& s, Screen from) {
     s.proposalFrom=from;
     // Backup actions are confirmations, never proposals of save-byte changes.
     if(from==Screen::Backups) { s.screen=Screen::ConfirmOne; return; }
-    if(!s.demo.synthetic) {
-        openNotice(s,from,"Real-data view: edits require independently approved backend.");
+    if(!s.demo.synthetic || !s.demoPreviewEnabled) {
+        openNotice(s,from,"READ ONLY: copied data cannot enter any editing workflow.");
         return;
     }
     if(!canPreview(s)) {
@@ -181,7 +201,7 @@ inline void press(State& s, Key k) {
         else if(k==Key::A || k==Key::X) {
             if(s.fromPC)openNotice(s,Screen::Pokemon,
                 "PC edit UNSUPPORTED: storage layout not verified.");
-            else if(!s.demo.synthetic)
+            else if(!s.demo.synthetic || !s.demoPreviewEnabled)
                 openNotice(s,Screen::Pokemon,"Imported Pokemon are READ ONLY.");
             else if(s.demo.partyStatus!=Availability::Ready)
                 openNotice(s,Screen::Pokemon,"Party data unavailable.");
@@ -200,23 +220,32 @@ inline void press(State& s, Key k) {
     }
     if(s.screen==Screen::Edit) {
         if(k==Key::B) { s.screen=Screen::Pokemon; return; }
-        if(k==Key::L || k==Key::R) {
-            unsigned g=static_cast<unsigned>(s.group);
-            g=(g+(k==Key::R?1u:5u))%6u;
-            s.group=static_cast<Group>(g); s.field=0; return;
+        // X and D-pad Left are full alternatives to the broken L shoulder.
+        if(k==Key::L || k==Key::R || k==Key::X ||
+           k==Key::Left || k==Key::Right) {
+            const unsigned g=static_cast<unsigned>(s.group);
+            const bool forward=k==Key::R || k==Key::Right;
+            s.group=static_cast<Group>((g+(forward?1u:5u))%6u);
+            s.field=0;return;
         }
     } else if(s.screen==Screen::PC) {
-        if(k==Key::L || k==Key::R) {
+        if(k==Key::L || k==Key::R || k==Key::X ||
+           k==Key::Left || k==Key::Right) {
             if(s.demo.pcStatus!=Availability::Ready || !s.demo.pcBoxes)return;
-            s.box=(s.box+(k==Key::R?1u:s.demo.pcBoxes-1u))%s.demo.pcBoxes;
-            s.selected=0; return;
+            const bool forward=k==Key::R || k==Key::Right;
+            s.box=(s.box+(forward?1u:s.demo.pcBoxes-1u))%s.demo.pcBoxes;
+            s.selected=0;return;
         }
     } else if(s.screen==Screen::Bag) {
-        if(k==Key::L || k==Key::R) {
+        if(k==Key::L || k==Key::R || k==Key::X ||
+           k==Key::Left || k==Key::Right) {
             const unsigned n=count(s);
             if(!n)return;
-            if(k==Key::R)s.selected=std::min(n-1u,s.selected+6u);
-            else s.selected=s.selected>=6u?s.selected-6u:0u;
+            const bool forward=k==Key::R || k==Key::Right;
+            const unsigned page=firstVisible(s.selected);
+            if(forward) {
+                if(n>page+PageRows)s.selected=page+PageRows;
+            } else if(page>=PageRows)s.selected=page-PageRows;
             return;
         }
     }
