@@ -190,7 +190,9 @@ void top(const State& s) {
             std::puts("EDIT PROPOSAL - NOT APPLIED");
             if(s.proposalFrom==Screen::Money) std::puts("Money");
             else if(s.proposalFrom==Screen::Bag)
-                std::printf("Item: %s\n",s.demo.bag[s.selected].name);
+                std::printf("Item: %.18s\n",
+                    s.selected<s.demo.bagCount && s.selected<s.demo.bag.size()?
+                    s.demo.bag[s.selected].name:"<selection unavailable>");
             else std::printf("%s / %s\n",pokemon(s).name,groupName(s.group));
             std::printf("\nBefore: %u\nProposed: %u\nAllowed: %u - %u\n",
                 original(s),s.proposal,minimum(s),maximum(s));
