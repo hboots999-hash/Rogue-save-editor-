@@ -245,27 +245,32 @@ jobs:
             APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/3dsx.log 2>&1 &
             guest=$!
             sleep 18
+            # Azahar 2126.2 default Qt map from upstream config.cpp:
+            # A=a, B=s, D-pad Down=g, Start=m, Select=n.
+            # Arrow keys only map to Circle Pad and z/x map to X/Y, so
+            # earlier automation never reached these D-pad-only menus.
+            azwin=$(xdotool search --onlyvisible --name "Azahar" | head -n 1)
+            if test -n "$azwin"; then
+              xdotool windowactivate --sync "$azwin" || true
+              xdotool windowfocus --sync "$azwin" || true
+            fi
             import -window root evidence/3dsx-home.png
-            xdotool key z || true
+            xdotool key a || true
             sleep 2
             import -window root evidence/3dsx-party.png
-            # Best-effort UI keyboard path: B => Home, six Down =>
-            # opt-in copied-save import. Save an evidence frame for each state.
-            # Keyboard mappings can differ between emulator versions.
-            xdotool key x || true
+            xdotool key s || true
             sleep 1
-            for i in 1 2 3 4 5 6; do xdotool key Down || true; sleep 0.15; done
-            xdotool key z || true
+            for i in 1 2 3 4 5 6; do xdotool key g || true; sleep 0.15; done
+            xdotool key a || true
             sleep 1
             import -window root evidence/3dsx-import-menu.png
-            xdotool key z || true
+            xdotool key a || true
             sleep 1
             import -window root evidence/3dsx-missing-copy.png
-            # Try normal B/back and standalone START release. Screenshot
-            # is evidence of attempted input, not proof of on-device exit.
-            xdotool key x || true
-            xdotool key x || true
-            xdotool key Return || true
+            # Normal B/back and standalone START-release exit attempt.
+            xdotool key s || true
+            xdotool key s || true
+            xdotool key m || true
             sleep 1
             import -window root evidence/3dsx-exit-attempt.png
             kill "$guest" 2>/dev/null || true
