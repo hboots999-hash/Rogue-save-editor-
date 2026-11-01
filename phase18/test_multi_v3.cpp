@@ -88,7 +88,7 @@ int main(){
     // reorder to keep EVERY intermediate per-Pokemon EV total <=510.
     for(unsigned p=0;p<6;p++){
         for(unsigned stat: {0u,2u,4u,5u})
-            CHECK(v3::append(snapshot,all,Kind::EVs,p,stat,1));
+            CHECK(v3::append(snapshot,all,Kind::EVs,p,stat,stat==0?5u:1u));
         for(unsigned stat: {1u,3u})
             CHECK(v3::append(snapshot,all,Kind::EVs,p,stat,251));
         for(unsigned stat=0;stat<6;stat++)
