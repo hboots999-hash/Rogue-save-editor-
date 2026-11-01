@@ -28,6 +28,8 @@ struct Demo {
     Availability backupStatus=Availability::Unverified;
     unsigned partyCount=0,pcBoxes=0,bagCount=0,money=0;
     unsigned activeCounter=0; // displayed only, no optimistic lock authorisation
+    uint32_t sourceModelApi=0; // 0=fake; Phase18 ModelApiVersion=1 for validated copy
+    std::array<uint8_t,32> sourceSha256{}; // copied-file fingerprint, never edit authority
     std::array<unsigned,14> pcCounts{};
     std::array<Pokemon,6> party{};
     std::array<std::array<Pokemon,30>,14> pc{};
@@ -49,7 +51,7 @@ struct ReadOnlyProvider {
 };
 
 inline bool validPokemon(const Pokemon& m) {
-    if(!m.species || m.level>100 || m.ability>3 || m.nature>24)return false;
+    if(!m.species || m.level>100 || m.ability>2 || m.nature>24)return false;
     unsigned evsum=0;
     for(unsigned i=0;i<6;i++){
         if(m.iv[i]>31 || m.ev[i]>252)return false;
