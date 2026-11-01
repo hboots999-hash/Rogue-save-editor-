@@ -140,6 +140,11 @@ inline Demo capture(const ReadOnlyProvider& p) {
     return out;
 }
 inline void populateMock(Demo& d) {
+    static_assert(std::is_trivially_copyable<Demo>::value,
+                  "Snapshot must stay stack-safe to clear in place");
+    // Import->demo reset must not retain any private real-copy data in
+    // inactive Pokémon/box slots or bag entries.
+    std::fill_n(reinterpret_cast<uint8_t*>(&d),sizeof(d),uint8_t(0));
     d.synthetic=true;
     d.partyStatus=d.pcStatus=d.moneyStatus=d.bagStatus=Availability::Ready;
     d.partyCount=3;d.pcBoxes=2;d.pcCounts[0]=3;d.pcCounts[1]=3;d.bagCount=5;d.money=42000;
