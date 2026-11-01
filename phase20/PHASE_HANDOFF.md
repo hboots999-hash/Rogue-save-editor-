@@ -1,7 +1,7 @@
 # Phase 20: isolated read-only integration preview (DRAFT)
 
 **Date:** 1 November 2026. **Branch:** `feature/phase20-readonly-integration`. **Base:** `feature/integration-qa` (stacked on draft QA PR #10), **not merged**.
-**Status:** Experimental synthetic-only combined build. **No installed GBA VC save writes and no restoration approvals.**
+**Status:** Experimental combined build. [Integration CI #41328064232](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41328064232) PASSED host strict/ASan/UBSan, native ELF/3DSX and separate-title CIA packaging. Azahar startup is a new independent optional check, pending latest CI. **No installed GBA VC save writes and no restoration approvals.**
 
 ## Pinned component inputs
 
@@ -35,12 +35,12 @@
 
 ## Acceptance gate for following milestone
 
-- [ ] Pinned exact-sha combined host strict and sanitizers pass; first run caught incompatible old Phase19 model, corrected SHA in subsequent CI.
-- [ ] Native ARM11 compiled/link outputs and separate-title experimental CIA pass title-ID safety tests.
+- [x] Pinned exact-sha combined host strict and sanitizers pass (run 41328064232); first run caught incompatible old Phase19 model, corrected SHA.
+- [x] Native ARM11 3DSX/ELF and separate-title experimental CIA passed title-ID safety tests (run 41328064232).
 - [ ] Clear deterministic namespace boundary without alias hacks after Phase19 upstream adopts explicit versioned types.
 - [ ] Phase17 independent recovery evidence compatible with host+native, without live-save write.
 - [ ] ROM-build exact provenance and evidence established before any wider offline editor controls.
 - [ ] Independent physical 3DS read-only copy viewer and exit/navigation test, when appropriate.
 - [ ] **Restoration and installed save editing remain disabled regardless of above checks.**
 
-Tests: GitHub Actions workflow `phase20-readonly.yml` (strict C++17 and ASan/UBSan + devkitARM + separate CIA). Do not merge draft PR as a release.
+Latest workflow also attempts *optional* Azahar 3DSX and installed-CIA boot smoke with an isolated SD canary, which is NOT physical 3DS evidence. Tests: GitHub Actions workflow `phase20-readonly.yml` (strict C++17 and ASan/UBSan + devkitARM + separate CIA). Do not merge draft PR as a release.
