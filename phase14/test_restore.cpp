@@ -102,6 +102,9 @@ int main(int argc,char** argv) {
     c=source;h168::w32(c.data(),0x34,UINT32_MAX-1);
     h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX);
     assert(!layout(c,l)); // high counter cannot be incremented safely
+    c=source;h168::w32(c.data(),0x34,UINT32_MAX-2u);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX-1u);
+    assert(!layout(c,l)); // would stage forbidden UINT32_MAX
     // Normal two-slot orientation must work with the real observed 49/48.
     c=source;h168::w32(c.data(),0x34,49);
     h168::w32(c.data(),rogue_live::SlotSize+0x34,48);
