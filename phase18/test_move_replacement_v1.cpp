@@ -74,7 +74,7 @@ int main(){
         CHECK(view.data.valid && view.data.party.size()==6);
         for(unsigned party=0;party<6;party++)
         for(unsigned slot=0;slot<4;slot++){
-            Request edit{};
+            move_v1::Request edit{};
             CHECK(begin(view,original.data(),original.size(),party,slot,edit));
             CHECK(edit.expectedPPBonuses==0xff);
             CHECK(edit.expectedMoveId==uint16_t((slot==0?33:slot==1?45:slot==2?55:65)));
@@ -130,7 +130,7 @@ int main(){
     }
     const auto source=fullParty(0);
     const auto view=v2::inspect(source.data(),source.size());
-    Request q{};
+    move_v1::Request q{};
     CHECK(begin(view,source.data(),source.size(),0,0,q));
     q.replacementMoveId=9999;
     CHECK(!previewResearch(source.data(),source.size(),q,fakeMoves,4).ok);
