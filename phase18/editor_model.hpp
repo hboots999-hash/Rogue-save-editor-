@@ -36,6 +36,7 @@ struct SaveView {
     uint32_t activeCounter=0,inactiveCounter=0,money=0;
     Digest256 sourceSha256{}; // source snapshot identity, no personal bytes recorded
     unsigned activeBank=0;
+    uint8_t bagUpgradeCandidate=0; // informational EX-layout candidate only
     std::vector<PartyView> party{};
     std::vector<ItemView> items{};
     // This is explicitly a candidate shape, never a confirmed 2.1.2 PC.
@@ -54,6 +55,7 @@ inline SaveView inspectReadOnly(const uint8_t* bytes,size_t size,
     v.activeCounter=info.banks[info.active].counter;
     v.inactiveCounter=info.banks[info.active^1u].counter;
     v.money=info.money;
+    v.bagUpgradeCandidate=layout::bagUpgradeCandidate(bytes,info.banks[info.active].sector[1]);
     for(unsigned i=0;i<info.partyCount;i++){
         Mon mon{};
         if(!partyAt(bytes,size,info,i,mon)){
