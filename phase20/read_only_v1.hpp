@@ -69,40 +69,41 @@ inline bool inspectCopy(const uint8_t* raw,size_t n,phase19::Demo& visible,
         reason="Phase20 accepts only exact 131072-byte offline copied saves.";
         return false;
     }
-    // Independent Phase18 model guards and Phase19 presentation guards.
-    // Both must pass BEFORE changing either of the caller-visible outputs.
-    rogue18::SaveView model{};
-    try { model=rogue18::inspectReadOnly(raw,n,false); }
-    catch(const std::bad_alloc&) {
-        reason="Insufficient memory for copied-save model.";return false;
-    }
-    if(!model.valid || model.apiVersion!=rogue18::ModelApiVersion ||
-       model.confidence!=rogue18::DataConfidence::StructurallyValidated ||
-       !rogue18::hasDigest(model.sourceSha256) ||
-       !model.capabilities.copiedSaveOnly || model.capabilities.liveWrite ||
-       model.capabilities.restore || model.capabilities.pcEdit ||
-       model.party.size()>6 || model.items.size()>450) {
-        reason="Phase18 copied-save model rejected the data or capabilities.";
+    // Lightweight Phase18 low-level validation only. NEVER pull the
+    // experimental editor_model/pc_readonly headers into native ARM11:
+    // a prior Phase19 crash investigation exposed a 37-KiB PC stack frame.
+    h168::Info info{};
+    if(!rogue18::validate(raw,n,info) || !info.valid ||
+       info.partyCount>6u || info.items>450u || info.money>999999u) {
+        reason="Phase18 read-only decoder rejected sector/party/bag data.";
         return false;
     }
-    // Deliberately static to prevent a large Phase19 snapshot on ARM11 stack.
-    // Non-reentrant (the 3DS app uses a single UI thread); only copied values
-    // enter visible, and never on an unsuccessful import.
+    const auto digest=rogue18::sourceDigest(raw,n);
+    if(!rogue18::hasDigest(digest)) {
+        reason="Copied-save SHA-256 was invalid.";return false;
+    }
+    // 3DS event loop is single-threaded: stage large DTO in static storage.
+    // Neither displayed snapshot nor summary changes on a failed check.
     static phase19::Demo checked{};
     if(!phase19::inspectCopiedBuffer(raw,n,checked,reason))return false;
-    if(checked.synthetic || checked.sourceModelApi!=model.apiVersion ||
-       checked.sourceSha256!=model.sourceSha256 ||
-       checked.activeCounter!=model.activeCounter ||
-       checked.money!=model.money ||
-       checked.partyCount!=model.party.size() ||
-       checked.bagCount!=model.items.size() ||
+    const auto counter=info.banks[info.active].counter;
+    if(checked.synthetic ||
+       checked.sourceModelApi!=phase19::Phase18ReadModelApiV1 ||
+       checked.sourceSha256!=digest ||
+       checked.activeCounter!=counter ||
+       checked.money!=info.money ||
+       checked.partyCount!=info.partyCount ||
+       checked.bagCount!=info.items ||
        checked.pcStatus!=phase19::Availability::Unsupported ||
        checked.backupStatus!=phase19::Availability::Unverified) {
         reason="Phase18/Phase19 read-only model agreement failure.";
         return false;
     }
-    for(size_t i=0;i<model.party.size();++i) {
-        const auto& a=model.party[i].value;
+    for(unsigned i=0;i<info.partyCount;++i) {
+        rogue18::Mon a{};
+        if(!rogue18::partyAt(raw,n,info,i,a)) {
+            reason="Read-only party decoding failed independently.";return false;
+        }
         const auto& b=checked.party[i];
         if(b.species!=a.species || b.ability!=a.abilitySlot ||
            b.nature!=a.effectiveNature || b.egg!=a.egg) {
@@ -117,20 +118,21 @@ inline bool inspectCopy(const uint8_t* raw,size_t n,phase19::Demo& visible,
                 reason="Phase18/Phase19 move/PP agreement failure.";return false;
             }
     }
-    for(size_t i=0;i<model.items.size();++i)
-        if(checked.bag[i].id!=model.items[i].itemId ||
-           checked.bag[i].quantity!=model.items[i].quantity) {
-            reason="Phase18/Phase19 bag model agreement failure.";
-            return false;
+    for(unsigned i=0;i<info.items;++i) {
+        unsigned id=0,quantity=0;
+        if(!h168::item(raw,info,i,id,quantity) ||
+           checked.bag[i].id!=id || checked.bag[i].quantity!=quantity) {
+            reason="Phase18/Phase19 bag model agreement failure.";return false;
         }
+    }
     CopyObservation next{};
-    next.modelVersion=model.apiVersion;
+    next.modelVersion=phase19::Phase18ReadModelApiV1;
     next.rawBytes=static_cast<uint32_t>(n);
-    next.activeCounter=model.activeCounter;
-    next.sourceSha256=model.sourceSha256;
-    next.money=model.money;
-    next.party=static_cast<unsigned>(model.party.size());
-    next.items=static_cast<unsigned>(model.items.size());
+    next.activeCounter=counter;
+    next.sourceSha256=digest;
+    next.money=info.money;
+    next.party=static_cast<unsigned>(info.partyCount);
+    next.items=static_cast<unsigned>(info.items);
     next.structurallyReadable=true;
     // Even the successful read-only import grants NO authority to edit.
     visible=checked;
