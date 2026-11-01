@@ -1,0 +1,69 @@
+name: Phase18 Synthetic Move Research (NO ROM UNLOCK)
+on:
+  push:
+    branches: [feature/phase18-move-replacement-research]
+  pull_request:
+    paths:
+      - 'phase18/move_replacement_v1.hpp'
+      - 'phase18/test_move_replacement_v1.cpp'
+      - 'phase18/native_move_v1_compile.cpp'
+      - 'phase18/MOVE_REPLACEMENT_RESEARCH.md'
+      - '.github/workflows/phase18-move-research.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  host:
+    name: Strict and sanitized C++17 synthetic-only tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build, run, and independently check forbidden operations
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in strict asan; do
+            flags="-std=c++17 -Wall -Wextra -Werror -pedantic -g -O2"
+            if [ "$mode" = asan ]; then
+              flags="-std=c++17 -Wall -Wextra -Werror -pedantic -g -O1 -fsanitize=address,undefined -fno-omit-frame-pointer"
+            fi
+            g++ $flags -DROGUE18_SYNTHETIC_MOVE_TEST -Iphase18 phase18/test_move_replacement_v1.cpp -o /tmp/move-test
+            /tmp/move-test
+          done
+          grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
+          grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
+          test ! -f phase18/*.sav
+          test ! -f phase18/*.gba
+  native:
+    name: ARM11 devkitARM synthetic engine compile and stack proof
+    runs-on: ubuntu-latest
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install development headers
+        run: |
+          set -eu
+          dkp-pacman -S --noconfirm --needed 3ds-dev
+      - name: ARM11 C++ compile and link-symbol audit
+        run: |
+          set -eu
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -DROGUE18_SYNTHETIC_MOVE_TEST -c phase18/native_move_v1_compile.cpp -o /tmp/move-native.o
+          test -s /tmp/move-native.o
+          "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-native.o > /tmp/move-symbols.txt
+          if grep -E 'FSPXI_|svcBackdoor|FSUSER_' /tmp/move-symbols.txt; then
+            echo "Installed-game save symbol forbidden"; exit 1
+          fi
+          test -s /tmp/move-native.su
+          python3 - <<'PY'
+          frames=[]
+          for line in open('/tmp/move-native.su'):
+              parts=line.rstrip().rsplit(chr(9),2)
+              if len(parts)==3:
+                  try: frames.append((int(parts[1]),parts[0]))
+                  except ValueError: pass
+          assert frames, "No ARM11 frame evidence"
+          size,name=max(frames)
+          print("Largest compiled ARM11 frame:",size,name)
+          assert size<=4096
+          PY
