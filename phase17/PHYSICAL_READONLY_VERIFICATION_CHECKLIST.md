@@ -88,6 +88,30 @@ The two `phase16-*` file+hash pairs may be omitted together only when reviewing 
 
 The tool reports **RAW SD BYTES VERIFIED ONLY**. This is NOT evidence of actual game save compatibility, source durability across unsafe removal, on-device restore authority, replayable journaling or permission to test an edited draft in gameplay. Any failure, inconclusive result or missing pre-run digest means **STOP; preserve evidence without cleaning or retrying**.
 
+## Future move replacements: independent evidence is byte-level ONLY
+
+A new Phase17 read-only tool `verify_raw_draft_diff_v1.py` can compare a
+131072-byte original raw SD copy and draft to an **independently prepared
+versioned JSON byte-change manifest**. For the `move-replacement-research`
+kind it refuses more than eight raw byte changes, stale full-file hashes,
+unexpected differences, wrong expected before/after values, reused hardlinks,
+truncated files and changed sources. A success reports
+**`RAW_BYTES_ONLY_MOVE_RESEARCH_BLOCKED`**. It does **not** prove decrypted
+Pokémon move/PP/PP-Up semantics, installed ROM version, game compatibility or
+permission to import a draft. Never create the expected manifest merely by
+diffing the exported file; that would defeat independent verification.
+
+Use this byte-footprint checker **alongside**, not instead of,
+`verify_offline_sd_hashes.py`, which independently compares the SD import,
+backup/draft and protected Phase16 container/journal hashes. Full procedure
+and research-only manifest contract:
+[TONIGHT_MOVE_DRAFT_RECOVERY_HANDOFF.md](TONIGHT_MOVE_DRAFT_RECOVERY_HANDOFF.md).
+At present **no physical move replacement should be exported or injected**.
+Only the existing PP-only and other vetted scalars have a synthetic SD-export
+path. If Phase18 proposes a new move-replacement format, independently audit
+its *own new SHA-pinned source revision and native build* before even using
+this research checker on an expendable copy.
+
 ## Record without exposing user data
 
 Capture build SHA, CI artifact digest, hardware model/firmware versions if volunteered, steps and button paths, pass/fail/error codes, exact synthetic fixture identity, filenames and output sizes, before/after local hashes, abnormal startup and storage symptoms. Avoid screenshots showing private save contents, trainer data or other identifying files. A physical read-only PASS is **only** a limited I/O/UI observation.
