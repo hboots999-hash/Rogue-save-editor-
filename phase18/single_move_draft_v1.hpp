@@ -84,7 +84,7 @@ inline bool safeTag(const char* tag){
     // including the terminating NUL for the maximum 24-char token.
     for(size_t n=0;n<=24;n++){
         const char c=tag[n];
-        if(c=='\\0')return n>0;
+        if(c==0)return n>0;
         if(n==24 || !((c>='0' && c<='9') ||
                        (c>='a' && c<='z') || (c>='A' && c<='Z') ||
                        c=='-' || c=='_'))return false;
