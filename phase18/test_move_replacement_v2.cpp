@@ -4,6 +4,7 @@
 #error "The replacement engine core is test-only until release gates pass"
 #endif
 #include "move_queue_v4.hpp"
+#include "single_move_draft_v1.hpp"
 #define main phase18_fixture_unused_for_move_v2
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
@@ -132,6 +133,52 @@ int main(int argc,char** argv){
     CHECK(begin(view,original.data(),original.size(),0,2,request));
     const auto good=previewSynthetic(original.data(),original.size(),request,600,15);
     CHECK(good.ok);
+    CHECK(!move_draft_v1::ReleaseDraftExportEnabled);
+    move_draft_v1::Transaction release{};
+    CHECK(!move_draft_v1::exportToSd(original.data(),original.size(),
+          good.candidate.data(),good.candidate.size(),
+          fake,request,release));
+    CHECK(!release.authorized);
+    move_draft_v1::Evidence proof{};
+    CHECK(move_draft_v1::verifyGenerated(original.data(),original.size(),
+          good.candidate.data(),good.candidate.size(),request,600,15,proof));
+    CHECK(proof.sourceSha==sourceDigest(original.data(),original.size()));
+    CHECK(proof.draftSha==sourceDigest(good.candidate.data(),good.candidate.size()));
+    CHECK(proof.newMove==600 && proof.newPP==15 &&
+          proof.oldMove==request.source.expectedMoveId &&
+          proof.changedCount>0 && proof.changedCount<=8);
+    char tempRoot[]="/tmp/pksm_move_draft_XXXXXX";
+    const char* mockRoot=::mkdtemp(tempRoot);
+    CHECK(mockRoot);
+    move_draft_v1::Evidence written{};
+    CHECK(move_draft_v1::exportSyntheticToMockSd(mockRoot,"proof_01",
+             original.data(),original.size(),good.candidate.data(),
+             good.candidate.size(),request,600,15,written));
+    CHECK(written.draftSha==proof.draftSha);
+    const std::string prefix=std::string(mockRoot)+"/move_proof_01";
+    CHECK(move_draft_v1::readBack(prefix+"_backup.sav",original.data(),
+                                 original.size()));
+    CHECK(move_draft_v1::readBack(prefix+"_draft.sav",good.candidate.data(),
+                                 good.candidate.size()));
+    // Exclusive create: repeating export may not overwrite originals.
+    CHECK(!move_draft_v1::exportSyntheticToMockSd(mockRoot,"proof_01",
+             original.data(),original.size(),good.candidate.data(),
+             good.candidate.size(),request,600,15,written));
+    CHECK(move_draft_v1::readBack(prefix+"_backup.sav",original.data(),
+                                 original.size()));
+    CHECK(!move_draft_v1::exportSyntheticToMockSd(mockRoot,"../bad",
+             original.data(),original.size(),good.candidate.data(),
+             good.candidate.size(),request,600,15,written));
+    CHECK(!move_draft_v1::exportSyntheticToMockSd("sdmc:/protected","bad",
+             original.data(),original.size(),good.candidate.data(),
+             good.candidate.size(),request,600,15,written));
+    auto tamperedDraft=good.candidate;
+    tamperedDraft[127]^=1;
+    CHECK(!move_draft_v1::verifyGenerated(original.data(),original.size(),
+          tamperedDraft.data(),tamperedDraft.size(),request,600,15,written));
+    CHECK(::unlink((prefix+"_backup.sav").c_str())==0);
+    CHECK(::unlink((prefix+"_draft.sav").c_str())==0);
+    CHECK(::rmdir(mockRoot)==0);
     // Optional generated, UNPLAYABLE test fixture for an independent
     // Python Phase9 decoder in CI, never a real save or release draft.
     if(argc>1){
