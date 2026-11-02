@@ -39,6 +39,11 @@ jobs:
           done
           grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
           grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
+          grep -F 'constexpr bool ApplyApproved=false' phase18/move_replacement_v2.hpp
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE)' phase18/move_replacement_v2.hpp phase18/move_queue_v4.hpp phase18/native_move_v2_compile.cpp; then
+            echo "Privileged game archive services forbidden in offline move engine"
+            exit 1
+          fi
           python3 -m py_compile phase18/tools/extract_2_1_2_move_catalog.py
           python3 phase18/tools/test_exact_rom_catalog.py
           test ! -f phase18/*.sav
@@ -62,6 +67,7 @@ jobs:
           test -s /tmp/move-v2-native.o
           test -s /tmp/move-native.o
           "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-native.o > /tmp/move-symbols.txt
+          "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-v2-native.o >> /tmp/move-symbols.txt
           if grep -E 'FSPXI_|svcBackdoor|FSUSER_' /tmp/move-symbols.txt; then
             echo "Installed-game save symbol forbidden"; exit 1
           fi
