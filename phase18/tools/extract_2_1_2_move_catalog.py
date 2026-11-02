@@ -18,6 +18,8 @@ BATTLE_TABLES = (0x00BD27D0, 0x00BD8E30)
 COUNT = 936
 NAME_WIDTH = 13
 BATTLE_WIDTH = 28
+PACKED_ROW_WIDTH = 15
+CATALOG_SHA = "3d2d63e5fd77371a76540d07a6c5a4d20a9ddae7acea9f03035d86936ee34fa4"
 
 def sha(data: bytes) -> str:
     return hashlib.sha256(data).hexdigest()
@@ -84,18 +86,42 @@ def rows(rom: bytes):
                    pp[0]==pp[1] and 1<=pp[0]<=64)
         yield (mid,name,kind,pp[0],pp[1],int(pp[0]==pp[1]),int(candidate))
 
+def exact_packed_catalog(rom: bytes) -> bytes:
+    """Emit ONLY name[13]+PPa+PPb metadata, never the 32MiB ROM.
+
+    The result may stay locally on the owner's SD card. It MUST NOT be
+    committed to git or treated as an authorization to write a game save.
+    """
+    if len(rom)!=ROM_SIZE or sha(rom)!=ROM_SHA:
+        raise ValueError("Pinned GBA ROM digest mismatch")
+    packed=bytearray()
+    for move_id in range(COUNT):
+        packed.extend(rom[NAMES+move_id*NAME_WIDTH:
+                          NAMES+(move_id+1)*NAME_WIDTH])
+        packed.append(rom[BATTLE_TABLES[0]+move_id*BATTLE_WIDTH+5])
+        packed.append(rom[BATTLE_TABLES[1]+move_id*BATTLE_WIDTH+5])
+    if len(packed)!=COUNT*PACKED_ROW_WIDTH or sha(packed)!=CATALOG_SHA:
+        raise ValueError("ROM move catalog authentication failed")
+    return bytes(packed)
+
 def main() -> None:
     ap=argparse.ArgumentParser(description=__doc__)
     ap.add_argument("cia",type=Path)
     ap.add_argument("--out",required=True,type=Path,
                     help="Local CSV path; never commit private files")
+    ap.add_argument("--packed",type=Path,
+                    help="Optional LOCAL 14040-byte metadata index; NEVER commit")
     ns=ap.parse_args()
-    entries=list(rows(cia_rom(ns.cia.read_bytes())))
+    rom=cia_rom(ns.cia.read_bytes())
+    entries=list(rows(rom))
     with ns.out.open("w",encoding="utf-8",newline="") as f:
         writer=csv.writer(f)
         writer.writerow(("move_id","name","kind","pp_variant_a","pp_variant_b",
                          "pp_agreement","research_ui_candidate_only"))
         writer.writerows(entries)
+    if ns.packed:
+        ns.packed.write_bytes(exact_packed_catalog(rom))
+        print("Local catalog SHA:",CATALOG_SHA)
     print("ROM SHA:",ROM_SHA)
     print("Records:",len(entries))
     print("Ordinary PP conflicts:",sum(x[2]=="ordinary" and not x[5] for x in entries))
