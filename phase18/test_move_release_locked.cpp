@@ -4,6 +4,7 @@
 #error "Release-lock test must not compile with synthetic editor symbols"
 #endif
 #include "move_queue_v4.hpp"
+#include "single_move_draft_v1.hpp"
 #include <iostream>
 #include <type_traits>
 using namespace rogue18;
@@ -24,5 +25,12 @@ int main(){
     if(move_queue_v4::preview(nullptr,0,queue).ok)return 6;
     if(move_queue_v4::mayWriteInstalledGame(queue))return 7;
     if(move_queue_v4::verifyStaging(nullptr,0,untrusted,queue))return 8;
+    static_assert(!move_draft_v1::ReleaseDraftExportEnabled,
+                  "Unexpected SD draft export enabled");
+    move_draft_v1::Transaction transaction{};
+    if(move_draft_v1::exportToSd(nullptr,0,nullptr,0,
+                                untrusted,req,transaction))return 9;
+    if(transaction.authorized ||
+       move_draft_v1::mayExport(transaction))return 10;
     std::cout<<"PASS production headers: Apply/verify/export rejected without synthetic macro\n";
 }
