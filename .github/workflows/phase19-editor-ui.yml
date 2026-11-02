@@ -66,6 +66,13 @@ jobs:
             -Iphase19 phase19/test_move_browser.cpp -o /tmp/phase19-move-browser-asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-move-browser-asan
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase19 phase19/test_move_replacement_ui.cpp -o /tmp/phase19-move-selection
+          /tmp/phase19-move-selection
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iphase19 phase19/test_move_replacement_ui.cpp -o /tmp/phase19-move-selection-asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-move-selection-asan
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Iphase19 phase19/test_selection_safety.cpp -o /tmp/phase19-selection-tests
           /tmp/phase19-selection-tests
           g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
