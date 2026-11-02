@@ -1,5 +1,8 @@
 # Phase18 move_v2 + move_queue_v4 — Phase20 integration handoff
 
+> **2 Nov 2026 safety amendment:** Read [EXACT_MOVE_VERIFICATION_AUDIT_2026-11-02.md](EXACT_MOVE_VERIFICATION_AUDIT_2026-11-02.md) before integrating further. The exact-ROM PP-Up mask tables and a compiled max-PP/clear-bonus helper are now identified, but ordinary move replacement/forgetting and runtime mode behaviour are **still not sufficiently proven**. The release version has **no replacement construction implementation**: `move_v2::detail::construct` is guarded by `ROGUE18_TEST_MOVE_V2` and must never be built in a user CIA. `move_v2::releaseBlockers` is an immutable list of six unfinished gates. `move_queue_v4` conservatively disallows IV/EV/PP edits or a second replacement for **any slot of the same Pokémon** in one queue; `verifyStaging` now validates the original scalar guards and Pokémon identity read-only. `move_queue_v4::preview` still hard-blocks queued replacements. No Phase20 source was changed here.
+
+
 **Status:** fully implemented, independently testable **offline replacement core**, but release **Apply is hard-DISABLED** because exact-ROM runtime PP modes, PP-Up replacement semantics, move legality and game load/re-save still need evidence. PR #14 remains draft. No Phase20 or Phase18 v3 source changes.
 
 ## Pinned build identity
