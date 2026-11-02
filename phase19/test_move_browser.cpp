@@ -18,6 +18,25 @@ static const MoveRecord* find(const MoveBrowser& b,const char* text) {
     }
     return nullptr;
 }
+static void advanceReadOnlyConfirmations(MoveBrowser& browser,const Demo& d) {
+    assert(browser.page==MovePage::Review);
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Review); // held A cannot advance
+    browser.releaseApproval();
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::ConfirmOne);
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::ConfirmOne);
+    browser.releaseApproval();
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::ConfirmTwo);
+    assert(browser.browse(d,MoveKey::X));
+    assert(browser.page==MovePage::ConfirmTwo);
+    browser.releaseApproval();
+    assert(browser.browse(d,MoveKey::X));
+    assert(browser.page==MovePage::Notice);
+    assert(browser.notice==MoveNotice::ReplacementBlocked);
+}
 int main() {
     static Demo d{};
     populateMock(d);
@@ -59,9 +78,7 @@ int main() {
     assert(std::strcmp(browser.selectedMove()->name,"Fiery Dance")==0);
     assert(browser.selectedMove()->id==9001); // deliberately fictional ID
     assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Review);
-    assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Notice); // no approval/export
+    advanceReadOnlyConfirmations(browser,d); // no Apply/export
     assert(browser.browse(d,MoveKey::B));
     assert(browser.page==MovePage::Catalog);
     assert(browser.browse(d,MoveKey::Y));
@@ -115,9 +132,7 @@ int main() {
     for(unsigned i=0;i<200;i++)assert(browser.browse(d,MoveKey::R));
     assert(browser.selected==935u);
     assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Review);
-    assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Notice);
+    advanceReadOnlyConfirmations(browser,d);
     assert(!browser.matchAt(936,first));
     unsigned statuses[5]{};
     for(const auto& m:all)statuses[unsigned(m.evidence)]++;
@@ -252,16 +267,13 @@ int main() {
     assert(browser.initialize(full,d,0));
     assert(browser.browse(d,MoveKey::A));
     assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Review);
-    assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Notice);
+    advanceReadOnlyConfirmations(browser,d);
     assert(browser.notice==MoveNotice::ReplacementBlocked);
     // A claimed exact ROM catalogue still never enables an Apply flow.
     full.origin=CatalogOrigin::ExactRomReviewed;
     assert(browser.initialize(full,d,0));
     assert(browser.browse(d,MoveKey::A));
     assert(browser.browse(d,MoveKey::A));
-    assert(browser.browse(d,MoveKey::A));
-    assert(browser.page==MovePage::Notice);
+    advanceReadOnlyConfirmations(browser,d);
     std::cout<<"PASS Phase19 936-entry alphabetical move browser, 807/40 flags, Fiery Dance keyboard, bounds and READ-ONLY refusal\n";
 }
