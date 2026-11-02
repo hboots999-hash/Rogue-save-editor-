@@ -7,6 +7,15 @@
 #include <cstddef>
 #include <cstdint>
 #include <cstring>
+#if defined(ROGUE18_TEST_MOVE_V2)
+#include <cerrno>
+#include <cstdio>
+#include <string>
+#include <vector>
+#include <fcntl.h>
+#include <sys/stat.h>
+#include <unistd.h>
+#endif
 namespace rogue18 { namespace move_draft_v1 {
 constexpr uint32_t ContractVersion=1;
 constexpr bool ReleaseDraftExportEnabled=false;
@@ -36,14 +45,6 @@ inline bool exportToSd(const uint8_t*,size_t,const uint8_t*,size_t,
 }
 
 #if defined(ROGUE18_TEST_MOVE_V2)
-#include <cerrno>
-#include <cstdio>
-#include <string>
-#include <vector>
-#include <fcntl.h>
-#include <sys/stat.h>
-#include <unistd.h>
-
 inline bool verifyGenerated(const uint8_t* original,size_t n,
                             const uint8_t* draft,size_t len,
                             const move_v2::Request& request,
