@@ -8,6 +8,7 @@
 #include "offline_edit_presentation.hpp" // compile/size-audit shared UI-only Phase20 adapter
 #include "read_only_import.hpp"
 #include "rosalina_input.hpp"
+#include "move_browser.hpp"
 #include <string>
 using namespace phase19;
 static_assert(sizeof(OfflineApprovalGate)<16u,"ARM11 approval gate should stay tiny");
@@ -96,7 +97,8 @@ void top(const State& s) {
             for(unsigned i=0;i<4;i+=2)
                 std::printf("%u:%u PP%u  %u:%u PP%u\n",
                     i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
-            std::puts(s.fromPC||!s.demo.synthetic?"\n\nREAD ONLY: editing disabled":"\n\nA: explore party edit demo");
+            std::puts(s.fromPC||!s.demo.synthetic?"\nREAD ONLY: editing disabled":"\nA: explore party edit demo");
+            if(!s.fromPC)std::puts("Y: searchable move browser (RO)");
             break;
         }
         case Screen::Edit: {
@@ -220,6 +222,114 @@ void top(const State& s) {
             break;
     }
 }
+// Move Browser uses fictional test metadata. Not a verified ROM database,
+// writer, move replacement API or part of any SD draft export.
+void moveTop(const State& s,const MoveBrowser& v) {
+    consoleClear();
+    std::puts("MOVE BROWSER - READ ONLY");
+    std::puts("SYNTHETIC IDS, NOT ROM DATA");
+    std::puts("===========================");
+    if(!v.activeParty(s.demo)) {
+        std::puts("Party data changed or missing.");
+        std::puts("Return and reselect Pokemon.");
+        std::puts("B: return; NO SAVE WRITES");
+        return;
+    }
+    const auto& p=s.demo.party[v.partySlot];
+    std::printf("Party %u: %.15s (#%u)\n",v.partySlot+1u,p.name,p.species);
+    if(v.page==MovePage::Slots){
+        std::puts("SELECT EXISTING MOVE SLOT");
+        for(unsigned i=0;i<4u;i++)
+            std::printf("%c Slot %u  ID %u  PP %u\n",
+                        i==v.slot?'>':' ',i+1u,p.moves[i],p.pp[i]);
+        std::puts("\nA: browse this slot");
+        std::puts("Up/Down: slot  B: back");
+        std::puts("No replacement can be saved.");
+    }else if(v.page==MovePage::Catalog){
+        std::printf("Slot %u old ID%u PP%u\n",v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
+        std::printf("Search: %.18s\n",v.query[0]?v.query:"(all moves)");
+        std::printf("Matches %u  (alphabetical)\n",v.matchCount);
+        const unsigned first=(v.selected/BrowserPageRows)*BrowserPageRows;
+        const unsigned end=std::min(first+BrowserPageRows,v.matchCount);
+        for(unsigned i=first;i<end;i++) {
+            unsigned idx=0;
+            if(!v.matchAt(i,idx))break;
+            const auto& m=v.catalog->records[idx];
+            // No false long-name truncation: full name appears on Review.
+            // Mark other than matching ordinary candidate with '!'.
+            const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
+            std::printf("%c%c %-15.15s %5u\n",
+                v.selected==i?'>':' ',flag,m.name,m.id);
+        }
+        if(!v.matchCount)std::puts("No results. Y: edit search.");
+        else std::printf("%u-%u / %u   ! = UNVERIFIED\n",
+             first+1u,end,v.matchCount);
+        std::puts("R/Right: next page");
+        std::puts("X/Left: previous page");
+        std::puts("Y: search  A: review");
+        std::puts("B: return to slots");
+    }else if(v.page==MovePage::Keyboard){
+        std::puts("SEARCH MOVE NAME (max 18)");
+        std::printf("Find: %.18s\n",v.pending);
+        std::puts("D-Pad: choose key");
+        for(unsigned y=0;y<5u;y++) {
+            for(unsigned x=0;x<6u;x++) {
+                const unsigned i=y*6u+x;
+                const char k=MoveBrowser::Keyboard[i];
+                if(i==v.keyboardIndex)std::printf("[%c] ",k==' '?'_':k);
+                else std::printf(" %c  ",k==' '?'_':k);
+            }
+            std::putchar('\n');
+        }
+        std::puts("A: type / <: delete / !: apply");
+        std::puts("X: delete  Y: apply");
+        std::puts("B: cancel search");
+        std::puts("No save files are modified.");
+    }else if(v.page==MovePage::Review){
+        std::puts("REPLACEMENT REVIEW - BLOCKED");
+        std::printf("Existing slot %u: ID%u PP%u\n",
+            v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
+        if(const MoveRecord* m=v.selectedMove()){
+            std::puts("Selected catalogue entry:");
+            forEachBoundedLine(m->name,30u,3u,[](const char* row,unsigned n){
+                std::printf("%.*s\n",int(n),row);
+            });
+            std::printf("Candidate ID: %u\n",m->id);
+            if(m->evidence==MoveEvidence::Candidate)
+                std::printf("Research base PP: %u\n",m->basePP);
+            else std::puts("Base PP: NOT VERIFIED");
+            wrappedNotice(evidenceLabel(m->evidence));
+        }
+        std::puts("ALWAYS READ ONLY - NO APPLY");
+        std::puts("A: see block reason B: back");
+    }else{
+        std::puts("MOVE REPLACEMENT BLOCKED");
+        std::puts("Exact-ROM move table and PP");
+        std::puts("effects not authenticated.");
+        std::puts("No draft or save was changed.");
+        std::puts("A/B: back to browse");
+    }
+}
+void moveBottom(const State& s,const MoveBrowser& v){
+    consoleClear();
+    std::puts("PKSM ROGUE - MOVE RESEARCH");
+    std::puts("-------------------------");
+    std::puts("ROM MAPPING: NOT VERIFIED");
+    std::puts("936-record API supported.");
+    std::puts("40 PP conflicts must be");
+    std::puts("flagged by a verified source.");
+    std::puts("NO MOVE REPLACEMENT ACTIVE");
+    std::puts("No installed game write.");
+    std::puts("No offline draft export.");
+    std::puts("L button is NOT required.");
+    std::puts("R/Right: forward (browser)");
+    std::puts("X/Left: back (browser)");
+    std::puts("START: release to exit");
+    std::puts("START+SELECT: Rosalina");
+    std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
+              "Real party, SYNTHETIC list.");
+    if(v.page==MovePage::Review)std::puts("Even PP matches are NOT APPROVED.");
+}
 void bottom(const State& s) {
     consoleClear();
     std::puts("PKSM ROGUE - NONWRITING BUILD");
@@ -264,6 +374,8 @@ int main() {
     populateMock(active);
     static State state(active);
     static char importStatus[200]{};
+    static MoveBrowser moveView{};
+    bool viewingMoves=false;
     StartExitGate startGate{};
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
@@ -279,8 +391,35 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
+        if(viewingMoves) {
+            if(!moveView.activeParty(state.demo)) {
+                viewingMoves=false;
+            } else {
+                MoveKey mk=MoveKey::B;
+                bool moveKey=false;
+                if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
+                else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
+                else if(down&KEY_UP){mk=MoveKey::Up;moveKey=true;}
+                else if(down&KEY_DOWN){mk=MoveKey::Down;moveKey=true;}
+                else if(down&KEY_LEFT){mk=MoveKey::Left;moveKey=true;}
+                else if(down&KEY_RIGHT){mk=MoveKey::Right;moveKey=true;}
+                else if(down&KEY_R){mk=MoveKey::R;moveKey=true;}
+                else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
+                else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                if(moveKey) {
+                    if(moveView.page==MovePage::Slots && mk==MoveKey::B)
+                        viewingMoves=false;
+                    else moveView.browse(state.demo,mk);
+                    redraw=true;
+                }
+            }
+        } else if((down&KEY_Y) && state.screen==Screen::Pokemon &&
+                  !state.fromPC && hasSelectedPokemon(state)) {
+            viewingMoves=moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
+            redraw=true;
+        } else if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
+                viewingMoves=false;
                 std::string reason;
                 if(inspectFixedSDCopy(active,reason)) {
                     switchView(state,false);
@@ -289,14 +428,17 @@ int main() {
                     openNotice(state,Screen::Import,importStatus);
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
+                viewingMoves=false;
                 populateMock(active);
                 switchView(state,true);
             } else press(state,k);
             redraw=true;
         }
         if(redraw) {
-            consoleSelect(&upper); top(state);
-            consoleSelect(&lower); bottom(state);
+            consoleSelect(&upper);
+            if(viewingMoves)moveTop(state,moveView); else top(state);
+            consoleSelect(&lower);
+            if(viewingMoves)moveBottom(state,moveView); else bottom(state);
             redraw=false;
         }
         gspWaitForVBlank();
