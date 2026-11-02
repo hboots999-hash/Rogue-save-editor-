@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <cstdint>
 #include <cstring>
+#include <cstdio>
 
 namespace phase19 {
 constexpr unsigned MaxMoveRecords=936;
@@ -50,20 +51,56 @@ inline bool validMoveName(const char* s,unsigned capacity) {
     }
     return length>0 && length<capacity;
 }
-inline bool validMoveCatalog(const MoveCatalog& c) {
-    if(c.version!=MoveCatalogApi || !c.records || !c.count ||
-       c.count>MaxMoveRecords || static_cast<unsigned>(c.origin)>2u)return false;
-    // CPU-bounded, no heap: at most 936^2 ID checks once on import.
+enum class CatalogProblem : uint8_t {
+    None, Missing, ReadFailure, WrongSize, CorruptDigest, WrongRom,
+    UnsupportedVersion, BadCount, BadName, BadMove, DuplicateId
+};
+inline const char* catalogProblemText(CatalogProblem problem) {
+    switch(problem){
+        case CatalogProblem::None:return "Catalogue metadata ready (browse only).";
+        case CatalogProblem::Missing:return "Move metadata missing. Check /3ds/PKSM-Rogue/catalogs/. No moves applied.";
+        case CatalogProblem::ReadFailure:return "Could not read move metadata from SD. Check SD card; no moves applied.";
+        case CatalogProblem::WrongSize:return "Move metadata has wrong size; expected the reviewed fixed-length format.";
+        case CatalogProblem::CorruptDigest:return "Move metadata checksum mismatch. Do not use this catalogue.";
+        case CatalogProblem::WrongRom:return "Metadata ROM identity unverified. Install matching reviewed metadata only.";
+        case CatalogProblem::UnsupportedVersion:return "Unsupported move catalogue version. Update metadata and app together.";
+        case CatalogProblem::BadCount:return "Move catalogue count invalid or exceeds safe 936-entry limit.";
+        case CatalogProblem::BadName:return "Move metadata includes empty, invalid or unterminated names.";
+        case CatalogProblem::BadMove:return "Move ID, PP or evidence status invalid; catalogue unavailable.";
+        case CatalogProblem::DuplicateId:return "Move catalogue has duplicate IDs; browser disabled.";
+    }
+    return "Move catalogue unverified; no replacements allowed.";
+}
+inline CatalogProblem validateMoveCatalog(const MoveCatalog& c) {
+    if(c.version!=MoveCatalogApi)return CatalogProblem::UnsupportedVersion;
+    if(!c.records || !c.count || c.count>MaxMoveRecords ||
+       static_cast<unsigned>(c.origin)>2u)return CatalogProblem::BadCount;
+    // No heap/large temporary arrays: 936x935/2 comparisons maximum,
+    // performed only once on browser initialization.
     for(unsigned i=0;i<c.count;i++){
         const auto& m=c.records[i];
-        if(!m.id || !validMoveName(m.name,sizeof(m.name)) ||
-           static_cast<unsigned>(m.evidence)>4u)return false;
-        if(m.evidence==MoveEvidence::Candidate) {
-            if(m.basePP==0 || m.basePP>64)return false;
-        }else if(m.basePP>64)return false;
-        for(unsigned j=0;j<i;j++)if(c.records[j].id==m.id)return false;
+        if(!validMoveName(m.name,sizeof(m.name)))return CatalogProblem::BadName;
+        if(!m.id || static_cast<unsigned>(m.evidence)>4u ||
+           m.basePP>64 || (m.evidence==MoveEvidence::Candidate && !m.basePP))
+            return CatalogProblem::BadMove;
+        for(unsigned j=0;j<i;j++)if(c.records[j].id==m.id)
+            return CatalogProblem::DuplicateId;
     }
-    return true;
+    return CatalogProblem::None;
+}
+inline bool validMoveCatalog(const MoveCatalog& c) {
+    return validateMoveCatalog(c)==CatalogProblem::None;
+}
+// Exactly 15 column slots: abbreviated alphabetical rows are explicitly
+// marked with "..."; the full 39-byte name remains on the review page.
+inline void formatMoveShortName(const char* name,char (&out)[16]) {
+    std::memset(out,0,sizeof(out));
+    if(!name)return;
+    unsigned n=0;
+    while(name[n] && n<15u)++n;
+    if(n<15u){std::memcpy(out,name,n);return;}
+    if(!name[15]){std::memcpy(out,name,15);return;}
+    std::memcpy(out,name,12);std::memcpy(out+12,"...",3);
 }
 inline char lowerAscii(char c){
     return c>='A' && c<='Z'?char(c+('a'-'A')):c;
@@ -100,14 +137,27 @@ struct MoveBrowser {
     unsigned queryLength=0;
     char query[SearchMax+1]{};
     char pending[SearchMax+1]{};
-    std::array<uint16_t,MaxMoveRecords> alphabetical{}; // ~1872 bytes
+    std::array<uint16_t,MaxMoveRecords> alphabetical{}; // 1872 B
+    std::array<uint16_t,MaxMoveRecords> matches{};      // 1872 B, O(1) rows
+    CatalogProblem problem=CatalogProblem::Missing;
     bool ready=false;
+    void reset() {
+        catalog=nullptr;page=MovePage::Slots;partySlot=slot=selected=0;
+        shown=matchCount=keyboardIndex=queryLength=0;
+        query[0]=pending[0]='\0';ready=false;
+        problem=CatalogProblem::Missing;
+        // Large index arrays are overwritten on initialize/recount, not
+        // value-initialized in a temporary 4-KiB ARM11 stack object.
+    }
     static constexpr char Keyboard[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ -<!";
     bool initialize(const MoveCatalog& source,const Demo& d,unsigned party) {
-        *this=MoveBrowser{}; // 2KB state: caller must put in static/heap
-        if(!validMoveCatalog(source) || party>=d.partyCount ||
-           party>=d.party.size() || d.partyStatus!=Availability::Ready ||
-           !d.party[party].species)return false;
+        reset();
+        problem=validateMoveCatalog(source);
+        if(problem!=CatalogProblem::None)return false;
+        if(party>=d.partyCount || party>=d.party.size() ||
+           d.partyStatus!=Availability::Ready || !d.party[party].species) {
+            problem=CatalogProblem::BadMove;return false;
+        }
         catalog=&source;partySlot=party;
         for(unsigned i=0;i<source.count;i++)
             alphabetical[i]=static_cast<uint16_t>(i);
@@ -117,6 +167,7 @@ struct MoveBrowser {
             return cmp<0 || (cmp==0 && source.records[a].id<source.records[b].id);
         });
         ready=true;
+        problem=CatalogProblem::None;
         recount();
         return true;
     }
@@ -127,14 +178,8 @@ struct MoveBrowser {
     }
     bool matchAt(unsigned ordinal,unsigned& rowIndex) const {
         if(!ready || !catalog || ordinal>=matchCount)return false;
-        unsigned seen=0;
-        for(unsigned i=0;i<catalog->count;i++){
-            const unsigned row=alphabetical[i];
-            if(hasSearch(catalog->records[row].name,query)){
-                if(seen++==ordinal){rowIndex=row;return true;}
-            }
-        }
-        return false;
+        rowIndex=matches[ordinal];
+        return rowIndex<catalog->count;
     }
     const MoveRecord* selectedMove() const {
         unsigned row=0;
@@ -143,11 +188,13 @@ struct MoveBrowser {
     void recount() {
         matchCount=0;
         if(!ready || !catalog)return;
-        for(unsigned i=0;i<catalog->count;i++)
-            if(hasSearch(catalog->records[alphabetical[i]].name,query))
-                ++matchCount;
+        for(unsigned i=0;i<catalog->count;i++){
+            const uint16_t idx=alphabetical[i];
+            if(hasSearch(catalog->records[idx].name,query))
+                matches[matchCount++]=idx;
+        }
         if(!matchCount)selected=0;
-        else if(selected>=matchCount)selected=matchCount-1;
+        else if(selected>=matchCount)selected=matchCount-1u;
     }
     bool browse(const Demo& d,MoveKey k) {
         if(!activeParty(d)){
@@ -219,6 +266,25 @@ struct MoveBrowser {
         std::memcpy(pending,query,sizeof(query));
         queryLength=static_cast<unsigned>(std::strlen(pending));
         keyboardIndex=0;page=MovePage::Keyboard;return true;
+    }
+};
+// No-repeat on A/B/X/Y: this gate repeats only D-pad/R navigation.
+// Call once per HID frame; pass the highest-priority HELD direction.
+struct MoveNavRepeat {
+    MoveKey previous=MoveKey::A;
+    unsigned frames=0;
+    bool active=false;
+    void reset(){active=false;frames=0;}
+    bool poll(MoveKey k,bool held) {
+        if(!held){reset();return false;}
+        const bool nav=k==MoveKey::Up || k==MoveKey::Down ||
+                       k==MoveKey::Left || k==MoveKey::Right || k==MoveKey::R;
+        if(!nav){reset();return false;}
+        if(!active || k!=previous) {
+            previous=k;active=true;frames=0;return true;
+        }
+        if(frames<1000u)++frames;
+        return frames>=16u && ((frames-16u)%5u)==0;
     }
 };
 // Fictional catalogue ONLY. IDs are deliberately fictional (9001+) and
