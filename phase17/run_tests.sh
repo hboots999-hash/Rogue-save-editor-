@@ -30,4 +30,5 @@ for mode in strict sanitized; do
 done
 # Read-only independent PC hash verifier uses ONLY synthetic temporary files.
 python3 phase17/test_verify_offline_sd_hashes.py
+python3 phase17/test_verify_raw_draft_diff_v1.py
 bash phase16/run_tests.sh
