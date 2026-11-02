@@ -42,6 +42,8 @@ static Bytes partyFixture(unsigned perm){
 int main(int argc,char** argv){
     using namespace rogue18::move_v2;
     CHECK(!ApplyApproved);
+    CHECK(releaseBlockers.size()==6);
+    CHECK(releaseBlockers[0]==ApplyBlocker::PpTableModeUnproven);
     CHECK(RomSha.size()==32 && CatalogSha.size()==32);
     const uint8_t dummy[PackedBytes]{};
     Catalog fake{dummy,sizeof(dummy),RomSha};
@@ -186,6 +188,20 @@ int main(int argc,char** argv){
     queue.replacements.push_back(request);
     CHECK(!move_queue_v4::preview(original.data(),original.size(),queue).ok);
     CHECK(!move_queue_v4::appendScalar(view,queue,Kind::Move,0,2,0));
+    CHECK(!move_queue_v4::appendScalar(view,queue,Kind::Move,0,0,1));
+    CHECK(!move_queue_v4::appendScalar(view,queue,Kind::IVs,0,0,31));
+    CHECK(!move_queue_v4::appendScalar(view,queue,Kind::EVs,0,0,31));
+    CHECK(!move_queue_v4::verifyStaging(original.data(),original.size(),
+                                        fake,queue));
+    CHECK(!move_queue_v4::verifyStaging(original.data(),original.size(),
+                                        fake,move_queue_v4::Queue{}));
+    CHECK(!move_queue_v4::verifyStaging(nullptr,original.size(),
+                                        fake,queue));
+    CHECK(!move_queue_v4::verifyStaging(original.data(),original.size()-1,
+                                        fake,queue));
+    CHECK(!move_queue_v4::appendReplacement(view,original.data(),original.size(),
+                 fake,queue,0,0,603)); // any second move of same mon blocked
+
     std::cout<<"PASS move-v2: "<<passed
              <<" synthetically regenerated offline replacements (24x6x4),"
              <<" exact 8-byte proof, 28 corrupt sectors, stale guards,"
