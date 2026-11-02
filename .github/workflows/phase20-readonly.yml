@@ -357,7 +357,24 @@ jobs:
             import -window root evidence/3dsx-home.png
             tap3ds a
             import -window root evidence/3dsx-party.png
-            tap3ds s
+            # Phase19 integrated READ-ONLY move browser, deliberately
+            # fictional demo catalogue. This MUST not create an SD draft.
+            tap3ds a  # Party -> Pokemon details
+            tap3ds x  # Y on Pokemon opens move browser, not batch
+            import -window root evidence/3dsx-move-slots.png
+            tap3ds a  # Slots -> alphabetical catalogue
+            import -window root evidence/3dsx-move-catalogue.png
+            tap3ds x  # Y opens D-pad search keyboard inside browser
+            import -window root evidence/3dsx-move-search.png
+            tap3ds s  # cancel keyboard -> catalogue
+            tap3ds a  # catalogue -> replacement review
+            tap3ds a  # review -> permanent BLOCKED notice
+            import -window root evidence/3dsx-move-blocked.png
+            tap3ds s  # notice -> catalogue
+            tap3ds s  # catalogue -> slots
+            tap3ds s  # slots -> Pokemon
+            tap3ds s  # Pokemon -> Party
+            tap3ds s  # Party -> Home
             import -window root evidence/3dsx-home-return.png
             for i in 1 2 3 4 5 6; do tap3ds g; done
             tap3ds a
@@ -456,6 +473,10 @@ jobs:
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
           test -s evidence/3dsx-home-return.png
+          test -s evidence/3dsx-move-slots.png
+          test -s evidence/3dsx-move-catalogue.png
+          test -s evidence/3dsx-move-search.png
+          test -s evidence/3dsx-move-blocked.png
           test -s evidence/3dsx-import-menu.png
           test -s evidence/3dsx-missing-copy.png
           test -s evidence/3dsx-exit-attempt.png
