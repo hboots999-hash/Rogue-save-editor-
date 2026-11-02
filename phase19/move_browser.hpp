@@ -158,7 +158,7 @@ struct MoveBrowser {
         problem=validateMoveCatalog(source);
         if(problem!=CatalogProblem::None)return false;
         if(party>=d.partyCount || party>=d.party.size() ||
-           d.partyStatus!=Availability::Ready || !d.party[party].species) {
+           d.partyStatus!=Availability::Ready || (!d.party[party].species || d.party[party].egg)) {
             problem=CatalogProblem::BadMove;return false;
         }
         catalog=&source;partySlot=party;
@@ -178,7 +178,7 @@ struct MoveBrowser {
         return ready && catalog && catalog->count<=MaxMoveRecords &&
                partySlot<d.partyCount &&
                partySlot<d.party.size() && d.partyStatus==Availability::Ready &&
-               d.party[partySlot].species!=0;
+               d.party[partySlot].species!=0 && !d.party[partySlot].egg;
     }
     bool matchAt(unsigned ordinal,unsigned& rowIndex) const {
         if(!ready || !catalog || ordinal>=matchCount ||
