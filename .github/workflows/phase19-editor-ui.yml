@@ -59,6 +59,13 @@ jobs:
             -Iphase19 phase19/test_offline_edit_presentation.cpp -o /tmp/phase19-offline-present-asan
           ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-offline-present-asan
           g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Iphase19 phase19/test_move_browser.cpp -o /tmp/phase19-move-browser
+          /tmp/phase19-move-browser
+          g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
+            -fsanitize=address,undefined -fno-omit-frame-pointer \
+            -Iphase19 phase19/test_move_browser.cpp -o /tmp/phase19-move-browser-asan
+          ASAN_OPTIONS=detect_leaks=1 /tmp/phase19-move-browser-asan
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
             -Iphase19 phase19/test_selection_safety.cpp -o /tmp/phase19-selection-tests
           /tmp/phase19-selection-tests
           g++ -std=c++17 -O1 -g -Wall -Wextra -Wpedantic -Werror \
@@ -141,6 +148,7 @@ jobs:
           cp phase19/screen_text.hpp phase19-build/include/screen_text.hpp
           cp phase19/offline_review_ui.hpp phase19-build/include/offline_review_ui.hpp
           cp phase19/offline_edit_presentation.hpp phase19-build/include/offline_edit_presentation.hpp
+          cp phase19/move_browser.hpp phase19-build/include/move_browser.hpp
           cp phase19/adapter.hpp phase19-build/include/adapter.hpp
           cp phase19/read_only_import.hpp phase19-build/include/read_only_import.hpp
           cp phase19/rosalina_input.hpp phase19-build/include/rosalina_input.hpp
