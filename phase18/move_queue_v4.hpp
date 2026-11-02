@@ -16,11 +16,17 @@ inline bool begin(const v2::ReadSnapshot& snapshot,Queue& out){
     out=Queue{};
     return v3::start(snapshot,out.scalars);
 }
+// A replacement rewrites the mon's 48-byte encrypted payload and checksum.
+// Before an authenticated atomic composer exists, no other IV/EV/PP/replacement
+// operation may target that Pokémon in the same queue.
+inline bool touchesMon(const Kind kind){
+    return kind==Kind::Move || kind==Kind::IVs || kind==Kind::EVs;
+}
 inline bool appendScalar(const v2::ReadSnapshot& snapshot,Queue& queue,
                          Kind kind,unsigned slot,unsigned field,uint32_t desired){
     if(queue.version!=ContractVersion)return false;
-    if(kind==Kind::Move)for(const auto& edit:queue.replacements)
-        if(edit.source.partySlot==slot && edit.source.moveSlot==field)
+    if(touchesMon(kind))for(const auto& edit:queue.replacements)
+        if(edit.source.partySlot==slot)
             return false;
     return v3::append(snapshot,queue.scalars,kind,slot,field,desired);
 }
@@ -35,10 +41,10 @@ inline bool appendReplacement(const v2::ReadSnapshot& snapshot,
        queue.scalars.expectedDigest!=snapshot.data.sourceSha256 ||
        queue.scalars.expectedCounter!=snapshot.data.activeCounter)return false;
     for(const auto& edit:queue.scalars.edits)
-        if(edit.kind==Kind::Move && edit.slot==party && edit.field==moveSlot)
+        if(touchesMon(edit.kind) && edit.slot==party)
             return false;
     for(const auto& edit:queue.replacements)
-        if(edit.source.partySlot==party && edit.source.moveSlot==moveSlot)
+        if(edit.source.partySlot==party)
             return false;
     move_v2::Request request{};
     if(!move_v2::begin(snapshot,original,n,party,moveSlot,request) ||
@@ -54,6 +60,55 @@ inline Result preview(const uint8_t* original,size_t n,
     if(!queue.replacements.empty())
         return blocked("Move replacement queue staged only: exact-ROM Apply gate disabled");
     return v3::preview(original,n,queue.scalars);
+}
+// Informational only. Revalidates immutable source and requested identity
+// without producing a candidate. Failure must disable even the Review action.
+inline bool verifyStaging(const uint8_t* original,size_t n,
+                          const move_v2::Catalog& catalog,const Queue& queue){
+    if(queue.version!=ContractVersion ||
+       queue.replacements.size()>MaxReplacements ||
+       !original || n!=raw_v1::Size ||
+       !move_v2::authenticate(catalog))
+        return false;
+    const auto view=v2::inspect(original,n);
+    if(!view.data.valid ||
+       view.data.sourceSha256!=queue.scalars.expectedDigest ||
+       view.data.activeCounter!=queue.scalars.expectedCounter)
+        return false;
+    for(size_t i=0;i<queue.replacements.size();i++){
+        const auto& wanted=queue.replacements[i];
+        if(wanted.version!=move_v2::ContractVersion ||
+           !move_v2::ApplyApproved==false)
+            return false;
+        move_v2::Request fresh{};
+        if(!move_v2::begin(view,original,n,wanted.source.partySlot,
+                           wanted.source.moveSlot,fresh))
+            return false;
+        const auto& a=fresh.source;
+        const auto& b=wanted.source;
+        if(a.expectedOriginalSha256!=b.expectedOriginalSha256 ||
+           a.expectedCounter!=b.expectedCounter ||
+           a.partySlot!=b.partySlot || a.moveSlot!=b.moveSlot ||
+           a.expectedPid!=b.expectedPid || a.expectedOt!=b.expectedOt ||
+           a.expectedSpecies!=b.expectedSpecies ||
+           a.expectedPokemonChecksum!=b.expectedPokemonChecksum ||
+           a.expectedMoveId!=b.expectedMoveId ||
+           a.expectedPP!=b.expectedPP ||
+           a.expectedPPBonuses!=b.expectedPPBonuses ||
+           wanted.catalogDigest!=move_v2::CatalogSha)
+            return false;
+        move_v2::Move candidate{};
+        if(!move_v2::lookup(catalog,wanted.replacementId,candidate) ||
+           candidate.id==b.expectedMoveId)
+            return false;
+        for(size_t j=0;j<i;j++)
+            if(queue.replacements[j].source.partySlot==b.partySlot)
+                return false;
+        for(const auto& scalar:queue.scalars.edits)
+            if(touchesMon(scalar.kind) && scalar.slot==b.partySlot)
+                return false;
+    }
+    return true;
 }
 inline bool mayWriteInstalledGame(const Queue&){return false;}
 }} // namespace rogue18::move_queue_v4
