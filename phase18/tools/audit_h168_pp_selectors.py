@@ -118,10 +118,15 @@ def structural_report(rom: bytes) -> dict:
 
 def main() -> None:
     p=argparse.ArgumentParser(description=__doc__)
-    p.add_argument("rom",type=Path,help="Local 32MiB exact ROM, never commit it")
+    p.add_argument("source",type=Path,help="Local exact ROM or original CIA")
+    p.add_argument("--cia",action="store_true",help="Read ROM in memory from CIA; no binary extraction to disk")
     p.add_argument("--json",type=Path,help="Optional metadata-only output")
     a=p.parse_args()
-    report=structural_report(a.rom.read_bytes())
+    data=a.source.read_bytes()
+    if a.cia:
+        from extract_2_1_2_move_catalog import cia_rom
+        data=cia_rom(data)
+    report=structural_report(data)
     rendered=json.dumps(report,indent=2)+"\n"
     if a.json:
         a.json.write_text(rendered,encoding="utf-8")
