@@ -155,5 +155,113 @@ int main() {
         [&](const char* line,unsigned n){rows.emplace_back(line,n);});
     assert(rows.size()>=2);
     for(const auto& row:rows)assert(row.size()<=15u);
+    // Phase20's 14,040-byte provider exposes 935 entries (IDs 1..935)
+    // rather than our synthetic 936-entry maximum. Exercise that exact
+    // shape with realistic name lengths, duplicate alphabetic titles,
+    // 807 ordinary candidates and 40 explicit PP conflicts.
+    full.count=935;
+    for(unsigned i=0;i<935;i++){
+        all[i].id=static_cast<uint16_t>(i+1u);
+        all[i].basePP=i<807?uint8_t(5u+5u*(i%6u)):i<847?20:0;
+        all[i].evidence=i<807?MoveEvidence::Candidate:
+            i<847?MoveEvidence::ConflictingPP:MoveEvidence::Unknown;
+        std::snprintf(all[i].name,sizeof(all[i].name),
+                       "Move %03u Research Data",i+1u);
+    }
+    std::snprintf(all[599].name,sizeof(all[599].name),"Fiery Dance");
+    std::snprintf(all[600].name,sizeof(all[600].name),"fiery dance");
+    std::snprintf(all[601].name,sizeof(all[601].name),
+                  "Long-Name-Metadata-Entry-039-ABCDEF");
+    assert(validMoveCatalog(full));
+    assert(browser.initialize(full,d,0));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.matchCount==935u);
+    std::strcpy(browser.query,"fIeRy");
+    browser.recount();
+    assert(browser.matchCount==2u);
+    unsigned f0=0,f1=0;
+    assert(browser.matchAt(0,f0) && browser.matchAt(1,f1));
+    assert(all[f0].id==600u && all[f1].id==601u); // stable ID tie-break
+    assert(!browser.matchAt(2,f0));
+    std::strcpy(browser.query,"unmatched impossible term");
+    browser.recount();
+    assert(browser.matchCount==0u);
+    assert(browser.selectedMove()==nullptr);
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Catalog); // can't review empty result
+    browser.query[0]='\0';browser.recount();
+    assert(browser.matchCount==935u);
+    assert(find(browser,"Fiery Dance"));
+    for(unsigned i=0;i<1000;i++) {
+        assert(browser.browse(d,MoveKey::R));
+        assert(browser.selected<935u);
+        assert(browser.browse(d,MoveKey::X));
+        assert(browser.selected<935u);
+    }
+    // Metadata error taxonomy: statuses are display-only, never authorise
+    // move replacement, including for alleged exact-ROM source.
+    assert(std::strstr(catalogProblemText(CatalogProblem::Missing),"missing"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::WrongSize),"wrong size"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::CorruptDigest),"checksum"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::ReadFailure),"SD"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::WrongRom),"ROM"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::UnsupportedVersion),"version"));
+    assert(std::strstr(catalogProblemText(CatalogProblem::DuplicateId),"duplicate"));
+    full.version=13;
+    assert(validateMoveCatalog(full)==CatalogProblem::UnsupportedVersion);
+    full.version=1;
+    all[100].id=all[101].id;
+    assert(validateMoveCatalog(full)==CatalogProblem::DuplicateId);
+    all[100].id=101;
+    all[0].name[0]='\0';
+    assert(validateMoveCatalog(full)==CatalogProblem::BadName);
+    std::snprintf(all[0].name,sizeof(all[0].name),"Move 001 Research Data");
+    assert(validateMoveCatalog(full)==CatalogProblem::None);
+    // The explicit shortened row must identify truncation; review may
+    // still show the full name, even at the maximum permitted length.
+    char shortName[16]{};
+    formatMoveShortName("Extremely Long Named Move Example",shortName);
+    assert(std::strlen(shortName)==15u);
+    assert(std::strcmp(shortName+12,"...")==0);
+    formatMoveShortName("Fiery Dance",shortName);
+    assert(std::strcmp(shortName,"Fiery Dance")==0);
+    // SELECT/START cannot be consumed by the move repeat gate (the native
+    // loop explicitly blocks them); A/B/X/Y never autorepeat.
+    MoveNavRepeat repeat{};
+    assert(repeat.poll(MoveKey::Down,true));
+    for(unsigned i=1;i<16u;i++)assert(!repeat.poll(MoveKey::Down,true));
+    assert(repeat.poll(MoveKey::Down,true));
+    for(unsigned i=0;i<4u;i++)assert(!repeat.poll(MoveKey::Down,true));
+    assert(repeat.poll(MoveKey::Down,true));
+    assert(!repeat.poll(MoveKey::A,true));
+    assert(repeat.poll(MoveKey::Right,true));
+    assert(!repeat.poll(MoveKey::Right,false));
+    assert(repeat.poll(MoveKey::Right,true));
+    // Empty moves and eggs must not enter the catalogue.
+    d.party[0].moves[0]=0;
+    assert(browser.initialize(full,d,0));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Notice);
+    assert(browser.notice==MoveNotice::EmptySlot);
+    assert(browser.browse(d,MoveKey::B));
+    assert(browser.page==MovePage::Slots);
+    d.party[0].moves[0]=53;
+    d.party[0].egg=true;
+    assert(!browser.initialize(full,d,0));
+    d.party[0].egg=false;
+    assert(browser.initialize(full,d,0));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Review);
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Notice);
+    assert(browser.notice==MoveNotice::ReplacementBlocked);
+    // A claimed exact ROM catalogue still never enables an Apply flow.
+    full.origin=CatalogOrigin::ExactRomReviewed;
+    assert(browser.initialize(full,d,0));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.browse(d,MoveKey::A));
+    assert(browser.page==MovePage::Notice);
     std::cout<<"PASS Phase19 936-entry alphabetical move browser, 807/40 flags, Fiery Dance keyboard, bounds and READ-ONLY refusal\n";
 }
