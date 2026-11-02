@@ -171,6 +171,7 @@ struct MoveBrowser {
                 else if(k==MoveKey::A && matchCount)page=MovePage::Review;
                 else if(k==MoveKey::Y){
                     std::memcpy(pending,query,sizeof(query));
+                    queryLength=static_cast<unsigned>(std::strlen(pending));
                     keyboardIndex=0;page=MovePage::Keyboard;
                 }else if(k==MoveKey::B)page=MovePage::Slots;
                 break;
