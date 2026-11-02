@@ -10,6 +10,9 @@ on:
       - 'phase18/move_replacement_v2.hpp'
       - 'phase18/move_queue_v4.hpp'
       - 'phase18/test_move_replacement_v2.cpp'
+      - 'phase18/test_move_release_locked.cpp'
+      - 'phase18/tools/audit_h168_pp_selectors.py'
+      - 'phase18/tools/test_h168_pp_selector_audit.py'
       - 'phase18/native_move_v2_compile.cpp'
       - 'phase18/MOVE_REPLACEMENT_RESEARCH.md'
       - '.github/workflows/phase18-move-research.yml'
@@ -35,6 +38,8 @@ jobs:
             /tmp/move-test
             g++ $flags -DROGUE18_TEST_MOVE_V2 -Iphase18 phase18/test_move_replacement_v2.cpp -o /tmp/move-v2-test
             /tmp/move-v2-test /tmp/phase18_synthetic_move_v2_$mode.sav
+            g++ $flags -Iphase18 phase18/test_move_release_locked.cpp -o /tmp/move-v2-release-test
+            /tmp/move-v2-release-test
             python3 -c "import sys; sys.path.insert(0,'phase9/tools'); from inspect_gbavc_save import inspect_bytes; from pathlib import Path; x=inspect_bytes(Path(sys.argv[1]).read_bytes()); assert_all=lambda p: (_ for _ in ()).throw(AssertionError()) if not p else None; assert_all(x['read_only'] and x['bytes']==131072); assert_all(all(s['sectors_checksum_valid']==14 for s in x['banks'])); assert_all(x['current']['party_count']==6); m=x['current']['party'][0]; assert_all(m['checksum_valid'] and m['move_ids'][2]==600 and m['move_pp'][2]==15); print('PASS independent Phase9 checksums/new move ID/PP')" "/tmp/phase18_synthetic_move_v2_$mode.sav"
           done
           grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
@@ -46,6 +51,8 @@ jobs:
           fi
           python3 -m py_compile phase18/tools/extract_2_1_2_move_catalog.py
           python3 phase18/tools/test_exact_rom_catalog.py
+          python3 -m py_compile phase18/tools/audit_h168_pp_selectors.py
+          python3 phase18/tools/test_h168_pp_selector_audit.py
           test ! -f phase18/*.sav
           test ! -f phase18/*.gba
   native:
@@ -64,18 +71,22 @@ jobs:
           set -eu
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -DROGUE18_SYNTHETIC_MOVE_TEST -c phase18/native_move_v1_compile.cpp -o /tmp/move-native.o
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -DROGUE18_TEST_MOVE_V2 -c phase18/native_move_v2_compile.cpp -o /tmp/move-v2-native.o
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -c phase18/native_move_v2_compile.cpp -o /tmp/move-v2-release-native.o
+          test -s /tmp/move-v2-release-native.o
           test -s /tmp/move-v2-native.o
           test -s /tmp/move-native.o
           "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-native.o > /tmp/move-symbols.txt
           "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-v2-native.o >> /tmp/move-symbols.txt
+          "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-v2-release-native.o >> /tmp/move-symbols.txt
           if grep -E 'FSPXI_|svcBackdoor|FSUSER_' /tmp/move-symbols.txt; then
             echo "Installed-game save symbol forbidden"; exit 1
           fi
           test -s /tmp/move-native.su
           test -s /tmp/move-v2-native.su
+          test -s /tmp/move-v2-release-native.su
           python3 - <<'PY'
           frames=[]
-          for filename in ['/tmp/move-native.su','/tmp/move-v2-native.su']:
+          for filename in ['/tmp/move-native.su','/tmp/move-v2-native.su','/tmp/move-v2-release-native.su']:
             for line in open(filename):
                 parts=line.rstrip().rsplit(chr(9),2)
                 if len(parts)==3:
