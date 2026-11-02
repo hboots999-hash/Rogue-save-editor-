@@ -20,6 +20,13 @@ SELECTOR = 0x081D11B8
 # Table A begins at ROM offset 0x00BD27D0; scan only earlier code/data
 # space to avoid treating table data's arbitrary words as code references.
 SCAN_END = 0x00BD27D0
+# Verified exact-build PP-Up lane tables and compiled helper entrypoints.
+PP_MASKS_AT = 0x010A9984
+PP_MASKS = bytes((3,12,48,192,252,243,207,63,1,4,16,64))
+CALC_MAX_PP = 0x00191634
+CLEAR_MON_PP = 0x00191684
+CLEAR_BATTLE_PP = 0x001916B8
+
 
 def u16(data: bytes, at: int) -> int:
     return struct.unpack_from("<H", data, at)[0]
@@ -50,6 +57,12 @@ def structural_report(rom: bytes) -> dict:
         raise ValueError("Unmatched ROM; refusing guessed PP-table mode")
     if rom[SELECTOR - 0x08000000: SELECTOR - 0x08000000+4] != bytes((0x00,0x20,0x70,0x47)):
         raise ValueError("Selector is not the verified movs r0,#0; bx lr")
+    if rom[PP_MASKS_AT:PP_MASKS_AT+12]!=PP_MASKS or rom.rfind(PP_MASKS)!=PP_MASKS_AT:
+        raise ValueError("Exact 2-bit PP-Up mask geometry is not uniquely located")
+    if struct.unpack_from("<I",rom,0x0019167C)[0]!=0x090A9984:
+        raise ValueError("Compiled CalculatePPWithBonus mask literal changed")
+    if struct.unpack_from("<I",rom,0x001916B4)[0]!=0x090A9988:
+        raise ValueError("Compiled RemoveMonPPBonus clear-mask literal changed")
     aa = pointer_sites(rom, TABLE_A)
     bb = pointer_sites(rom, TABLE_B)
     selectors = direct_bl_sites(rom, SELECTOR - 0x08000000)
@@ -60,6 +73,11 @@ def structural_report(rom: bytes) -> dict:
                   if u16(rom,off+4)==0x2800 and
                   u16(rom,off+6)&0xF000==0xD000 and
                   u16(rom,off+6)&0x0F00!=0x0F00]
+    bonus_calls = {
+        "calculate_max_pp":len(direct_bl_sites(rom,CALC_MAX_PP)),
+        "clear_party_mon_pp_bonus":len(direct_bl_sites(rom,CLEAR_MON_PP)),
+        "clear_battle_mon_pp_bonus":len(direct_bl_sites(rom,CLEAR_BATTLE_PP))
+    }
     # A nearby BL is *not* sufficient to connect a literal to that BL.
     return {
       "rom_sha256": ROM_SHA,
@@ -67,6 +85,18 @@ def structural_report(rom: bytes) -> dict:
       "production_apply_approved": False,
       "direct_literals": {"table_a":len(aa),"table_b":len(bb),
                           "neighboring_pairs_at_most_16_bytes":len(paired)},
+      "pp_up_compiled_evidence":{
+          "mask_rom_offset":"0x010a9984",
+          "get_slot_masks":[3,12,48,192],
+          "clear_slot_masks":[252,243,207,63],
+          "add_slot_masks":[1,4,16,64],
+          "max_pp_helper_entry":"0x08191634",
+          "clear_party_mon_helper_entry":"0x08191684",
+          "clear_battle_mon_helper_entry":"0x081916b8",
+          "raw_bl_patterns_targeting_helpers":bonus_calls,
+          "max_pp_path_selects_table_a":True,
+          "clearing_helper_exists_but_replacement_call_unproven":True
+      },
       "selector_thumb_entry":f"0x{SELECTOR:08x}",
       "selector_instructions":"movs r0,#0; bx lr",
       "raw_thumb_bl_patterns_targeting_selector":len(selectors),
@@ -79,7 +109,7 @@ def structural_report(rom: bytes) -> dict:
           "BL byte patterns may include unreachable data; no control-flow proof",
           "Pointers and selector calls are not individually connected by scanning",
           "Branch direction and table chosen must be proved per reachable mode",
-          "No disassembly proof of move learn/forget / PP-Up reset routines",
+          "Existence of clear-mon-PP helper does not prove learn/forget invokes it",
           "No observed replay/re-save of edited save in target emulator",
           "Unknown cached state and special-move/learnset constraints",
           "All 40 PP-conflicting IDs disabled; no automatic teach allowlist"
