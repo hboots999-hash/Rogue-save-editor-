@@ -8,6 +8,7 @@
 #include "phase20/read_only_v1.hpp"
 #include "phase20/offline_edit_v1.hpp"
 #include "rosalina_input.hpp"
+#include "move_browser.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -205,6 +206,7 @@ void top(const State& s,const phase20::OfflineFlow& edit,
                 std::printf("%u:%u PP%u  %u:%u PP%u\n",
                     i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
             std::puts(s.fromPC?"\n\nPC editing unsupported":!s.demo.synthetic?"\n\nA: OFFLINE IV / EV / PP":"\n\nA: explore party edit demo");
+            if(!s.fromPC)std::puts("Y: browse moves (READ ONLY)");
             break;
         }
         case Screen::Edit: {
@@ -326,6 +328,115 @@ void top(const State& s,const phase20::OfflineFlow& edit,
             break;
     }
 }
+// Move Browser uses fictional test metadata. Not a verified ROM database,
+// writer, move replacement API or part of any SD draft export.
+void moveTop(const State& s,const MoveBrowser& v) {
+    consoleClear();
+    std::puts("MOVE BROWSER - READ ONLY");
+    std::puts("SYNTHETIC IDS, NOT ROM DATA");
+    std::puts("===========================");
+    if(!v.activeParty(s.demo)) {
+        std::puts("Party data changed or missing.");
+        std::puts("Return and reselect Pokemon.");
+        std::puts("B: return; NO SAVE WRITES");
+        return;
+    }
+    const auto& p=s.demo.party[v.partySlot];
+    std::printf("Party %u: %.15s (#%u)\n",v.partySlot+1u,p.name,p.species);
+    if(v.page==MovePage::Slots){
+        std::puts("SELECT EXISTING MOVE SLOT");
+        for(unsigned i=0;i<4u;i++)
+            std::printf("%c Slot %u  ID %u  PP %u\n",
+                        i==v.slot?'>':' ',i+1u,p.moves[i],p.pp[i]);
+        std::puts("\nA: browse this slot");
+        std::puts("Up/Down: slot  B: back");
+        std::puts("No replacement can be saved.");
+    }else if(v.page==MovePage::Catalog){
+        std::printf("Slot %u old ID%u PP%u\n",v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
+        std::printf("Search: %.18s\n",v.query[0]?v.query:"(all moves)");
+        std::printf("Matches %u  (alphabetical)\n",v.matchCount);
+        const unsigned first=(v.selected/BrowserPageRows)*BrowserPageRows;
+        const unsigned end=std::min(first+BrowserPageRows,v.matchCount);
+        for(unsigned i=first;i<end;i++) {
+            unsigned idx=0;
+            if(!v.matchAt(i,idx))break;
+            const auto& m=v.catalog->records[idx];
+            // No false long-name truncation: full name appears on Review.
+            // Mark other than matching ordinary candidate with '!'.
+            const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
+            std::printf("%c%c %-15.15s %5u\n",
+                v.selected==i?'>':' ',flag,m.name,m.id);
+        }
+        if(!v.matchCount)std::puts("No results. Y: edit search.");
+        else std::printf("%u-%u / %u   ! = UNVERIFIED\n",
+             first+1u,end,v.matchCount);
+        std::puts("R/Right: next page");
+        std::puts("X/Left: previous page");
+        std::puts("Y: search  A: review");
+        std::puts("B: return to slots");
+    }else if(v.page==MovePage::Keyboard){
+        std::puts("SEARCH MOVE NAME (max 18)");
+        std::printf("Find: %.18s\n",v.pending);
+        std::puts("D-Pad: choose key");
+        for(unsigned y=0;y<5u;y++) {
+            for(unsigned x=0;x<6u;x++) {
+                const unsigned i=y*6u+x;
+                const char k=MoveBrowser::Keyboard[i];
+                if(i==v.keyboardIndex)std::printf("[%c] ",k==' '?'_':k);
+                else std::printf(" %c  ",k==' '?'_':k);
+            }
+            std::putchar('\n');
+        }
+        std::puts("A: type / <: delete / !: apply");
+        std::puts("X: delete  Y: apply");
+        std::puts("B: cancel search");
+        std::puts("No save files are modified.");
+    }else if(v.page==MovePage::Review){
+        std::puts("REPLACEMENT REVIEW - BLOCKED");
+        std::printf("Existing slot %u: ID%u PP%u\n",
+            v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
+        if(const MoveRecord* m=v.selectedMove()){
+            std::puts("Selected catalogue entry:");
+            forEachBoundedLine(m->name,30u,3u,[](const char* row,unsigned n){
+                std::printf("%.*s\n",int(n),row);
+            });
+            std::printf("Candidate ID: %u\n",m->id);
+            if(m->evidence==MoveEvidence::Candidate)
+                std::printf("Research base PP: %u\n",m->basePP);
+            else std::puts("Base PP: NOT VERIFIED");
+            wrappedNotice(evidenceLabel(m->evidence));
+        }
+        std::puts("ALWAYS READ ONLY - NO APPLY");
+        std::puts("A: see block reason B: back");
+    }else{
+        std::puts("MOVE REPLACEMENT BLOCKED");
+        std::puts("Exact-ROM move table and PP");
+        std::puts("effects not authenticated.");
+        std::puts("No draft or save was changed.");
+        std::puts("A/B: back to browse");
+    }
+}
+void moveBottom(const State& s,const MoveBrowser& v){
+    consoleClear();
+    std::puts("PKSM ROGUE - MOVE RESEARCH");
+    std::puts("-------------------------");
+    std::puts("ROM MAPPING: NOT VERIFIED");
+    std::puts("936-record API supported.");
+    std::puts("40 PP conflicts must be");
+    std::puts("flagged by a verified source.");
+    std::puts("NO MOVE REPLACEMENT ACTIVE");
+    std::puts("No installed game write.");
+    std::puts("No offline draft export.");
+    std::puts("L button is NOT required.");
+    std::puts("R/Right: forward (browser)");
+    std::puts("X/Left: back (browser)");
+    std::puts("START: release to exit");
+    std::puts("START+SELECT: Rosalina");
+    std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
+              "Real party, SYNTHETIC list.");
+    if(v.page==MovePage::Review)std::puts("Even PP matches are NOT APPROVED.");
+}
+
 void bottom(const State& s,const phase20::OfflineFlow& edit,
             const phase20::BatchFlow& batch) {
     consoleClear();
@@ -385,6 +496,8 @@ int main() {
     static State state(active);
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
+    static MoveBrowser moveView{};
+    bool viewingMoves=false;
     static phase20::BatchFlow batch{};
     static phase20::CopyObservation observation{};
     static P17ReadOnlyStatusV1 recoveryStatus{};
@@ -407,9 +520,41 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
-           batch.stage==phase20::BatchStage::Browse) {
-            (void)phase20::batchShortcut(state,observation,batch);
+        if(viewingMoves) {
+            // The MoveBrowser is an isolated, permanently read-only overlay.
+            // Y is reserved for its keyboard while browsing; no batch or
+            // SD exporter is callable from this input path.
+            if(!moveView.activeParty(state.demo))viewingMoves=false;
+            else {
+                MoveKey mk=MoveKey::B;
+                bool moveKey=true;
+                if(down&KEY_B)mk=MoveKey::B;
+                else if(down&KEY_A)mk=MoveKey::A;
+                else if(down&KEY_UP)mk=MoveKey::Up;
+                else if(down&KEY_DOWN)mk=MoveKey::Down;
+                else if(down&KEY_LEFT)mk=MoveKey::Left;
+                else if(down&KEY_RIGHT)mk=MoveKey::Right;
+                else if(down&KEY_R)mk=MoveKey::R;
+                else if(down&KEY_X)mk=MoveKey::X;
+                else if(down&KEY_Y)mk=MoveKey::Y;
+                else moveKey=false;
+                if(moveKey) {
+                    if(moveView.page==MovePage::Slots && mk==MoveKey::B)
+                        viewingMoves=false;
+                    else moveView.browse(state.demo,mk);
+                    redraw=true;
+                }
+            }
+        } else if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
+                  batch.stage==phase20::BatchStage::Browse) {
+            // Conflict resolution: on Pokémon detail, Y opens the
+            // read-only browser ONLY if no active v3 batch. In all other
+            // contexts Y keeps the existing verified multi-edit workflow.
+            if(state.screen==Screen::Pokemon && !state.fromPC &&
+               !batch.collecting && selectedPokemonValid(state))
+                viewingMoves=moveView.initialize(syntheticMoveCatalog(),
+                                                  state.demo,state.mon);
+            else (void)phase20::batchShortcut(state,observation,batch);
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
@@ -423,6 +568,7 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    viewingMoves=false;
                     editing=phase20::OfflineFlow{};
                     batch=phase20::BatchFlow{};
                     switchView(state,false);
@@ -432,6 +578,7 @@ int main() {
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
+                viewingMoves=false;
                 observation=phase20::CopyObservation{};
                 editing=phase20::OfflineFlow{};
                 batch=phase20::BatchFlow{};
@@ -444,8 +591,12 @@ int main() {
             redraw=true;
         }
         if(redraw) {
-            consoleSelect(&upper); top(state,editing,batch);
-            consoleSelect(&lower); bottom(state,editing,batch);
+            consoleSelect(&upper);
+            if(viewingMoves)moveTop(state,moveView);
+            else top(state,editing,batch);
+            consoleSelect(&lower);
+            if(viewingMoves)moveBottom(state,moveView);
+            else bottom(state,editing,batch);
             redraw=false;
         }
         gspWaitForVBlank();
