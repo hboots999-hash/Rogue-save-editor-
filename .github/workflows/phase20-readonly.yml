@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
@@ -77,6 +77,13 @@ jobs:
               dependencies/phase17/phase17/readonly_status_v1.cpp \
               -o /tmp/phase20/offline-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/offline-$mode
+            # Actual Phase19 searchable read-only move browser remains
+            # permanently nonwriting (fictional entries until metadata import).
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -Idependencies/phase19/phase19 \
+              dependencies/phase19/phase19/test_move_browser.cpp \
+              -o /tmp/phase20/move-browser-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
             # QA-08: compile the actual Phase17 legacy header and Phase18 v2
             # in one TU, repeatedly. Fail the build on any collision.
             P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
@@ -129,7 +136,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
@@ -151,7 +158,7 @@ jobs:
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
           cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp} phase20-build/include/phase20/
-          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
           cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
@@ -183,6 +190,8 @@ jobs:
           grep -Fq 'exportFixedSDCopy(const phase19::Demo& display' phase20/offline_edit_v1.hpp
           grep -Fq 'exportFixedBatch(const phase19::Demo& d' phase20/offline_edit_v1.hpp
           grep -Fq 'phase20::batchShortcut(state,observation,batch)' phase20/main.cpp
+          grep -Fq 'moveView.initialize(syntheticMoveCatalog()' phase20/main.cpp
+          grep -Fq 'viewingMoves)moveTop(state,moveView)' phase20/main.cpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -209,7 +218,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
