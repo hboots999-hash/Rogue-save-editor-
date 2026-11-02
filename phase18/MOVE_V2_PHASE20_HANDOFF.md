@@ -5,6 +5,60 @@
 
 **Status:** fully implemented, independently testable **offline replacement core**, but release **Apply is hard-DISABLED** because exact-ROM runtime PP modes, PP-Up replacement semantics, move legality and game load/re-save still need evidence. PR #14 remains draft. No Phase20 or Phase18 v3 source changes.
 
+## 2 Nov 2026 evening: single-move draft implementation (test-only, export gated)
+
+**New real implementation:** [`single_move_draft_v1.hpp`](single_move_draft_v1.hpp)
+defines `move_draft_v1::Evidence` (source SHA-256, candidate SHA-256,
+active counter, old/new move ID, old/new PP, party/slot and changed byte
+count), a read-only `Transaction`, and a locked public `exportToSd`.
+**Export is NOT enabled:** `ReleaseDraftExportEnabled=false`, and
+`exportToSd` unconditionally returns false without filesystem access.
+
+Under the CI-only `ROGUE18_TEST_MOVE_V2` macro,
+`verifyGenerated` recomputes the entire synthetic candidate, checks
+its source digest, validates both banks/checksums, and enforces the eight-byte
+maximum footprint; `exportSyntheticToMockSd` writes a **new-exclusive**
+backup and separate synthetic draft inside a disposable host test
+directory, `fsync`s each, reads each back byte-for-byte and refuses
+overwriting an existing backup. Failed draft verification preserves
+the original backup, never modifying the source.
+
+Phase20 can integrate a **read-only single-move Review** now:
+
+```cpp
+#include "phase18/move_queue_v4.hpp"
+#include "phase18/single_move_draft_v1.hpp"
+
+const auto view=rogue18::v2::inspect(copyBytes,131072);
+rogue18::move_queue_v4::Queue pending{};
+if (!rogue18::move_queue_v4::begin(view,pending)) return;
+// loadedCatalog is the user-local SHA-authenticated 14040-byte metadata;
+// never import the CIA or ROM directly into the user-facing menu.
+if (!rogue18::move_queue_v4::appendReplacement(
+        view,copyBytes,131072,loadedCatalog,pending,
+        partySlot,occupiedMoveSlot,newMoveId)) return;
+rogue18::move_queue_v4::SingleMoveReview review{};
+if (!rogue18::move_queue_v4::reviewSingle(
+        copyBytes,131072,loadedCatalog,pending,review)) return;
+// Show review.previousId, review.replacementId, review.catalogBasePP,
+// review.originalPPUps and review.sourceSha.
+// Both review.mayExport and review.mayRestoreInstalledGame are false.
+```
+
+`reviewSingle` requires **exactly one replacement** and **zero scalar
+edits** for the first safe path, checks the authenticated catalogue,
+source/slot identity and duplicate move IDs. It never generates draft
+bytes or calls the synthetic mutator. A separate future reviewed release
+contract will have to prove the exact compiled move-learn/forget routine,
+PP-Up policy, move legality, and emulator load/re-save before calling
+anything like `exportToSd` with a live copy. The CI fixtures are
+deliberately **unplayable** and must not be given to users as real saves.
+
+**Current build decision:** The existing CIA can carry the read-only
+browser/review without an enabled new-move Apply control. Creating an
+actual user save draft remains BLOCKED; no real `.sav` was available in
+this exact chat's filesystem for validation. No PR #12 changes were made.
+
 ## Pinned build identity
 
 - User-provided GodMode9 CIA was inspected locally; GBA ROM SHA-256:
