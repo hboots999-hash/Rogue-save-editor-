@@ -20,6 +20,8 @@ int main() {
     auto check=[&](RawExportReview expected) {
         const auto result=reviewOfflineSdOnly(original,candidate,e);
         assert(result.result==expected);
+        assert(result.rawCopyMatchesExpected==
+               (expected==RawExportReview::OfflineCopyReviewedOnly));
         assert(!result.canModifyInstalledGame());
         assert(!result.canRestoreAuthenticatedContainer());
         assert(!result.authorisesGameplayInjection());
@@ -84,6 +86,7 @@ int main() {
     draft=original;
     const auto noChange=reviewOfflineSdOnly(original,original,e);
     assert(noChange.result==RawExportReview::NoChange);
+    assert(!noChange.rawCopyMatchesExpected);
     assert(!noChange.authorisesGameplayInjection());
     draft=candidate;
     assert(check(RawExportReview::OfflineCopyReviewedOnly).rawCopyMatchesExpected);
