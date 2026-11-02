@@ -175,12 +175,14 @@ struct MoveBrowser {
         return true;
     }
     bool activeParty(const Demo& d) const {
-        return ready && catalog && partySlot<d.partyCount &&
+        return ready && catalog && catalog->count<=MaxMoveRecords &&
+               partySlot<d.partyCount &&
                partySlot<d.party.size() && d.partyStatus==Availability::Ready &&
                d.party[partySlot].species!=0;
     }
     bool matchAt(unsigned ordinal,unsigned& rowIndex) const {
-        if(!ready || !catalog || ordinal>=matchCount)return false;
+        if(!ready || !catalog || ordinal>=matchCount ||
+           ordinal>=MaxMoveRecords)return false;
         rowIndex=matches[ordinal];
         return rowIndex<catalog->count;
     }
@@ -190,11 +192,14 @@ struct MoveBrowser {
     }
     void recount() {
         matchCount=0;
-        if(!ready || !catalog)return;
-        for(unsigned i=0;i<catalog->count;i++){
+        if(!ready || !catalog || catalog->count>MaxMoveRecords)return;
+        for(unsigned i=0;i<catalog->count && i<MaxMoveRecords;i++){
             const uint16_t idx=alphabetical[i];
-            if(hasSearch(catalog->records[idx].name,query))
+            if(idx>=catalog->count)continue;
+            if(hasSearch(catalog->records[idx].name,query)) {
+                if(matchCount>=MaxMoveRecords)break;
                 matches[matchCount++]=idx;
+            }
         }
         if(!matchCount)selected=0;
         else if(selected>=matchCount)selected=matchCount-1u;
