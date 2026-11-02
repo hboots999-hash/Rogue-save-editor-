@@ -34,7 +34,21 @@ jobs:
             g++ $flags -DROGUE18_SYNTHETIC_MOVE_TEST -Iphase18 phase18/test_move_replacement_v1.cpp -o /tmp/move-test
             /tmp/move-test
             g++ $flags -DROGUE18_TEST_MOVE_V2 -Iphase18 phase18/test_move_replacement_v2.cpp -o /tmp/move-v2-test
-            /tmp/move-v2-test
+            /tmp/move-v2-test /tmp/phase18_synthetic_move_v2_$mode.sav
+            python3 - "/tmp/phase18_synthetic_move_v2_$mode.sav" <<'PY'
+            import sys
+            sys.path.insert(0,'phase9/tools')
+            from inspect_gbavc_save import inspect_bytes
+            from pathlib import Path
+            result=inspect_bytes(Path(sys.argv[1]).read_bytes())
+            assert result['read_only'] and result['bytes']==131072
+            assert all(b['sectors_checksum_valid']==14 for b in result['banks'])
+            mon=result['current']['party'][0]
+            assert result['current']['party_count']==6
+            assert mon['checksum_valid'] and mon['move_ids'][2]==600
+            assert mon['move_pp'][2]==15
+            print('PASS independent Phase9 Python checksums/PP/new move ID')
+            PY
           done
           grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
           grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
