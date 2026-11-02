@@ -414,7 +414,7 @@ int main() {
                 }
             }
         } else if((down&KEY_Y) && state.screen==Screen::Pokemon &&
-                  !state.fromPC && hasSelectedPokemon(state)) {
+                  !state.fromPC && selectedPokemonValid(state)) {
             viewingMoves=moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
