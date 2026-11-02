@@ -210,6 +210,14 @@ struct MoveBrowser {
                partySlot<d.party.size() && d.partyStatus==Availability::Ready &&
                d.party[partySlot].species!=0 && !d.party[partySlot].egg;
     }
+    const MoveRecord* existingMove(const Demo& d,unsigned currentSlot) const {
+        if(!catalog || currentSlot>=4u || !activeParty(d))return nullptr;
+        const unsigned id=d.party[partySlot].moves[currentSlot];
+        if(!id)return nullptr;
+        for(unsigned i=0;i<catalog->count;i++)
+            if(catalog->records[i].id==id)return &catalog->records[i];
+        return nullptr; // unknown original ID: show numeric ID, never guess
+    }
     bool matchAt(unsigned ordinal,unsigned& rowIndex) const {
         if(!ready || !catalog || ordinal>=matchCount ||
            ordinal>=MaxMoveRecords)return false;
@@ -352,6 +360,57 @@ struct MoveBrowser {
         keyboardIndex=0;page=MovePage::Keyboard;return true;
     }
 };
+
+constexpr uint32_t MoveSelectionIntentVersion=1;
+struct MoveSelectionIntentV1 {
+    uint32_t version=MoveSelectionIntentVersion;
+    unsigned partySlot=0, moveSlot=0, species=0;
+    unsigned originalMoveId=0, originalPP=0;
+    unsigned replacementMoveId=0, replacementBasePP=0;
+    uint32_t sourceCounter=0;
+    std::array<uint8_t,32> sourceSha256{};
+    std::array<uint8_t,32> catalogRomSha256{};
+    bool candidatePPMatchesTables=false;
+};
+// Produces a bounded, read-only description for a separately reviewed
+// Phase18 API adapter. Caller cannot turn this data into write authority.
+// No save bytes, Pokemon PID/OT/checksum/PP-Ups, or full Phase18 proof exists.
+inline bool describeMoveSelection(const MoveBrowser& browser,const Demo& d,
+                                  MoveSelectionIntentV1& out) {
+    out=MoveSelectionIntentV1{};
+    if(!browser.activeParty(d) || browser.slot>=4u || !browser.catalog ||
+       (browser.page!=MovePage::Review &&
+        browser.page!=MovePage::ConfirmOne &&
+        browser.page!=MovePage::ConfirmTwo &&
+        browser.page!=MovePage::Notice))return false;
+    const MoveRecord* candidate=browser.selectedMove();
+    const Pokemon& mon=d.party[browser.partySlot];
+    if(!candidate || !mon.moves[browser.slot] ||
+       candidate->evidence!=MoveEvidence::Candidate ||
+       !candidate->basePP || candidate->id==mon.moves[browser.slot])return false;
+    for(unsigned i=0;i<4u;i++)
+        if(i!=browser.slot && mon.moves[i]==candidate->id)return false;
+    out.partySlot=browser.partySlot;out.moveSlot=browser.slot;
+    out.species=mon.species;
+    out.originalMoveId=mon.moves[browser.slot];out.originalPP=mon.pp[browser.slot];
+    out.replacementMoveId=candidate->id;
+    out.replacementBasePP=candidate->basePP;
+    out.sourceCounter=d.activeCounter;out.sourceSha256=d.sourceSha256;
+    out.catalogRomSha256=browser.catalog->romSha256;
+    out.candidatePPMatchesTables=true;
+    return true; // descriptor exists, NOT approval to preview or export
+}
+struct MoveReplacementGateV1 {
+    static constexpr uint32_t version=1;
+    static constexpr bool productionPreview=false;
+    static constexpr bool offlineExport=false;
+    static constexpr bool installedWrite=false;
+    static bool mayApply(const MoveSelectionIntentV1&) {return false;}
+};
+static_assert(!MoveReplacementGateV1::productionPreview &&
+              !MoveReplacementGateV1::offlineExport &&
+              !MoveReplacementGateV1::installedWrite,
+              "Phase19 must never enable move edits by itself");
 // No-repeat on A/B/X/Y: this gate repeats only D-pad/R navigation.
 // Call once per HID frame; pass the highest-priority HELD direction.
 struct MoveNavRepeat {
