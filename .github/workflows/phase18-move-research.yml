@@ -7,6 +7,10 @@ on:
       - 'phase18/move_replacement_v1.hpp'
       - 'phase18/test_move_replacement_v1.cpp'
       - 'phase18/native_move_v1_compile.cpp'
+      - 'phase18/move_replacement_v2.hpp'
+      - 'phase18/move_queue_v4.hpp'
+      - 'phase18/test_move_replacement_v2.cpp'
+      - 'phase18/native_move_v2_compile.cpp'
       - 'phase18/MOVE_REPLACEMENT_RESEARCH.md'
       - '.github/workflows/phase18-move-research.yml'
   workflow_dispatch:
@@ -29,6 +33,8 @@ jobs:
             fi
             g++ $flags -DROGUE18_SYNTHETIC_MOVE_TEST -Iphase18 phase18/test_move_replacement_v1.cpp -o /tmp/move-test
             /tmp/move-test
+            g++ $flags -DROGUE18_TEST_MOVE_V2 -Iphase18 phase18/test_move_replacement_v2.cpp -o /tmp/move-v2-test
+            /tmp/move-v2-test
           done
           grep -F 'constexpr bool ExactRomMoveTableApproved=false' phase18/move_replacement_v1.hpp
           grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
@@ -51,19 +57,23 @@ jobs:
         run: |
           set -eu
           "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -DROGUE18_SYNTHETIC_MOVE_TEST -c phase18/native_move_v1_compile.cpp -o /tmp/move-native.o
+          "$DEVKITARM/bin/arm-none-eabi-g++" -std=gnu++17 -O2 -Wall -Wextra -Werror -Werror=frame-larger-than=4096 -fstack-usage -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp -I"$DEVKITPRO/libctru/include" -Iphase18 -D__3DS__ -DROGUE18_TEST_MOVE_V2 -c phase18/native_move_v2_compile.cpp -o /tmp/move-v2-native.o
+          test -s /tmp/move-v2-native.o
           test -s /tmp/move-native.o
           "$DEVKITARM/bin/arm-none-eabi-nm" -u /tmp/move-native.o > /tmp/move-symbols.txt
           if grep -E 'FSPXI_|svcBackdoor|FSUSER_' /tmp/move-symbols.txt; then
             echo "Installed-game save symbol forbidden"; exit 1
           fi
           test -s /tmp/move-native.su
+          test -s /tmp/move-v2-native.su
           python3 - <<'PY'
           frames=[]
-          for line in open('/tmp/move-native.su'):
-              parts=line.rstrip().rsplit(chr(9),2)
-              if len(parts)==3:
-                  try: frames.append((int(parts[1]),parts[0]))
-                  except ValueError: pass
+          for filename in ['/tmp/move-native.su','/tmp/move-v2-native.su']:
+            for line in open(filename):
+                parts=line.rstrip().rsplit(chr(9),2)
+                if len(parts)==3:
+                    try: frames.append((int(parts[1]),parts[0]))
+                    except ValueError: pass
           assert frames, "No ARM11 frame evidence"
           size,name=max(frames)
           print("Largest compiled ARM11 frame:",size,name)
