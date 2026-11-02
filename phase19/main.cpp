@@ -258,11 +258,16 @@ void moveTop(const State& s,const MoveBrowser& v) {
             // No false long-name truncation: full name appears on Review.
             // Mark other than matching ordinary candidate with '!'.
             const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
-            std::printf("%c%c %-15.15s %5u\n",
-                v.selected==i?'>':' ',flag,m.name,m.id);
+            char shortName[16]{};
+            formatMoveShortName(m.name,shortName);
+            char ppText[4]="--";
+            if(m.evidence==MoveEvidence::Candidate)
+                std::snprintf(ppText,sizeof(ppText),"%u",m.basePP);
+            std::printf("%c%c %-15s %5u %2s\n",
+                v.selected==i?'>':' ',flag,shortName,m.id,ppText);
         }
         if(!v.matchCount)std::puts("No results. Y: edit search.");
-        else std::printf("%u-%u / %u   ! = UNVERIFIED\n",
+        else std::printf("%u-%u / %u ! NOT VERIFIED\n",
              first+1u,end,v.matchCount);
         std::puts("R/Right: next page");
         std::puts("X/Left: previous page");
@@ -303,11 +308,22 @@ void moveTop(const State& s,const MoveBrowser& v) {
         std::puts("ALWAYS READ ONLY - NO APPLY");
         std::puts("A: see block reason B: back");
     }else{
-        std::puts("MOVE REPLACEMENT BLOCKED");
-        std::puts("Exact-ROM move table and PP");
-        std::puts("effects not authenticated.");
-        std::puts("No draft or save was changed.");
-        std::puts("A/B: back to browse");
+        if(v.notice==MoveNotice::EmptySlot){
+            std::puts("EMPTY MOVE SLOT");
+            std::puts("Choose an occupied move slot.");
+            std::puts("No replacement is available.");
+            std::puts("A/B: back to move slots");
+        }else if(v.notice==MoveNotice::PartyChanged){
+            std::puts("PARTY DATA CHANGED");
+            std::puts("Return and reselect Pokemon.");
+            std::puts("A/B: back");
+        }else{
+            std::puts("MOVE REPLACEMENT BLOCKED");
+            std::puts("Exact-ROM move table and PP");
+            std::puts("effects not authenticated.");
+            std::puts("No draft or save was changed.");
+            std::puts("A/B: back to browse");
+        }
     }
 }
 void moveBottom(const State& s,const MoveBrowser& v){
@@ -375,6 +391,7 @@ int main() {
     static State state(active);
     static char importStatus[200]{};
     static MoveBrowser moveView{};
+    MoveNavRepeat moveRepeat{};
     bool viewingMoves=false;
     StartExitGate startGate{};
     bool redraw=true;
@@ -393,29 +410,40 @@ int main() {
         Key k=Key::X;
         if(viewingMoves) {
             if(!moveView.activeParty(state.demo)) {
-                viewingMoves=false;
-            } else {
+                viewingMoves=false;moveRepeat.reset();redraw=true;
+            }else if((held&(KEY_SELECT|KEY_START))!=0u) {
+                // Reserve either-order START+SELECT for Rosalina.
+                // Never navigate or confirm while either key is held.
+                moveRepeat.reset();
+            }else{
                 MoveKey mk=MoveKey::B;
                 bool moveKey=false;
                 if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
                 else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
-                else if(down&KEY_UP){mk=MoveKey::Up;moveKey=true;}
-                else if(down&KEY_DOWN){mk=MoveKey::Down;moveKey=true;}
-                else if(down&KEY_LEFT){mk=MoveKey::Left;moveKey=true;}
-                else if(down&KEY_RIGHT){mk=MoveKey::Right;moveKey=true;}
-                else if(down&KEY_R){mk=MoveKey::R;moveKey=true;}
                 else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
                 else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
-                if(moveKey) {
-                    if(moveView.page==MovePage::Slots && mk==MoveKey::B)
-                        viewingMoves=false;
-                    else moveView.browse(state.demo,mk);
+                if(moveKey)moveRepeat.reset();
+                else if((held&(KEY_A|KEY_B|KEY_X|KEY_Y))==0u) {
+                    bool nav=true;
+                    if(held&KEY_UP)mk=MoveKey::Up;
+                    else if(held&KEY_DOWN)mk=MoveKey::Down;
+                    else if(held&KEY_LEFT)mk=MoveKey::Left;
+                    else if(held&KEY_RIGHT)mk=MoveKey::Right;
+                    else if(held&KEY_R)mk=MoveKey::R;
+                    else nav=false;
+                    moveKey=moveRepeat.poll(mk,nav);
+                } else moveRepeat.reset();
+                if(moveKey){
+                    if(moveView.page==MovePage::Slots && mk==MoveKey::B){
+                        viewingMoves=false;moveRepeat.reset();
+                    }else moveView.browse(state.demo,mk);
                     redraw=true;
                 }
             }
         } else if((down&KEY_Y) && state.screen==Screen::Pokemon &&
                   !state.fromPC && selectedPokemonValid(state)) {
             viewingMoves=moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
+            moveRepeat.reset();
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
