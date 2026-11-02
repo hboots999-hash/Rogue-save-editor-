@@ -31,8 +31,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
         run: |
@@ -77,6 +82,20 @@ jobs:
               dependencies/phase17/phase17/readonly_status_v1.cpp \
               -o /tmp/phase20/offline-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/offline-$mode
+            # Actual Phase19 searchable read-only move browser remains
+            # permanently nonwriting (fictional entries until metadata import).
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -Idependencies/phase19/phase19 \
+              dependencies/phase19/phase19/test_move_browser.cpp \
+              -o /tmp/phase20/move-browser-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase18/phase18 \
+              -Idependencies/moves -Idependencies/moves/phase18 \
+              -Idependencies/phase19/phase19 \
+              phase20/test_move_catalog_bridge_v1.cpp \
+              -o /tmp/phase20/catalog-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/catalog-$mode
             # QA-08: compile the actual Phase17 legacy header and Phase18 v2
             # in one TU, repeatedly. Fail the build on any collision.
             P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
@@ -129,8 +148,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
         run: |
@@ -150,10 +174,11 @@ jobs:
           cp phase20/main.cpp phase20-build/source/main.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
-          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp} phase20-build/include/phase20/
-          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/phase19/
-          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
-          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp} phase20-build/include/phase18/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp} phase20-build/include/phase20/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
+          cp dependencies/moves/phase18/{move_replacement_v1.hpp,move_replacement_v2.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
           test -s phase20-build/build/main.su
           cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
@@ -181,6 +206,12 @@ jobs:
             echo 'FAIL: unexpected installed-save restore symbol'; exit 1
           fi
           grep -Fq 'exportFixedSDCopy(const phase19::Demo& display' phase20/offline_edit_v1.hpp
+          grep -Fq 'exportFixedBatch(const phase19::Demo& d' phase20/offline_edit_v1.hpp
+          grep -Fq 'phase20::batchShortcut(state,observation,batch)' phase20/main.cpp
+          grep -Fq 'moveView.initialize(syntheticMoveCatalog()' phase20/main.cpp
+          grep -Fq 'localMoves.verifiedMetadata()' phase20/main.cpp
+          grep -Fq 'static_assert(!rogue18::move_v2::ApplyApproved' phase20/move_catalog_bridge_v1.hpp
+          grep -Fq 'viewingMoves)moveTop(state,moveView)' phase20/main.cpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
@@ -207,8 +238,13 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: f9b7874ad70a04f71de1b9e2fc6a030dba369016
+          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
         run: |
@@ -321,7 +357,24 @@ jobs:
             import -window root evidence/3dsx-home.png
             tap3ds a
             import -window root evidence/3dsx-party.png
-            tap3ds s
+            # Phase19 integrated READ-ONLY move browser, deliberately
+            # fictional demo catalogue. This MUST not create an SD draft.
+            tap3ds a  # Party -> Pokemon details
+            tap3ds x  # Y on Pokemon opens move browser, not batch
+            import -window root evidence/3dsx-move-slots.png
+            tap3ds a  # Slots -> alphabetical catalogue
+            import -window root evidence/3dsx-move-catalogue.png
+            tap3ds x  # Y opens D-pad search keyboard inside browser
+            import -window root evidence/3dsx-move-search.png
+            tap3ds s  # cancel keyboard -> catalogue
+            tap3ds a  # catalogue -> replacement review
+            tap3ds a  # review -> permanent BLOCKED notice
+            import -window root evidence/3dsx-move-blocked.png
+            tap3ds s  # notice -> catalogue
+            tap3ds s  # catalogue -> slots
+            tap3ds s  # slots -> Pokemon
+            tap3ds s  # Pokemon -> Party
+            tap3ds s  # Party -> Home
             import -window root evidence/3dsx-home-return.png
             for i in 1 2 3 4 5 6; do tap3ds g; done
             tap3ds a
@@ -360,6 +413,40 @@ jobs:
             test "$(stat -c %s "$outroot/drafts/phase18_draft_001.sav")" -eq 131072
             sha256sum -c evidence/import-before.txt
             cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_001.sav"
+            # Exercise the Y-driven 3DSX v3 multi-edit path in this SAME
+            # running emulator, with non-playable generated data only.
+            # Azahar 2126.2 default keys: Y=x Up=t Down=g A=a B=s.
+            tap3ds s  # close single-draft result -> Money
+            tap3ds s  # Money -> Home; selection stays on Money (index 3)
+            tap3ds x  # Y: start RAM-only queue
+            tap3ds a  # Home -> Money
+            tap3ds a  # Money -> value editor
+            tap3ds t  # money +1
+            tap3ds a  # review selected scalar
+            tap3ds a  # STAGE money scalar (no SD output)
+            import -window root evidence/3dsx-batch-money-staged.png
+            tap3ds s  # dismiss staged notice
+            tap3ds s  # Money -> Home
+            tap3ds t  # home selection Money -> Bag
+            tap3ds a  # Bag list
+            tap3ds a  # edit existing item quantity
+            tap3ds t  # quantity 10 -> 11
+            tap3ds a  # review item scalar
+            tap3ds a  # STAGE item scalar
+            import -window root evidence/3dsx-batch-two-staged.png
+            tap3ds s  # dismiss staged notice
+            tap3ds s  # Bag -> Home
+            tap3ds x  # Y: review both pending scalars
+            import -window root evidence/3dsx-batch-review.png
+            tap3ds a  # batch confirmation 1
+            tap3ds a  # batch confirmation 2
+            tap3ds a  # export ONE v3 SD-only combined draft
+            sleep 3
+            import -window root evidence/3dsx-batch-export-result.png
+            test -s "$outroot/backups/phase18_original_002.sav"
+            test -s "$outroot/drafts/phase18_draft_002.sav"
+            test "$(stat -c %s "$outroot/drafts/phase18_draft_002.sav")" -eq 131072
+            cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_002.sav"
             # Return to HOME, then test standalone START release exit.
             tap3ds s
             tap3ds s
@@ -386,12 +473,18 @@ jobs:
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
           test -s evidence/3dsx-home-return.png
+          test -s evidence/3dsx-move-slots.png
+          test -s evidence/3dsx-move-catalogue.png
+          test -s evidence/3dsx-move-search.png
+          test -s evidence/3dsx-move-blocked.png
           test -s evidence/3dsx-import-menu.png
           test -s evidence/3dsx-missing-copy.png
           test -s evidence/3dsx-exit-attempt.png
           test -s evidence/cia-home.png
           test -s evidence/3dsx-imported-home.png
           test -s evidence/3dsx-draft-export-result.png
+          test -s evidence/3dsx-batch-review.png
+          test -s evidence/3dsx-batch-export-result.png
           sha256sum -c evidence/canary-before.txt
           sha256sum -c evidence/import-before.txt
           # An independent host compile of Phase18 v2 verifies the WHOLE
@@ -403,8 +496,10 @@ jobs:
             demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav \
             demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups/phase18_original_001.sav \
             demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts/phase18_draft_001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups/phase18_original_002.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts/phase18_draft_002.sav \
             | tee evidence/offline-draft-verified.txt
-          echo 'PASS: Azahar starts 3DSX and CIA; actual 3DS UI produced verified offline draft; SD canary intact' | tee evidence/result.txt
+          echo 'PASS: Azahar native 3DSX single-edit + Y-queued multi-edit batch; CIA boot; SD canary intact' | tee evidence/result.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:

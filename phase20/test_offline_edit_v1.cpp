@@ -40,6 +40,13 @@ static rogue18::ExportResult hostSubmit(
     return phase20::exportGuarded(c.source->data(),c.source->size(),
         display,captured,choice,c.import.c_str(),c.root.c_str());
 }
+static rogue18::ExportResult hostBatchSubmit(
+    const phase19::Demo& display,const phase20::CopyObservation& observed,
+    const phase20::BatchFlow& queued,void* ctx) {
+    const auto& c=*static_cast<HostExportCtx*>(ctx);
+    return phase20::exportBatchGuarded(c.source->data(),c.source->size(),
+        display,observed,queued,c.import.c_str(),c.root.c_str());
+}
 static rogue18::ExportResult failAllocation(
     const phase19::Demo&,const phase20::CopyObservation&,
     const phase20::EditChoice&,void*) {
@@ -132,12 +139,125 @@ int main(){
     CopyObservation combinedCaptured{};
     assert(inspectCopy(combinedDraft.data(),combinedDraft.size(),
                        combinedDisplay,combinedCaptured,message));
+    // A queued EV decrease must make room for a later legal increase,
+    // even if the immutable original had almost exhausted its 510 budget.
+    BatchFlow evQueue{};
+    evQueue.collecting=true;
+    assert(rogue18::v3::start(v3Source,evQueue.pending));
+    assert(display.party[0].ev[1]==252);
+    assert(rogue18::v3::append(v3Source,evQueue.pending,rogue18::Kind::EVs,
+                                0,1,251));
+    EditChoice freed{OfflineKind::EV,0,2,3};
+    assert(phase20::maxValue(display,freed)==2); // original 508 EV used
+    assert(phase20::batchValueLimit(display,freed,&evQueue)==3);
+    assert(rogue18::v3::append(v3Source,evQueue.pending,rogue18::Kind::EVs,
+                                0,2,3));
+    const auto redistributed=rogue18::v3::preview(original.data(),
+                                                  original.size(),evQueue.pending);
+    assert(redistributed.ok);
+    assert(rogue18::v3::verify(original.data(),original.size(),
+                    redistributed.candidate.data(),redistributed.candidate.size(),
+                    evQueue.pending));
     assert(combinedDisplay.money==40002 &&
            combinedDisplay.bag[0].quantity==display.bag[0].quantity+1u &&
            combinedDisplay.party[0].iv[0]==(display.party[0].iv[0]+1u)%32u &&
            combinedDisplay.party[0].ev[3]==display.party[0].ev[3]-1u &&
            combinedDisplay.party[0].pp[0]==display.party[0].pp[0]+1u);
     assert(!combinedCaptured.canModifyInstalledGame && !combinedCaptured.canRestore);
+
+    // Phase20 native equivalent: Y starts queue, A stages each scalar
+    // without any writes, Y reviews, two final A approvals export ONE draft.
+    phase19::State staged(display);
+    staged.screen=phase19::Screen::Money;
+    BatchFlow queue{};
+    OfflineFlow chooser{};
+    assert(batchShortcut(staged,captured,queue,original.data(),original.size()));
+    assert(queue.collecting && queue.pending.edits.empty());
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Value);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::Up,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::ConfirmOne);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Result && chooser.succeeded);
+    assert(queue.pending.edits.size()==1);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::B,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Idle);
+
+    staged.screen=phase19::Screen::Bag;
+    staged.selected=0;
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::Up,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Result && chooser.succeeded);
+    assert(queue.pending.edits.size()==2);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::B,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(readBytes(input)==original); // queue is RAM-only; no draft yet
+
+    staged.screen=phase19::Screen::Pokemon;
+    staged.mon=0;staged.fromPC=false;
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Category);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Field);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(chooser.stage==EditStage::Value);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::Up,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::A,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+    assert(queue.pending.edits.size()==3);
+    assert(takeOfflineKey(staged,chooser,captured,phase19::Key::B,
+                          nullptr,nullptr,&queue,original.data(),original.size()));
+
+    assert(batchShortcut(staged,captured,queue)); // Y on imported view
+    assert(queue.stage==BatchStage::Review);
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    assert(queue.stage==BatchStage::ConfirmOne);
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::B));
+    assert(queue.stage==BatchStage::Review); // cancel remains RAM-only
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    assert(queue.stage==BatchStage::ConfirmTwo && !queue.success);
+    assert(readBytes(input)==original);
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::B));
+    assert(queue.stage==BatchStage::Review);
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    HostExportCtx batchHost{&original,root,input};
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A,
+                        &hostBatchSubmit,&batchHost));
+    assert(queue.stage==BatchStage::Result && queue.success);
+    assert(queue.pending.edits.size()==3);
+    assert(readBytes(input)==original);
+    assert(takeBatchKey(staged,queue,captured,phase19::Key::A));
+    assert(!queue.collecting && queue.stage==BatchStage::Browse);
+    // The source-lock is absolute; changing an otherwise unchecksummed tail
+    // after staging must refuse to generate another draft.
+    assert(batchShortcut(staged,captured,queue,original.data(),original.size()));
+    rogue18::v2::ReadSnapshot queueView{};
+    assert(batchSource(display,captured,queue,original.data(),original.size(),queueView));
+    auto invalidSource=original;invalidSource.back()^=0x01;
+    assert(!batchSource(display,captured,queue,invalidSource.data(),
+                        invalidSource.size(),queueView));
+    assert(!exportBatchGuarded(invalidSource.data(),invalidSource.size(),
+                 display,captured,queue,input.c_str(),root.c_str()).ok);
 
     // Every request is fingerprint pinned to the first displayed import.
     auto stale=original;

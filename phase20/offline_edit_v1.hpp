@@ -5,6 +5,7 @@
 #pragma once
 #include "phase20/read_only_v1.hpp"
 #include "phase18/offline_export.hpp"
+#include "phase18/multi_export_v3.hpp"
 #include <algorithm>
 #include <cstdint>
 #include <cstdio>
@@ -223,6 +224,201 @@ inline bool offlineVisible(const phase19::State& state,
            state.demo.sourceSha256==observation.sourceSha256 &&
            state.demo.activeCounter==observation.activeCounter;
 }
+// ADDITIVE copied-save v3 queue. Never changes the current imported data or
+// any installed title. Pending choices are locked against the same ORIGINAL.
+enum class BatchStage : uint8_t { Browse, Review, ConfirmOne, ConfirmTwo, Result };
+struct BatchFlow {
+    bool collecting=false,success=false;
+    BatchStage stage=BatchStage::Browse;
+    rogue18::v3::Batch pending{};
+    unsigned page=0;
+    char message[256]{};
+};
+inline unsigned batchValueLimit(const phase19::Demo& d,
+                                const EditChoice& c,const BatchFlow* q) {
+    if(c.kind!=OfflineKind::EV || !q || !q->collecting ||
+       c.slot>=d.partyCount || c.field>=6)return maxValue(d,c);
+    // Source remains immutable. A queued EV decrease can legitimately
+    // release headroom for a later EV increase on the SAME Pokémon.
+    // Exclude the currently selected stat, which is not yet staged.
+    unsigned other=0;
+    for(unsigned i=0;i<6;++i)if(i!=c.field) {
+        unsigned n=d.party[c.slot].ev[i];
+        for(const auto& e:q->pending.edits)
+            if(e.kind==rogue18::Kind::EVs &&
+               e.slot==c.slot && e.field==i)
+                n=e.value;
+        other+=n;
+    }
+    return other>510u?0u:std::min(252u,510u-other);
+}
+inline bool batchReady(const BatchFlow& q) {
+    return q.collecting && !q.pending.edits.empty();
+}
+inline rogue18::Kind mapKind(OfflineKind k) {
+    switch(k) {
+        case OfflineKind::Money:return rogue18::Kind::Money;
+        case OfflineKind::ExistingItem:return rogue18::Kind::ExistingQuantity;
+        case OfflineKind::IV:return rogue18::Kind::IVs;
+        case OfflineKind::EV:return rogue18::Kind::EVs;
+        case OfflineKind::PP:return rogue18::Kind::Move;
+    }
+    return rogue18::Kind::Nature; // v3 explicitly denies unsupported kinds.
+}
+inline bool batchSource(const phase19::Demo& d,const CopyObservation& o,
+                        const BatchFlow& batch,const uint8_t* raw,size_t n,
+                        rogue18::v2::ReadSnapshot& view) {
+    if(!raw || n!=CopiedRawBytes)return false;
+    view=rogue18::v2::inspect(raw,n);
+    return sameVisibleSource(d,o,view) &&
+           batch.pending.expectedDigest==view.data.sourceSha256 &&
+           batch.pending.expectedCounter==view.data.activeCounter &&
+           batch.pending.version==rogue18::v3::ContractVersion &&
+           !rogue18::v3::mayWriteInstalledGame(batch.pending);
+}
+inline rogue18::ExportResult exportBatchGuarded(
+    const uint8_t* raw,size_t n,const phase19::Demo& display,
+    const CopyObservation& observation,const BatchFlow& queued,
+    const char* input,const char* root) {
+    try {
+        rogue18::v2::ReadSnapshot view{};
+        if(!batchReady(queued) || !batchSource(display,observation,queued,raw,n,view))
+            return {false,"Pending edit batch no longer matches the imported original."};
+        const auto candidate=rogue18::v3::preview(raw,n,queued.pending);
+        if(!candidate.ok || !rogue18::v3::verify(raw,n,
+              candidate.candidate.data(),candidate.candidate.size(),queued.pending))
+            return {false,"Multi-edit draft rejected by independent full-byte proof."};
+        return rogue18::v3::exportCopiedBatch(raw,n,input,root,queued.pending);
+    } catch(const std::bad_alloc&) {
+        return {false,"Out of memory; no batch draft approved."};
+    } catch(const std::exception&) {
+        return {false,"Batch exception; no draft approved."};
+    }
+}
+inline rogue18::ExportResult exportFixedBatch(const phase19::Demo& d,
+    const CopyObservation& o,const BatchFlow& batch) {
+    auto source=rogue18::raw_v1::readExact(phase19::OfflineImportPath);
+    if(!source)return {false,"Missing or truncated original SD import."};
+    return exportBatchGuarded(source.get(),CopiedRawBytes,d,o,batch,
+               phase19::OfflineImportPath,"sdmc:/3ds/PKSM-Rogue");
+}
+using BatchSubmit=rogue18::ExportResult(*)(
+    const phase19::Demo&,const CopyObservation&,const BatchFlow&,void*);
+inline bool batchShortcut(const phase19::State& s,
+    const CopyObservation& observed,BatchFlow& q,
+    const uint8_t* syntheticSource=nullptr,size_t syntheticSize=0) {
+    if(!offlineVisible(s,observed) ||
+       (s.screen!=phase19::Screen::Home &&
+        s.screen!=phase19::Screen::Money &&
+        s.screen!=phase19::Screen::Bag &&
+        s.screen!=phase19::Screen::Party &&
+        s.screen!=phase19::Screen::Pokemon))return false;
+    try {
+        if(q.collecting) {
+            q.stage=batchReady(q)?BatchStage::Review:BatchStage::Browse;
+            q.page=0;
+            if(!batchReady(q))
+                std::snprintf(q.message,sizeof(q.message),
+                    "Queue is empty. Select values with A to stage them.");
+            return true;
+        }
+        auto disk=syntheticSource?std::unique_ptr<uint8_t[]>{}:
+                  rogue18::raw_v1::readExact(phase19::OfflineImportPath);
+        const uint8_t* raw=syntheticSource?syntheticSource:disk.get();
+        const size_t n=syntheticSource?syntheticSize:CopiedRawBytes;
+        if(!raw || n!=CopiedRawBytes)return false;
+        const auto view=rogue18::v2::inspect(raw,n);
+        if(!sameVisibleSource(s.demo,observed,view))return false;
+        rogue18::v3::Batch pending{};
+        if(!rogue18::v3::start(view,pending))return false;
+        q=BatchFlow{};
+        q.collecting=true;
+        q.pending=std::move(pending);
+        std::snprintf(q.message,sizeof(q.message),
+                 "BATCH MODE: A to stage edits; Y to review and export.");
+        return true;
+    } catch(const std::exception&) {return false;}
+}
+inline bool addToBatch(const uint8_t* raw,size_t n,
+    const phase19::Demo& display,const CopyObservation& observed,
+    BatchFlow& q,const EditChoice& c,std::string& reason) {
+    try {
+        rogue18::v2::ReadSnapshot view{};
+        if(!q.collecting || q.stage!=BatchStage::Browse ||
+           !batchSource(display,observed,q,raw,n,view)) {
+            reason="Original copied source changed; discard batch and re-import.";return false;
+        }
+        if(!rogue18::v3::append(view,q.pending,mapKind(c.kind),c.slot,c.field,c.value)) {
+            reason="Duplicate, unchanged, unsupported or invalid batch edit.";return false;
+        }
+        const auto proof=rogue18::v3::preview(raw,n,q.pending);
+        if(!proof.ok || proof.candidate.size()!=n ||
+           !rogue18::v3::verify(raw,n,proof.candidate.data(),
+                               proof.candidate.size(),q.pending)) {
+            q.pending.edits.pop_back();
+            reason="Combined values invalid (including EV budget); not queued.";
+            return false;
+        }
+        reason="Staged to offline queue. Press Y to review entire batch.";
+        return true;
+    } catch(const std::exception&) {
+        reason="Batch allocation/validation failed; no draft created.";
+        return false;
+    }
+}
+inline bool takeBatchKey(phase19::State& state,BatchFlow& q,
+    const CopyObservation& observed,phase19::Key key,
+    BatchSubmit submit=nullptr,void* context=nullptr) {
+    using phase19::Key;
+    if(q.stage==BatchStage::Browse)return false;
+    if(!offlineVisible(state,observed)) {
+        q=BatchFlow{};
+        return true;
+    }
+    if(q.stage==BatchStage::Review){
+        if(key==Key::B){q.stage=BatchStage::Browse;return true;}
+        if(key==Key::X && !q.pending.edits.empty()) {
+            q.pending.edits.pop_back();
+            if(q.page>0 && q.page*5>=q.pending.edits.size())--q.page;
+            if(q.pending.edits.empty())q.stage=BatchStage::Browse;
+            return true;
+        }
+        if(key==Key::Right || key==Key::R) {
+            if((q.page+1)*5<q.pending.edits.size())++q.page;
+        }else if(key==Key::Left && q.page>0)--q.page;
+        else if(key==Key::A && batchReady(q))q.stage=BatchStage::ConfirmOne;
+        return true;
+    }
+    if(key==Key::B){
+        q.stage=q.stage==BatchStage::Result?BatchStage::Browse:BatchStage::Review;
+        return true;
+    }
+    if(key!=Key::A)return true;
+    if(q.stage==BatchStage::ConfirmOne)q.stage=BatchStage::ConfirmTwo;
+    else if(q.stage==BatchStage::ConfirmTwo) {
+        try {
+            const auto saved=submit?submit(state.demo,observed,q,context):
+                 exportFixedBatch(state.demo,observed,q);
+            q.success=saved.ok;
+            if(q.success)
+                std::snprintf(q.message,sizeof(q.message),
+                   "ONE BATCH DRAFT: backups/%.42s drafts/%.42s. Original unchanged.",
+                   saved.backupName.c_str(),saved.draftName.c_str());
+            else
+                std::snprintf(q.message,sizeof(q.message),
+                    "BATCH BLOCKED: %.191s",saved.reason.c_str());
+        } catch(const std::exception&) {
+            q.success=false;
+            std::snprintf(q.message,sizeof(q.message),
+                "Batch export exception; no valid draft approved.");
+        }
+        q.stage=BatchStage::Result;
+    } else if(q.stage==BatchStage::Result) {
+        if(q.success)q=BatchFlow{};
+        else q.stage=BatchStage::Review;
+    }
+    return true;
+}
 // Host-only QA may inject the SAME guarded export path with a temporary
 // source directory. Production always defaults to the hard-coded native
 // SDMC import + immutable backup/draft location.
@@ -230,7 +426,10 @@ using OfflineSubmit = rogue18::ExportResult(*)(
     const phase19::Demo&,const CopyObservation&,const EditChoice&,void*);
 inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
                            const CopyObservation& observation,phase19::Key key,
-                           OfflineSubmit submit=nullptr,void* testContext=nullptr) {
+                           OfflineSubmit submit=nullptr,void* testContext=nullptr,
+                           BatchFlow* batch=nullptr,
+                           const uint8_t* batchTestSource=nullptr,
+                           size_t batchTestSize=0) {
     using phase19::Key;
     if(flow.stage==EditStage::Idle) {
         if(!offlineVisible(state,observation) || key!=Key::A)return false;
@@ -301,7 +500,7 @@ inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
                             key==Key::Right||key==Key::R?10:
                             key==Key::Left?-10:0;
             const unsigned lo=flow.choice.kind==OfflineKind::ExistingItem?1u:0u;
-            const unsigned hi=maxValue(state.demo,flow.choice);
+            const unsigned hi=batchValueLimit(state.demo,flow.choice,batch);
             if(delta) {
                 const int64_t v=static_cast<int64_t>(flow.proposed)+delta;
                 flow.proposed=static_cast<unsigned>(std::max(int64_t(lo),
@@ -317,6 +516,21 @@ inline bool takeOfflineKey(phase19::State& state,OfflineFlow& flow,
         }
         case EditStage::ConfirmOne:
             if(key==Key::B)flow.stage=EditStage::Value;
+            if(key==Key::A && batch && batch->collecting &&
+               batch->stage==BatchStage::Browse) {
+                // Queueing is RAM-only; require final batch-wide double
+                // confirmation before any SD file can be created.
+                auto disk=batchTestSource?std::unique_ptr<uint8_t[]>{}:
+                         rogue18::raw_v1::readExact(phase19::OfflineImportPath);
+                const uint8_t* raw=batchTestSource?batchTestSource:disk.get();
+                std::string reason;
+                const bool ok=addToBatch(raw,batchTestSource?batchTestSize:CopiedRawBytes,
+                                   state.demo,observation,*batch,flow.choice,reason);
+                flow.succeeded=ok;
+                std::snprintf(flow.result,sizeof(flow.result),"%s",reason.c_str());
+                flow.stage=EditStage::Result;
+                break;
+            }
             if(key==Key::A)flow.stage=EditStage::ConfirmTwo;
             break;
         case EditStage::ConfirmTwo:
