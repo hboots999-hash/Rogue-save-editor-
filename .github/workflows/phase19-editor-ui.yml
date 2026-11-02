@@ -316,6 +316,10 @@ jobs:
             import -window root evidence/3dsx-home.png
             tap3ds a
             import -window root evidence/3dsx-party.png
+            # Y from Party opens the six-Pokemon read-only picker.
+            tap3ds x
+            import -window root evidence/3dsx-move-party-picker.png
+            tap3ds s
             tap3ds a
             import -window root evidence/3dsx-pokemon.png
             # Azahar default x = 3DS Y, opens read-only move browser.
@@ -325,6 +329,15 @@ jobs:
             import -window root evidence/3dsx-move-catalog.png
             tap3ds x
             import -window root evidence/3dsx-move-keyboard.png
+            tap3ds s
+            tap3ds a
+            import -window root evidence/3dsx-move-comparison.png
+            tap3ds a
+            import -window root evidence/3dsx-move-confirm-one.png
+            tap3ds a
+            import -window root evidence/3dsx-move-confirm-two.png
+            tap3ds z
+            import -window root evidence/3dsx-move-blocked.png
             tap3ds s
             tap3ds s
             tap3ds s
@@ -365,6 +378,11 @@ jobs:
           test -s evidence/3dsx-move-slots.png
           test -s evidence/3dsx-move-catalog.png
           test -s evidence/3dsx-move-keyboard.png
+          test -s evidence/3dsx-move-party-picker.png
+          test -s evidence/3dsx-move-comparison.png
+          test -s evidence/3dsx-move-confirm-one.png
+          test -s evidence/3dsx-move-confirm-two.png
+          test -s evidence/3dsx-move-blocked.png
           test -s evidence/3dsx-home-return.png
           test -s evidence/3dsx-import-menu.png
           test -s evidence/3dsx-missing-copy.png
