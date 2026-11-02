@@ -309,6 +309,19 @@ jobs:
             import -window root evidence/3dsx-home.png
             tap3ds a
             import -window root evidence/3dsx-party.png
+            tap3ds a
+            import -window root evidence/3dsx-pokemon.png
+            # Azahar default x = 3DS Y, opens read-only move browser.
+            tap3ds x
+            import -window root evidence/3dsx-move-slots.png
+            tap3ds a
+            import -window root evidence/3dsx-move-catalog.png
+            tap3ds x
+            import -window root evidence/3dsx-move-keyboard.png
+            tap3ds s
+            tap3ds s
+            tap3ds s
+            tap3ds s
             tap3ds s
             import -window root evidence/3dsx-home-return.png
             for i in 1 2 3 4 5 6; do tap3ds g; done
@@ -341,6 +354,10 @@ jobs:
           '
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
+          test -s evidence/3dsx-pokemon.png
+          test -s evidence/3dsx-move-slots.png
+          test -s evidence/3dsx-move-catalog.png
+          test -s evidence/3dsx-move-keyboard.png
           test -s evidence/3dsx-home-return.png
           test -s evidence/3dsx-import-menu.png
           test -s evidence/3dsx-missing-copy.png
