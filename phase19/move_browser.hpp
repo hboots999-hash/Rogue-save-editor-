@@ -135,7 +135,7 @@ inline bool hasSearch(const char* title,const char* query){
     return false;
 }
 enum class MovePage : uint8_t { Slots, Catalog, Keyboard, Review, Notice, Party, ConfirmOne, ConfirmTwo };
-enum class MoveNotice : uint8_t { ReplacementBlocked, EmptySlot, PartyChanged };
+enum class MoveNotice : uint8_t { ReplacementBlocked, EmptySlot, PartyChanged, CandidateUnavailable, DuplicateMove, SameMove };
 enum class MoveKey : uint8_t { Up,Down,Left,Right,A,B,X,Y,R };
 struct MoveBrowser {
     const MoveCatalog* catalog=nullptr;
@@ -263,6 +263,18 @@ struct MoveBrowser {
         if(page==MovePage::Review || page==MovePage::ConfirmOne ||
            page==MovePage::ConfirmTwo)confirmationReleased=true;
     }
+    MoveNotice reviewBlocker(const Demo& d) const {
+        if(!activeParty(d) || slot>=4u)return MoveNotice::PartyChanged;
+        const MoveRecord* candidate=selectedMove();
+        if(!candidate || candidate->evidence!=MoveEvidence::Candidate ||
+           !candidate->basePP)return MoveNotice::CandidateUnavailable;
+        const Pokemon& mon=d.party[partySlot];
+        if(candidate->id==mon.moves[slot])return MoveNotice::SameMove;
+        for(unsigned i=0;i<4u;i++)
+            if(i!=slot && candidate->id==mon.moves[i])
+                return MoveNotice::DuplicateMove;
+        return MoveNotice::ReplacementBlocked; // candidate only; Apply still off
+    }
     bool browse(const Demo& d,MoveKey k) {
         // Clamp accidental/stale browser state before any keyboard access.
         if(slot>=4u){slot=0;page=MovePage::Slots;}
@@ -348,7 +360,10 @@ struct MoveBrowser {
             }
             case MovePage::Review:
                 if(k==MoveKey::A && confirmationReleased) {
-                    page=MovePage::ConfirmOne;confirmationReleased=false;
+                    notice=reviewBlocker(d);
+                    if(notice==MoveNotice::ReplacementBlocked) {
+                        page=MovePage::ConfirmOne;confirmationReleased=false;
+                    }else page=MovePage::Notice;
                 } else if(k==MoveKey::B)page=MovePage::Catalog;
                 break;
             case MovePage::ConfirmOne:
