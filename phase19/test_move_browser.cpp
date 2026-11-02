@@ -183,7 +183,7 @@ int main() {
     assert(browser.matchAt(0,f0) && browser.matchAt(1,f1));
     assert(all[f0].id==600u && all[f1].id==601u); // stable ID tie-break
     assert(!browser.matchAt(2,f0));
-    std::strcpy(browser.query,"unmatched impossible term");
+    std::strcpy(browser.query,"ZZZ_NO_MATCH");
     browser.recount();
     assert(browser.matchCount==0u);
     assert(browser.selectedMove()==nullptr);
