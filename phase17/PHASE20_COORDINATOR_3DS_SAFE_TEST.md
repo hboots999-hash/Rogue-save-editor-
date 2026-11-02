@@ -1,5 +1,10 @@
 # Phase20 coordinator: safe physical 3DS experiment (3DSX first)
 
+> **2 November evening update:** Phase20 CI-pinned source `5a79bcbc522ad4e8d37f14bebfa9e7ac12143de2`. The new move browser is **read-only**. On Pokémon detail **Y** can open the browser; on Home/Money/Bag/Party **Y** handles the existing batch queue. The browser supports searchable metadata only, **not** replacement. Its optional 14,040-byte external catalog has a verified SHA-256, but does not attest the game ROM on the console. START+SELECT stays reserved for Rosalina. Test the vetted **3DSX first**, never the CIA by default.
+>
+> For a no-write independent PC check after a synthetic export, use `phase17/verify_offline_sd_hashes.py` with previously saved original and Phase16 SHA-256 hashes **and** an independently produced expected Phase18 candidate SHA-256. Full command and negative-case instructions are in [PHYSICAL_READONLY_VERIFICATION_CHECKLIST.md](PHYSICAL_READONLY_VERIFICATION_CHECKLIST.md). A failure means preserve files and STOP; no automatic cleanup or restore.
+
+
 **Phase17 read-only safety handoff, 2 Nov 2026. Not an instruction to install or modify a game save.** The user's L shoulder is broken; Rosalina shortcut is **START+SELECT**. Experimental Phase20 CIA title `000400000F73A700` is **not a release**, and the valued Emerald Rogue title is `0004000007D7BA00`. Confirm both independently before any optional installation. Never overwrite or uninstall the game.
 
 ## Before touching the console
