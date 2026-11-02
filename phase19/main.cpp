@@ -227,7 +227,7 @@ void top(const State& s) {
 void moveTop(const State& s,const MoveBrowser& v) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
-    std::puts("SYNTHETIC IDS, NOT ROM DATA");
+    std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"MOVE CATALOGUE UNAVAILABLE");
     std::puts("===========================");
     if(!v.activeParty(s.demo)) {
         std::puts("Party data changed or missing.");
@@ -330,7 +330,7 @@ void moveBottom(const State& s,const MoveBrowser& v){
     consoleClear();
     std::puts("PKSM ROGUE - MOVE RESEARCH");
     std::puts("-------------------------");
-    std::puts("ROM MAPPING: NOT VERIFIED");
+    std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"CATALOGUE MISSING");
     std::puts("936-record API supported.");
     std::puts("40 PP conflicts must be");
     std::puts("flagged by a verified source.");
@@ -444,6 +444,8 @@ int main() {
                   !state.fromPC && selectedPokemonValid(state)) {
             viewingMoves=moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
             moveRepeat.reset();
+            if(!viewingMoves)
+                openNotice(state,Screen::Pokemon,catalogProblemText(moveView.problem));
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
