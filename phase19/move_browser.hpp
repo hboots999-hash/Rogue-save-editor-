@@ -30,6 +30,14 @@ struct MoveCatalog {
     const MoveRecord* records=nullptr; // borrowed immutable model-backed storage
     std::array<uint8_t,32> romSha256{}; // provenance, NOT permission for edits
 };
+inline const char* moveCatalogSourceLabel(CatalogOrigin origin) {
+    switch(origin) {
+        case CatalogOrigin::Synthetic:return "DEMO MOVE IDS - NOT ROM DATA";
+        case CatalogOrigin::Unauthenticated:return "MOVE METADATA UNVERIFIED";
+        case CatalogOrigin::ExactRomReviewed:return "META SHA VERIFIED; ROM NOT";
+    }
+    return "MOVE METADATA NOT VERIFIED";
+}
 inline const char* evidenceLabel(MoveEvidence x) {
     switch(x) {
         case MoveEvidence::Candidate:return "PP MATCH - REVIEW ONLY";
@@ -205,6 +213,12 @@ struct MoveBrowser {
         else if(selected>=matchCount)selected=matchCount-1u;
     }
     bool browse(const Demo& d,MoveKey k) {
+        // Clamp accidental/stale browser state before any keyboard access.
+        if(slot>=4u){slot=0;page=MovePage::Slots;}
+        if(keyboardIndex>=sizeof(Keyboard)-1u)keyboardIndex=0;
+        if(queryLength>SearchMax) {
+            queryLength=0;pending[0]='\0';page=MovePage::Catalog;
+        }
         if(!activeParty(d)){
             page=MovePage::Notice;
             notice=MoveNotice::PartyChanged;
