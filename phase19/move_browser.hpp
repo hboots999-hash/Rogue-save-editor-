@@ -144,6 +144,10 @@ struct MoveBrowser {
     unsigned shown=0,matchCount=0;
     unsigned keyboardIndex=0;
     unsigned queryLength=0;
+    unsigned sourceCounter=0,pinnedSpecies=0;
+    bool pinnedSynthetic=false;
+    std::array<uint8_t,32> sourceFingerprint{};
+    std::array<unsigned,4> originalMoves{},originalPP{};
     char query[SearchMax+1]{};
     char pending[SearchMax+1]{};
     std::array<uint16_t,MaxMoveRecords> alphabetical{}; // 1872 B
@@ -156,6 +160,8 @@ struct MoveBrowser {
     void reset() {
         catalog=nullptr;page=MovePage::Slots;partySlot=slot=selected=0;
         shown=matchCount=keyboardIndex=queryLength=0;
+        sourceCounter=pinnedSpecies=0;pinnedSynthetic=false;
+        sourceFingerprint.fill(0);originalMoves.fill(0);originalPP.fill(0);
         query[0]=pending[0]='\0';ready=false;
         problem=CatalogProblem::Missing;
         notice=MoveNotice::ReplacementBlocked;
@@ -185,6 +191,9 @@ struct MoveBrowser {
            !d.party[party].species || d.party[party].egg)
             return false;
         partySlot=party;slot=0;selected=0;page=MovePage::Slots;
+        sourceCounter=d.activeCounter;sourceFingerprint=d.sourceSha256;
+        pinnedSynthetic=d.synthetic;pinnedSpecies=d.party[party].species;
+        originalMoves=d.party[party].moves;originalPP=d.party[party].pp;
         confirmationReleased=false;
         return true;
     }
@@ -208,7 +217,13 @@ struct MoveBrowser {
         return ready && catalog && catalog->count<=MaxMoveRecords &&
                partySlot<d.partyCount &&
                partySlot<d.party.size() && d.partyStatus==Availability::Ready &&
-               d.party[partySlot].species!=0 && !d.party[partySlot].egg;
+               d.party[partySlot].species!=0 && !d.party[partySlot].egg &&
+               d.party[partySlot].species==pinnedSpecies &&
+               d.party[partySlot].moves==originalMoves &&
+               d.party[partySlot].pp==originalPP &&
+               d.activeCounter==sourceCounter &&
+               d.sourceSha256==sourceFingerprint &&
+               d.synthetic==pinnedSynthetic;
     }
     const MoveRecord* existingMove(const Demo& d,unsigned currentSlot) const {
         if(!catalog || currentSlot>=4u || !activeParty(d))return nullptr;
