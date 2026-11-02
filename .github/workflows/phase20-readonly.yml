@@ -91,7 +91,7 @@ jobs:
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
             g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
               -I. -Idependencies/phase18/phase18 \
-              -Idependencies/moves/phase18 \
+              -Idependencies/moves -Idependencies/moves/phase18 \
               -Idependencies/phase19/phase19 \
               phase20/test_move_catalog_bridge_v1.cpp \
               -o /tmp/phase20/catalog-$mode
