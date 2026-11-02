@@ -33,6 +33,11 @@ jobs:
           persist-credentials: false
           ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
         run: |
@@ -84,6 +89,13 @@ jobs:
               dependencies/phase19/phase19/test_move_browser.cpp \
               -o /tmp/phase20/move-browser-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase18/phase18 \
+              -Idependencies/moves/phase18 \
+              -Idependencies/phase19/phase19 \
+              phase20/test_move_catalog_bridge_v1.cpp \
+              -o /tmp/phase20/catalog-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/catalog-$mode
             # QA-08: compile the actual Phase17 legacy header and Phase18 v2
             # in one TU, repeatedly. Fail the build on any collision.
             P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
@@ -138,6 +150,11 @@ jobs:
           persist-credentials: false
           ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
         run: |
@@ -157,10 +174,11 @@ jobs:
           cp phase20/main.cpp phase20-build/source/main.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
-          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp} phase20-build/include/phase20/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
           cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
+          cp dependencies/moves/phase18/{move_replacement_v1.hpp,move_replacement_v2.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
           test -s phase20-build/build/main.su
           cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
@@ -191,6 +209,8 @@ jobs:
           grep -Fq 'exportFixedBatch(const phase19::Demo& d' phase20/offline_edit_v1.hpp
           grep -Fq 'phase20::batchShortcut(state,observation,batch)' phase20/main.cpp
           grep -Fq 'moveView.initialize(syntheticMoveCatalog()' phase20/main.cpp
+          grep -Fq 'localMoves.verifiedMetadata()' phase20/main.cpp
+          grep -Fq 'static_assert(!rogue18::move_v2::ApplyApproved' phase20/move_catalog_bridge_v1.hpp
           grep -Fq 'viewingMoves)moveTop(state,moveView)' phase20/main.cpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
@@ -220,6 +240,11 @@ jobs:
           persist-credentials: false
           ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
           path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
         run: |
