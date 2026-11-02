@@ -48,7 +48,7 @@ def pointer_sites(rom: bytes, pointer: int) -> list[int]:
 def structural_report(rom: bytes) -> dict:
     if len(rom) != ROM_SIZE or hashlib.sha256(rom).hexdigest() != ROM_SHA:
         raise ValueError("Unmatched ROM; refusing guessed PP-table mode")
-    if rom[SELECTOR - 0x08000000: SELECTOR - 0x08000000+4] != b"\\x00\\x20\\x70\\x47":
+    if rom[SELECTOR - 0x08000000: SELECTOR - 0x08000000+4] != bytes((0x00,0x20,0x70,0x47)):
         raise ValueError("Selector is not the verified movs r0,#0; bx lr")
     aa = pointer_sites(rom, TABLE_A)
     bb = pointer_sites(rom, TABLE_B)
@@ -92,7 +92,7 @@ def main() -> None:
     p.add_argument("--json",type=Path,help="Optional metadata-only output")
     a=p.parse_args()
     report=structural_report(a.rom.read_bytes())
-    rendered=json.dumps(report,indent=2)+"\\n"
+    rendered=json.dumps(report,indent=2)+"\n"
     if a.json:
         a.json.write_text(rendered,encoding="utf-8")
     else:
