@@ -127,6 +127,7 @@ inline bool hasSearch(const char* title,const char* query){
     return false;
 }
 enum class MovePage : uint8_t { Slots, Catalog, Keyboard, Review, Notice };
+enum class MoveNotice : uint8_t { ReplacementBlocked, EmptySlot, PartyChanged };
 enum class MoveKey : uint8_t { Up,Down,Left,Right,A,B,X,Y,R };
 struct MoveBrowser {
     const MoveCatalog* catalog=nullptr;
@@ -140,12 +141,14 @@ struct MoveBrowser {
     std::array<uint16_t,MaxMoveRecords> alphabetical{}; // 1872 B
     std::array<uint16_t,MaxMoveRecords> matches{};      // 1872 B, O(1) rows
     CatalogProblem problem=CatalogProblem::Missing;
+    MoveNotice notice=MoveNotice::ReplacementBlocked;
     bool ready=false;
     void reset() {
         catalog=nullptr;page=MovePage::Slots;partySlot=slot=selected=0;
         shown=matchCount=keyboardIndex=queryLength=0;
         query[0]=pending[0]='\0';ready=false;
         problem=CatalogProblem::Missing;
+        notice=MoveNotice::ReplacementBlocked;
         // Large index arrays are overwritten on initialize/recount, not
         // value-initialized in a temporary 4-KiB ARM11 stack object.
     }
@@ -199,13 +202,20 @@ struct MoveBrowser {
     bool browse(const Demo& d,MoveKey k) {
         if(!activeParty(d)){
             page=MovePage::Notice;
+            notice=MoveNotice::PartyChanged;
             return false;
         }
         switch(page) {
             case MovePage::Slots:
                 if(k==MoveKey::Up)slot=(slot+3u)%4u;
                 else if(k==MoveKey::Down)slot=(slot+1u)%4u;
-                else if(k==MoveKey::A){page=MovePage::Catalog;selected=0;recount();}
+                else if(k==MoveKey::A) {
+                    if(!d.party[partySlot].moves[slot]) {
+                        notice=MoveNotice::EmptySlot;page=MovePage::Notice;
+                    }else{
+                        page=MovePage::Catalog;selected=0;recount();
+                    }
+                }
                 else if(k==MoveKey::B)return false; // caller exits browser
                 break;
             case MovePage::Catalog:
@@ -252,11 +262,12 @@ struct MoveBrowser {
                 break;
             }
             case MovePage::Review:
-                if(k==MoveKey::A)page=MovePage::Notice; // BLOCKED
+                if(k==MoveKey::A){notice=MoveNotice::ReplacementBlocked;page=MovePage::Notice;} // BLOCKED
                 else if(k==MoveKey::B)page=MovePage::Catalog;
                 break;
             case MovePage::Notice:
-                if(k==MoveKey::B || k==MoveKey::A)page=MovePage::Catalog;
+                if(k==MoveKey::B || k==MoveKey::A)
+                    page=notice==MoveNotice::EmptySlot?MovePage::Slots:MovePage::Catalog;
                 break;
         }
         return true;
