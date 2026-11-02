@@ -12,6 +12,7 @@
 #undef main
 #undef CHECK
 #include <iostream>
+#include <fstream>
 #define CHECK(x) do{if(!(x)){std::cerr<<"MOVE V2 FAIL "<<__LINE__<<" "<<#x<<"\n";return 1;}}while(0)
 using namespace rogue18;
 static Bytes partyFixture(unsigned perm){
@@ -38,7 +39,7 @@ static Bytes partyFixture(unsigned perm){
                 raw_v1::checksum(original.data()+s1));
     return original;
 }
-int main(){
+int main(int argc,char** argv){
     using namespace rogue18::move_v2;
     CHECK(!ApplyApproved);
     CHECK(RomSha.size()==32 && CatalogSha.size()==32);
@@ -117,6 +118,15 @@ int main(){
     CHECK(begin(view,original.data(),original.size(),0,2,request));
     const auto good=previewSynthetic(original.data(),original.size(),request,600,15);
     CHECK(good.ok);
+    // Optional generated, UNPLAYABLE test fixture for an independent
+    // Python Phase9 decoder in CI, never a real save or release draft.
+    if(argc>1){
+        std::ofstream out(argv[1],std::ios::binary|std::ios::trunc);
+        CHECK(out.good());
+        out.write(reinterpret_cast<const char*>(good.candidate.data()),
+                  static_cast<std::streamsize>(good.candidate.size()));
+        out.close();CHECK(out.good());
+    }
     CHECK(!previewSynthetic(original.data(),original.size(),request,0,15).ok);
     CHECK(!previewSynthetic(original.data(),original.size(),request,
                             request.source.expectedMoveId,15).ok);
