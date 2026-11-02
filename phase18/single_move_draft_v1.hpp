@@ -80,14 +80,16 @@ inline bool verifyGenerated(const uint8_t* original,size_t n,
 // A real exporter requires a future separately reviewed versioned adapter.
 inline bool safeTag(const char* tag){
     if(!tag || !tag[0])return false;
-    size_t n=0;
-    for(;tag[n] && n<32;n++){
+    // Never scan an unbounded user-supplied token: at most 25 bytes,
+    // including the terminating NUL for the maximum 24-char token.
+    for(size_t n=0;n<=24;n++){
         const char c=tag[n];
-        if(!((c>='0' && c<='9') ||
-             (c>='a' && c<='z') || (c>='A' && c<='Z') ||
-             c=='-' || c=='_'))return false;
+        if(c=='\\0')return n>0;
+        if(n==24 || !((c>='0' && c<='9') ||
+                       (c>='a' && c<='z') || (c>='A' && c<='Z') ||
+                       c=='-' || c=='_'))return false;
     }
-    return n>0 && n<=24 && !tag[n];
+    return false;
 }
 inline bool writeNew(const std::string& filename,const uint8_t* data,size_t n){
     int flags=O_WRONLY|O_CREAT|O_EXCL;
