@@ -28,4 +28,6 @@ for mode in strict sanitized; do
   ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
     "$tmp/sd-review"
 done
+# Read-only independent PC hash verifier uses ONLY synthetic temporary files.
+python3 phase17/test_verify_offline_sd_hashes.py
 bash phase16/run_tests.sh
