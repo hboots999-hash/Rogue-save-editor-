@@ -91,6 +91,53 @@ inline size_t page(const Catalog& db,size_t offset,Move* out,size_t capacity){
     }
     return produced;
 }
+// Fixed-width 13-character native GUI names: no allocations, no untrusted
+// GBA formatting/control codes, no assumption that a GBA string is UTF-8.
+inline bool displayName(const Move& row,char out[14]){
+    if(!out || !row.id || !textKnown(row.rawName))return false;
+    size_t used=0;
+    for(size_t i=0;i<NameBytes;i++){
+        const uint8_t b=row.rawName[i];
+        if(b==0xff)break;
+        char ch=0;
+        if(b==0)ch=' ';
+        else if(b>=0xbb && b<=0xd4)ch=char('A'+b-0xbb);
+        else if(b>=0xd5 && b<=0xee)ch=char('a'+b-0xd5);
+        else if(b==0xae)ch='-';
+        else if(b==0xb4)ch='\'';
+        else if(b==0xa3)ch='2';
+        else return false;
+        out[used++]=ch;
+    }
+    out[used]=0;
+    return used>0;
+}
+inline bool containsName(const char* haystack,const char* needle){
+    if(!haystack || !needle)return false;
+    if(!needle[0])return true;
+    for(size_t i=0;haystack[i];i++){
+        size_t j=0;
+        while(haystack[i+j] && needle[j] &&
+              asciiLower(uint8_t(haystack[i+j]))==
+              asciiLower(uint8_t(needle[j])))j++;
+        if(!needle[j])return true;
+    }
+    return false;
+}
+inline size_t search(const Catalog& db,const char* query,size_t offset,
+                     Move* rows,size_t capacity){
+    if(!query || !rows || capacity>12 || !authenticate(db))return 0;
+    size_t seen=0,produced=0;
+    for(unsigned id=1;id<=848;id++){
+        Move row{};char name[14]{};
+        if(!lookupAuthenticated(db,uint16_t(id),row) ||
+           !displayName(row,name) || !containsName(name,query))continue;
+        if(seen++<offset)continue;
+        if(produced==capacity)break;
+        rows[produced++]=row;
+    }
+    return produced;
+}
 struct Request {
     uint32_t version=ContractVersion;
     move_v1::Request source{};
