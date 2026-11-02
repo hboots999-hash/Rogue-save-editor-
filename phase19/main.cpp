@@ -345,6 +345,20 @@ void moveTop(const State& s,const MoveBrowser& v) {
             std::puts("PARTY DATA CHANGED");
             std::puts("Return and reselect Pokemon.");
             std::puts("A/B: back");
+        }else if(v.notice==MoveNotice::CandidateUnavailable){
+            std::puts("MOVE IS UNVERIFIED");
+            std::puts("PP conflict/special/unknown.");
+            std::puts("This move cannot be selected.");
+            std::puts("No draft/save modified.");
+            std::puts("A/B: back to browse");
+        }else if(v.notice==MoveNotice::DuplicateMove ||
+                 v.notice==MoveNotice::SameMove){
+            std::puts(v.notice==MoveNotice::SameMove?
+                      "MOVE ALREADY IN THIS SLOT":
+                      "POKEMON KNOWS THIS MOVE");
+            std::puts("Choose another candidate.");
+            std::puts("No draft/save modified.");
+            std::puts("A/B: back to browse");
         }else{
             std::puts("MOVE REPLACEMENT BLOCKED");
             std::puts("Exact-ROM move table and PP");
