@@ -63,6 +63,31 @@ These choices are supported by [GodMode9's own README](https://github.com/d0k3/G
 3. Avoid **X (delete), Y (copy/paste), R+X (rename), Hexeditor/edit mode, scripts, title injection, SD formatting, write-permission unlock, and any FS operations modifying existing files**. `START` in GodMode9 reboots the console. Don't open Rosalina from GodMode9; in the Phase20 app `START+SELECT` is still reserved for Rosalina, and standalone START exits only on release.
 4. GodMode9 can confirm filename, size and SHA-256 equivalence, **not the actual Phase18 v3 field edits** by itself. For independent byte/semantic verification, transfer **expendable synthetic copies only** to an offline computer and run the pinned Phase18 v3 candidate verifier (or have the QA build a safe synthetic verifier). Do not upload private game saves.
 
+## 2 November evening — current Phase20 read-only move browser and independent hash verification
+
+Latest reviewed Phase20 source pin is `5a79bcbc522ad4e8d37f14bebfa9e7ac12143de2`, with its [four-job CI passing](https://github.com/hboots999-hash/Rogue-save-editor-/actions/runs/41450825410). The **read-only move browser** now appears from a Pokémon detail view's **Y** key when no multi-edit queue is active. **Y** on Home/Money/Bag/Party or during an existing queue remains batch review; the browser's internal Y is text search. No move replacement Apply or export is authorised. Optional `catalogs/exact_rom_move_metadata.bin` is **14,040 bytes**, read-only, separately SHA-256 verified and still NOT proof of the currently installed ROM; missing metadata must leave real imported move names unavailable, not guessed. Avoid deliberately loading unsupported move IDs or fake filenames.
+
+**Independent PC verification tool:** `phase17/verify_offline_sd_hashes.py`, installed from the same audited Phase17 PR, only opens files **read-only**. It does not need the 3DS, the game ROM or any private upload. It refuses filename collisions, aliases, missing/partial files, stale source hashes, backup differences and edited drafts differing from an **independently expected full-file Phase18 candidate hash**. An ordinary different draft hash is insufficient.
+
+After powering down and copying the SD card to a computer, run the following example *against your private copied folder* (replace placeholder SHA values with locally computed, previously protected values; do not upload either hash or file). Paths are for a copied SD card named `SD_COPY`:
+
+```sh
+python3 phase17/verify_offline_sd_hashes.py \
+  --import-file SD_COPY/3ds/PKSM-Rogue/imports/00000001.sav \
+  --backup-file SD_COPY/3ds/PKSM-Rogue/backups/phase18_original_001.sav \
+  --draft-file SD_COPY/3ds/PKSM-Rogue/drafts/phase18_draft_001.sav \
+  --source-sha256 ORIGINAL_PROTECTED_64_HEX \
+  --expected-draft-sha256 INDEPENDENT_PHASE18_CANDIDATE_64_HEX \
+  --phase16-container SD_COPY/3ds/PKSM-Rogue/phase16/original_container.bin \
+  --phase16-container-sha256 PROTECTED_CONTAINER_64_HEX \
+  --phase16-journal SD_COPY/3ds/PKSM-Rogue/phase16/rehearsal_only.rec \
+  --phase16-journal-sha256 PROTECTED_JOURNAL_64_HEX
+```
+
+The two `phase16-*` file+hash pairs may be omitted together only when reviewing *raw exports without asserting Phase16 preservation*. For a real hardware acceptance report, do **not** omit them. Obtain the expected draft digest by running an **independent Phase18 v3 verifier** over the original synthetic fixture and exact queued values — **never** by simply copying the exported draft's own SHA-256. Each source/backup/draft remains exactly **131072 bytes**. The protected GBA VC full-container remains **263168 bytes** and the separate RAM rehearsal journal **526400 bytes**, immutable and never passed to the Phase20 editor.
+
+The tool reports **RAW SD BYTES VERIFIED ONLY**. This is NOT evidence of actual game save compatibility, source durability across unsafe removal, on-device restore authority, replayable journaling or permission to test an edited draft in gameplay. Any failure, inconclusive result or missing pre-run digest means **STOP; preserve evidence without cleaning or retrying**.
+
 ## Record without exposing user data
 
 Capture build SHA, CI artifact digest, hardware model/firmware versions if volunteered, steps and button paths, pass/fail/error codes, exact synthetic fixture identity, filenames and output sizes, before/after local hashes, abnormal startup and storage symptoms. Avoid screenshots showing private save contents, trainer data or other identifying files. A physical read-only PASS is **only** a limited I/O/UI observation.
