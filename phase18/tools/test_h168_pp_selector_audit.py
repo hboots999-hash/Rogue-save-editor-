@@ -21,6 +21,11 @@ assert mod.TABLE_A==0x08bd27d0 and mod.TABLE_B==0x08bd8e30
 assert mod.SELECTOR==0x081d11b8
 assert mod.ROM_SHA.startswith("111b0008") and len(mod.ROM_SHA)==64
 assert mod.SCAN_END==0x00bd27d0
+assert mod.PP_MASKS_AT==0x010a9984
+assert mod.PP_MASKS==bytes((3,12,48,192,252,243,207,63,1,4,16,64))
+assert (mod.CALC_MAX_PP,mod.CLEAR_MON_PP,mod.CLEAR_BATTLE_PP)==(
+    0x191634,0x191684,0x1916b8)
+
 
 for bogus in (b"",bytes(128),bytes(mod.ROM_SIZE)):
     try:
