@@ -124,7 +124,7 @@ inline bool verifyStaging(const uint8_t* original,size_t n,
 // No mixed v3 scalar edits are accepted in the initial one-move path.
 struct SingleMoveReview {
     uint32_t contract=ContractVersion;
-    Digest256 sourceSha{},catalogSha=move_v2::CatalogSha{};
+    Digest256 sourceSha{},catalogSha=move_v2::CatalogSha;
     unsigned partySlot=0,moveSlot=0;
     uint16_t previousId=0,replacementId=0;
     uint8_t currentPP=0,catalogBasePP=0,originalPPUps=0;
