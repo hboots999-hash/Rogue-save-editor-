@@ -140,6 +140,26 @@ int main(){
     assert(b.browse(d,MoveKey::A));
     assert(b.page==MovePage::Review);
     assert(!describeMoveSelection(b,d,request));
+    b.releaseApproval();
+    assert(b.browse(d,MoveKey::A));
+    assert(b.page==MovePage::Notice);
+    assert(b.notice==MoveNotice::CandidateUnavailable);
+    // An unchanged move ID and a duplicate existing move are refused before
+    // either confirmation even when catalogue PP happens to match.
+    d.party[0].moves[0]=9014;
+    assert(b.initialize(catalog,d,0));
+    enterReview(b,d);
+    b.releaseApproval();
+    assert(b.browse(d,MoveKey::A));
+    assert(b.page==MovePage::Notice && b.notice==MoveNotice::SameMove);
+    d.party[0].moves[0]=53;
+    d.party[0].moves[1]=9014;
+    assert(b.initialize(catalog,d,0));
+    enterReview(b,d);
+    b.releaseApproval();
+    assert(b.browse(d,MoveKey::A));
+    assert(b.page==MovePage::Notice && b.notice==MoveNotice::DuplicateMove);
+    d.party[0].moves[1]=483;
     // Repeated openings with no allocation growth / stale approval.
     for(unsigned i=0;i<350;i++){
         assert(b.beginPartySelection(catalog,d));
