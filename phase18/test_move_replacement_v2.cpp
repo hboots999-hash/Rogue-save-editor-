@@ -55,6 +55,18 @@ int main(int argc,char** argv){
     CHECK(!lookup(fake,0,move));
     CHECK(!page(fake,0,&move,1));
     CHECK(!page(fake,0,&move,13));
+    CHECK(!search(fake,"FIRE",0,&move,1));
+    CHECK(!search(fake,"",0,&move,13));
+    Move display{};
+    display.id=1;
+    const uint8_t pound[13]={0xca,0xe3,0xe9,0xe2,0xd8,0xff};
+    std::memcpy(display.rawName,pound,13);
+    char label[14]{};
+    CHECK(displayName(display,label));
+    CHECK(std::strcmp(label,"Pound")==0);
+    CHECK(containsName(label,"ouN"));
+    CHECK(!containsName(label,"Flame"));
+    CHECK(!displayName(display,nullptr));
     CHECK(!mayRestoreInstalledGame(move_v2::Request{}));
 
     unsigned passed=0;
