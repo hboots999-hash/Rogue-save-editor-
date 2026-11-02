@@ -270,6 +270,7 @@ struct MoveBrowser {
             return false;
         }
         switch(page) {
+            case MovePage::Party: return true; // handled before party viability check
             case MovePage::Slots:
                 if(k==MoveKey::Up)slot=(slot+3u)%4u;
                 else if(k==MoveKey::Down)slot=(slot+1u)%4u;
