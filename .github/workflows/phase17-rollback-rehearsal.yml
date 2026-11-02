@@ -73,21 +73,27 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 4894d4a0e5ac9f1a6f703791795698e09d7defab
+          ref: 5a79bcbc522ad4e8d37f14bebfa9e7ac12143de2
           path: dependencies/phase20
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
           ref: 3625e160a17f805821098cf35a47a0f96aba8e16
           path: dependencies/phase18
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          path: dependencies/moves
       - name: Validate SD-only import/export scope; no native game writer
         shell: bash
         run: |
           set -euo pipefail
           git -C dependencies/phase20 rev-parse HEAD
           git -C dependencies/phase18 rev-parse HEAD
+          git -C dependencies/moves rev-parse HEAD
           bash phase17/audit_phase20_offline_scope.sh \
-            dependencies/phase20 dependencies/phase18
+            dependencies/phase20 dependencies/phase18 dependencies/moves
 
   native:
     name: devkitPro builds a real 3DSX and ELF with game writes blocked
