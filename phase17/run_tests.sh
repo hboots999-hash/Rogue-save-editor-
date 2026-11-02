@@ -21,5 +21,11 @@ for mode in strict sanitized; do
     -c phase17/test_status_abi_c.c -o "$tmp/c-abi.o"
   g++ "${extra[@]}" "$tmp/c-abi.o" "$tmp/status.o" -o "$tmp/c-abi"
   ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 "$tmp/c-abi"
+  # Deliberately separate from the actual Phase20 editor: isolated offline
+  # SD recovery evidence review has no file IO, privileged archive or writer.
+  g++ "${flags[@]}" "${extra[@]}" phase17/test_offline_sd_recovery_audit.cpp \
+    "$tmp/sha.o" -o "$tmp/sd-review"
+  ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
+    "$tmp/sd-review"
 done
 bash phase16/run_tests.sh
