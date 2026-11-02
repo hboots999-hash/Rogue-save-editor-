@@ -176,7 +176,7 @@ jobs:
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
           cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
-          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp} phase20-build/include/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/
           cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
           cp dependencies/moves/phase18/{move_replacement_v1.hpp,move_replacement_v2.hpp} phase20-build/include/phase18/
           make -C phase20-build -j2
