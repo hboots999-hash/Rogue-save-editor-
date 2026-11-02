@@ -9,6 +9,7 @@
 #include "phase20/offline_edit_v1.hpp"
 #include "rosalina_input.hpp"
 #include "move_browser.hpp"
+#include "phase20/move_catalog_bridge_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -333,7 +334,8 @@ void top(const State& s,const phase20::OfflineFlow& edit,
 void moveTop(const State& s,const MoveBrowser& v) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
-    std::puts("SYNTHETIC IDS, NOT ROM DATA");
+    std::puts(v.catalog && v.catalog->origin==CatalogOrigin::ExactRomReviewed?
+              "EXACT-ROM CATALOG SHA VERIFIED":"SYNTHETIC IDS, NOT ROM DATA");
     std::puts("===========================");
     if(!v.activeParty(s.demo)) {
         std::puts("Party data changed or missing.");
@@ -420,7 +422,9 @@ void moveBottom(const State& s,const MoveBrowser& v){
     consoleClear();
     std::puts("PKSM ROGUE - MOVE RESEARCH");
     std::puts("-------------------------");
-    std::puts("ROM MAPPING: NOT VERIFIED");
+    std::puts(v.catalog && v.catalog->origin==CatalogOrigin::ExactRomReviewed?
+              "METADATA SHA: VERIFIED":"ROM MAPPING: NOT VERIFIED");
+    std::puts("Installed ROM: NOT VERIFIED");
     std::puts("936-record API supported.");
     std::puts("40 PP conflicts must be");
     std::puts("flagged by a verified source.");
@@ -433,7 +437,8 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("START: release to exit");
     std::puts("START+SELECT: Rosalina");
     std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
-              "Real party, SYNTHETIC list.");
+              "Real party / local move list.");
+    std::puts("Browse ONLY: Apply BLOCKED");
     if(v.page==MovePage::Review)std::puts("Even PP matches are NOT APPROVED.");
 }
 
@@ -497,6 +502,7 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
     static phase20::BatchFlow batch{};
     static phase20::CopyObservation observation{};
@@ -551,10 +557,23 @@ int main() {
             // read-only browser ONLY if no active v3 batch. In all other
             // contexts Y keeps the existing verified multi-edit workflow.
             if(state.screen==Screen::Pokemon && !state.fromPC &&
-               !batch.collecting && selectedPokemonValid(state))
-                viewingMoves=moveView.initialize(syntheticMoveCatalog(),
-                                                  state.demo,state.mon);
-            else (void)phase20::batchShortcut(state,observation,batch);
+               !batch.collecting && selectedPokemonValid(state)) {
+                // The 936-row authenticated metadata is supplied separately
+                // by the owner and never bundled with an app executable.
+                // Synthetic/fake IDs appear only in deliberately demo mode.
+                if(state.demo.synthetic)
+                    viewingMoves=moveView.initialize(syntheticMoveCatalog(),
+                                                       state.demo,state.mon);
+                else if(localMoves.read())
+                    viewingMoves=moveView.initialize(
+                        *localMoves.verifiedMetadata(),state.demo,state.mon);
+                else
+                    openNotice(state,Screen::Pokemon,
+                        "No SHA-authenticated local move metadata. "
+                        "Place exact_rom_move_metadata.bin in "
+                        "/3ds/PKSM-Rogue/catalogs/ then retry Y. "
+                        "No moves can be applied.");
+            }else (void)phase20::batchShortcut(state,observation,batch);
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
