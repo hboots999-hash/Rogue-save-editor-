@@ -18,6 +18,25 @@ constexpr size_t NameBytes=13;
 constexpr size_t PackedRowBytes=15; // ROM text[13], ppA, ppB
 constexpr size_t PackedBytes=RecordCount*PackedRowBytes;
 constexpr bool ApplyApproved=false; // hard gate; no caller override
+enum class ApplyBlocker : uint8_t {
+    PpTableModeUnproven,
+    PpUpReplacementUnproven,
+    MoveLearnabilityUnproven,
+    CachedBattleStateUnproven,
+    EmulatorSaveReloadUnproven,
+    InstalledRomIdentityUnproven
+};
+// This is a compile-time report of release blockers, not a writable
+// approval token. Phase20 may show these in its disabled-Apply UI.
+inline constexpr std::array<ApplyBlocker,6> releaseBlockers{{
+    ApplyBlocker::PpTableModeUnproven,
+    ApplyBlocker::PpUpReplacementUnproven,
+    ApplyBlocker::MoveLearnabilityUnproven,
+    ApplyBlocker::CachedBattleStateUnproven,
+    ApplyBlocker::EmulatorSaveReloadUnproven,
+    ApplyBlocker::InstalledRomIdentityUnproven
+}};
+
 constexpr Digest256 RomSha{{
     0x11,0x1b,0x00,0x08,0xbc,0xec,0x51,0x9c,
     0x59,0xa0,0x2d,0xe5,0x78,0x95,0xa9,0x24,
@@ -166,6 +185,7 @@ inline bool verify(const uint8_t*,size_t,const uint8_t*,size_t,
                    const Catalog&,const Request&){return false;}
 inline bool mayRestoreInstalledGame(const Request&){return false;}
 
+#if defined(ROGUE18_TEST_MOVE_V2)
 namespace detail {
 // Offline pure-memory engine. Intentionally not reachable from preview().
 // Compiled for ARM11 and exercised with generated synthetic save fixtures;
@@ -258,7 +278,6 @@ inline Result construct(const uint8_t* raw,size_t n,
     return result;
 }
 } // namespace detail
-#if defined(ROGUE18_TEST_MOVE_V2)
 // Test-only entrypoints: intentionally cannot authenticate a real catalog.
 inline Result previewSynthetic(const uint8_t* before,size_t n,
                                const Request& req,uint16_t replacement,
