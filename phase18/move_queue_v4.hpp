@@ -119,5 +119,43 @@ inline bool verifyStaging(const uint8_t* original,size_t n,
     }
     return true;
 }
+// Read-only Phase20 Review screen for exactly ONE staged replacement.
+// This is NOT a teachability/legality decision or draft/export approval.
+// No mixed v3 scalar edits are accepted in the initial one-move path.
+struct SingleMoveReview {
+    uint32_t contract=ContractVersion;
+    Digest256 sourceSha{},catalogSha=move_v2::CatalogSha{};
+    unsigned partySlot=0,moveSlot=0;
+    uint16_t previousId=0,replacementId=0;
+    uint8_t currentPP=0,catalogBasePP=0,originalPPUps=0;
+    bool mayExport=false,mayRestoreInstalledGame=false;
+};
+inline bool reviewSingle(const uint8_t* original,size_t n,
+                         const move_v2::Catalog& db,
+                         const Queue& queue,SingleMoveReview& out){
+    out=SingleMoveReview{};
+    if(queue.replacements.size()!=1 || !queue.scalars.edits.empty() ||
+       !verifyStaging(original,n,db,queue))return false;
+    const auto& req=queue.replacements.front();
+    const auto& source=req.source;
+    move_v2::Move move{};
+    if(!move_v2::lookup(db,req.replacementId,move))return false;
+    raw_v1::Info info{};Mon originalMon{};
+    if(!validate(original,n,info) ||
+       !partyAt(original,n,info,source.partySlot,originalMon))
+        return false;
+    for(unsigned slot=0;slot<4;slot++)
+        if(slot!=source.moveSlot &&
+           originalMon.moves[slot]==req.replacementId)return false;
+    out.sourceSha=source.expectedOriginalSha256;
+    out.partySlot=source.partySlot;
+    out.moveSlot=source.moveSlot;
+    out.previousId=source.expectedMoveId;
+    out.replacementId=move.id;
+    out.currentPP=source.expectedPP;
+    out.catalogBasePP=move.basePP;
+    out.originalPPUps=move_v1::ppUps(source.expectedPPBonuses,source.moveSlot);
+    return true;
+}
 inline bool mayWriteInstalledGame(const Queue&){return false;}
 }} // namespace rogue18::move_queue_v4
