@@ -134,7 +134,7 @@ inline bool hasSearch(const char* title,const char* query){
     }
     return false;
 }
-enum class MovePage : uint8_t { Slots, Catalog, Keyboard, Review, Notice };
+enum class MovePage : uint8_t { Slots, Catalog, Keyboard, Review, Notice, Party, ConfirmOne, ConfirmTwo };
 enum class MoveNotice : uint8_t { ReplacementBlocked, EmptySlot, PartyChanged };
 enum class MoveKey : uint8_t { Up,Down,Left,Right,A,B,X,Y,R };
 struct MoveBrowser {
@@ -150,6 +150,8 @@ struct MoveBrowser {
     std::array<uint16_t,MaxMoveRecords> matches{};      // 1872 B, O(1) rows
     CatalogProblem problem=CatalogProblem::Missing;
     MoveNotice notice=MoveNotice::ReplacementBlocked;
+    bool fromPartyPicker=false;
+    bool confirmationReleased=false; // a held A/X cannot approve either stage
     bool ready=false;
     void reset() {
         catalog=nullptr;page=MovePage::Slots;partySlot=slot=selected=0;
@@ -157,19 +159,16 @@ struct MoveBrowser {
         query[0]=pending[0]='\0';ready=false;
         problem=CatalogProblem::Missing;
         notice=MoveNotice::ReplacementBlocked;
+        fromPartyPicker=false;confirmationReleased=false;
         // Large index arrays are overwritten on initialize/recount, not
         // value-initialized in a temporary 4-KiB ARM11 stack object.
     }
     static constexpr char Keyboard[]="ABCDEFGHIJKLMNOPQRSTUVWXYZ -<!";
-    bool initialize(const MoveCatalog& source,const Demo& d,unsigned party) {
+    bool prepareCatalog(const MoveCatalog& source) {
         reset();
         problem=validateMoveCatalog(source);
         if(problem!=CatalogProblem::None)return false;
-        if(party>=d.partyCount || party>=d.party.size() ||
-           d.partyStatus!=Availability::Ready || (!d.party[party].species || d.party[party].egg)) {
-            problem=CatalogProblem::BadMove;return false;
-        }
-        catalog=&source;partySlot=party;
+        catalog=&source;
         for(unsigned i=0;i<source.count;i++)
             alphabetical[i]=static_cast<uint16_t>(i);
         std::sort(alphabetical.begin(),alphabetical.begin()+source.count,
@@ -177,9 +176,32 @@ struct MoveBrowser {
             const int cmp=caseCmp(source.records[a].name,source.records[b].name);
             return cmp<0 || (cmp==0 && source.records[a].id<source.records[b].id);
         });
-        ready=true;
-        problem=CatalogProblem::None;
-        recount();
+        ready=true;problem=CatalogProblem::None;recount();
+        return true;
+    }
+    bool selectParty(const Demo& d,unsigned party) {
+        if(!ready || party>=6u || party>=d.partyCount ||
+           party>=d.party.size() || d.partyStatus!=Availability::Ready ||
+           !d.party[party].species || d.party[party].egg)
+            return false;
+        partySlot=party;slot=0;selected=0;page=MovePage::Slots;
+        confirmationReleased=false;
+        return true;
+    }
+    bool beginPartySelection(const MoveCatalog& source,const Demo& d) {
+        if(!prepareCatalog(source))return false;
+        if(d.partyStatus!=Availability::Ready &&
+           d.partyStatus!=Availability::Empty) {
+            problem=CatalogProblem::BadMove;reset();return false;
+        }
+        page=MovePage::Party;fromPartyPicker=true;partySlot=0;
+        return true; // empty party is shown with an explicit warning
+    }
+    bool initialize(const MoveCatalog& source,const Demo& d,unsigned party) {
+        if(!prepareCatalog(source))return false;
+        if(!selectParty(d,party)) {
+            problem=CatalogProblem::BadMove;ready=false;return false;
+        }
         return true;
     }
     bool activeParty(const Demo& d) const {
@@ -212,12 +234,27 @@ struct MoveBrowser {
         if(!matchCount)selected=0;
         else if(selected>=matchCount)selected=matchCount-1u;
     }
+    // Non-keyboard frame release callback from native input loop.
+    // Never triggers a write or advances a confirmation stage.
+    void releaseApproval() {
+        if(page==MovePage::Review || page==MovePage::ConfirmOne ||
+           page==MovePage::ConfirmTwo)confirmationReleased=true;
+    }
     bool browse(const Demo& d,MoveKey k) {
         // Clamp accidental/stale browser state before any keyboard access.
         if(slot>=4u){slot=0;page=MovePage::Slots;}
         if(keyboardIndex>=sizeof(Keyboard)-1u)keyboardIndex=0;
         if(queryLength>SearchMax) {
             queryLength=0;pending[0]='\0';page=MovePage::Catalog;
+        }
+        if(page==MovePage::Party) {
+            const unsigned n=d.partyStatus==Availability::Ready?
+                 std::min(6u,d.partyCount):0u;
+            if(k==MoveKey::Up)partySlot=partySlot?partySlot-1u:(n?n-1u:0u);
+            else if(k==MoveKey::Down)partySlot=n?(partySlot+1u)%n:0u;
+            else if(k==MoveKey::A)(void)selectParty(d,partySlot);
+            else if(k==MoveKey::B)return false;
+            return true;
         }
         if(!activeParty(d)){
             page=MovePage::Notice;
@@ -235,7 +272,10 @@ struct MoveBrowser {
                         page=MovePage::Catalog;selected=0;recount();
                     }
                 }
-                else if(k==MoveKey::B)return false; // caller exits browser
+                else if(k==MoveKey::B) {
+                    if(fromPartyPicker){page=MovePage::Party;return true;}
+                    return false; // caller exits browser
+                }
                 break;
             case MovePage::Catalog:
                 if(k==MoveKey::Up && selected>0)--selected;
@@ -244,7 +284,9 @@ struct MoveBrowser {
                     selected=matchCount?std::min(matchCount-1u,selected+BrowserPageRows):0;
                 else if(k==MoveKey::X || k==MoveKey::Left)
                     selected=selected>=BrowserPageRows?selected-BrowserPageRows:0;
-                else if(k==MoveKey::A && matchCount)page=MovePage::Review;
+                else if(k==MoveKey::A && matchCount) {
+                    page=MovePage::Review;confirmationReleased=false;
+                }
                 else if(k==MoveKey::Y){
                     std::memcpy(pending,query,sizeof(query));
                     queryLength=static_cast<unsigned>(std::strlen(pending));
@@ -281,8 +323,20 @@ struct MoveBrowser {
                 break;
             }
             case MovePage::Review:
-                if(k==MoveKey::A){notice=MoveNotice::ReplacementBlocked;page=MovePage::Notice;} // BLOCKED
-                else if(k==MoveKey::B)page=MovePage::Catalog;
+                if(k==MoveKey::A && confirmationReleased) {
+                    page=MovePage::ConfirmOne;confirmationReleased=false;
+                } else if(k==MoveKey::B)page=MovePage::Catalog;
+                break;
+            case MovePage::ConfirmOne:
+                if(k==MoveKey::A && confirmationReleased) {
+                    page=MovePage::ConfirmTwo;confirmationReleased=false;
+                } else if(k==MoveKey::B)page=MovePage::Catalog;
+                break;
+            case MovePage::ConfirmTwo:
+                if(k==MoveKey::X && confirmationReleased) {
+                    // Explicitly BLOCKED even after the final UI confirmation.
+                    notice=MoveNotice::ReplacementBlocked;page=MovePage::Notice;
+                } else if(k==MoveKey::B)page=MovePage::Catalog;
                 break;
             case MovePage::Notice:
                 if(k==MoveKey::B || k==MoveKey::A)
