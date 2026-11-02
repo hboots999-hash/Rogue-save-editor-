@@ -61,9 +61,10 @@ struct Move {
     uint8_t basePP=0;
     uint8_t rawName[NameBytes]{};
 };
-inline bool lookup(const Catalog& db,uint16_t id,Move& out){
+inline bool lookupAuthenticated(const Catalog& db,uint16_t id,Move& out){
     out=Move{};
-    if(!authenticate(db) || id==0 || id>848 || id==165)return false;
+    // Internal helper: caller has already pinned the entire packed digest.
+    if(id==0 || id>848 || id==165)return false;
     const uint8_t* p=db.packed+size_t(id)*PackedRowBytes;
     if(!textKnown(p) || p[13]==0 || p[13]>64 || p[13]!=p[14])
         return false; // conflicting, special, unknown & disabled IDs
@@ -71,15 +72,19 @@ inline bool lookup(const Catalog& db,uint16_t id,Move& out){
     std::memcpy(out.rawName,p,NameBytes);
     return true;
 }
+inline bool lookup(const Catalog& db,uint16_t id,Move& out){
+    out=Move{};
+    return authenticate(db) && lookupAuthenticated(db,id,out);
+}
 // Safe read-only fixed-page UI iteration, no guessable arbitrary IDs or heap.
 inline size_t page(const Catalog& db,size_t offset,Move* out,size_t capacity){
     if(!out || capacity>12 || !authenticate(db))return 0;
     size_t seen=0,produced=0;
     for(unsigned id=1;id<=848;id++){
         Move row{};
-        // Catalog digest already authenticated. Lookup intentionally also
-        // fails closed if catalog changes while being read.
-        if(!lookup(db,uint16_t(id),row))continue;
+        // One catalog SHA256 per page, not 848 repeated 14 KiB digests.
+        // Caller must hold the authenticated immutable buffer while paging.
+        if(!lookupAuthenticated(db,uint16_t(id),row))continue;
         if(seen++<offset)continue;
         if(produced>=capacity)break;
         out[produced++]=row;
