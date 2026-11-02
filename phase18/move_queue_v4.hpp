@@ -73,8 +73,18 @@ inline bool verifyStaging(const uint8_t* original,size_t n,
     const auto view=v2::inspect(original,n);
     if(!view.data.valid ||
        view.data.sourceSha256!=queue.scalars.expectedDigest ||
-       view.data.activeCounter!=queue.scalars.expectedCounter)
+       view.data.activeCounter!=queue.scalars.expectedCounter ||
+       queue.scalars.version!=v3::ContractVersion ||
+       queue.scalars.edits.size()>v3::MaxEdits)
         return false;
+    for(size_t i=0;i<queue.scalars.edits.size();i++){
+        const auto& scalar=queue.scalars.edits[i];
+        if(!v3::originalGuard(view,queue.scalars,scalar))
+            return false;
+        for(size_t j=0;j<i;j++)
+            if(v3::sameField(scalar,queue.scalars.edits[j]))
+                return false;
+    }
     for(size_t i=0;i<queue.replacements.size();i++){
         const auto& wanted=queue.replacements[i];
         if(wanted.version!=move_v2::ContractVersion)
