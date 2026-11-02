@@ -54,7 +54,7 @@ int main(){
     CHECK(!lookup(fake,0,move));
     CHECK(!page(fake,0,&move,1));
     CHECK(!page(fake,0,&move,13));
-    CHECK(!mayRestoreInstalledGame(Request{}));
+    CHECK(!mayRestoreInstalledGame(move_v2::Request{}));
 
     unsigned passed=0;
     for(unsigned perm=0;perm<24;perm++){
@@ -64,7 +64,7 @@ int main(){
         CHECK(view.data.valid && view.data.party.size()==6);
         for(unsigned party=0;party<6;party++)
         for(unsigned slot=0;slot<4;slot++){
-            Request q{};
+            move_v2::Request q{};
             CHECK(begin(view,original.data(),original.size(),party,slot,q));
             CHECK(q.version==ContractVersion);
             q.replacementId=uint16_t(501+slot);
@@ -113,7 +113,7 @@ int main(){
     }
     auto original=partyFixture(1);
     const auto view=v2::inspect(original.data(),original.size());
-    Request request{};
+    move_v2::Request request{};
     CHECK(begin(view,original.data(),original.size(),0,2,request));
     const auto good=previewSynthetic(original.data(),original.size(),request,600,15);
     CHECK(good.ok);
