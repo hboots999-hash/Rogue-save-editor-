@@ -101,6 +101,20 @@ def structural_report(rom: bytes) -> dict:
       "selector_instructions":"movs r0,#0; bx lr",
       "raw_thumb_bl_patterns_targeting_selector":len(selectors),
       "selector_calls_followed_by_cmp_r0_zero_conditional":len(zero_tests),
+      # Exhaustive static byte-pattern inventory for offline analyst review.
+      # Nearest selector is a distance hint, NOT proven control-flow linkage.
+      "all_literal_offsets": {
+          "table_a":[f"0x{x:06x}" for x in aa],
+          "table_b":[f"0x{x:06x}" for x in bb]
+      },
+      "all_candidate_selector_bl_offsets":[f"0x{x:06x}" for x in selectors],
+      "paired_literal_proximity":[
+          {"table_a":f"0x{a:06x}","table_b":f"0x{b:06x}",
+           "closest_selector":f"0x{near:06x}",
+           "distance_bytes":abs(min(a,b)-near)}
+          for a,b in paired
+          for near in [min(selectors,key=lambda q:abs(min(a,b)-q))]
+      ],
       "example_evidence": {
           "callsite_offsets":[f"0x{x:06x}" for x in selectors[:16]],
           "literal_pairs":[[f"0x{x:06x}",f"0x{y:06x}"] for x,y in paired[:16]]
