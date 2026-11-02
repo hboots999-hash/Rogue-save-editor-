@@ -77,8 +77,7 @@ inline bool verifyStaging(const uint8_t* original,size_t n,
         return false;
     for(size_t i=0;i<queue.replacements.size();i++){
         const auto& wanted=queue.replacements[i];
-        if(wanted.version!=move_v2::ContractVersion ||
-           !move_v2::ApplyApproved==false)
+        if(wanted.version!=move_v2::ContractVersion)
             return false;
         move_v2::Request fresh{};
         if(!move_v2::begin(view,original,n,wanted.source.partySlot,
