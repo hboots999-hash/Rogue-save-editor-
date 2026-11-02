@@ -82,13 +82,15 @@ inline OfflineSdReviewReport reviewOfflineSdOnly(
     if(*evidence.draft.bytes!=expectedDraft) {
         report.result=RawExportReview::DraftMismatch;return report;
     }
-    report.rawCopyMatchesExpected=true;
     if(!evidence.distinctNamesProven || !evidence.exclusiveCreationProven) {
         report.result=RawExportReview::ReusedOrUnprovenNames;return report;
     }
     if(expectedDraft==expectedOriginal) {
         report.result=RawExportReview::NoChange;return report;
     }
+    // Publish positive data-matching flag ONLY with the final reviewed
+    // status. Partial evidence must not look like a completed SD export.
+    report.rawCopyMatchesExpected=true;
     report.result=RawExportReview::OfflineCopyReviewedOnly;
     return report;
 }
