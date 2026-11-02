@@ -229,6 +229,22 @@ void moveTop(const State& s,const MoveBrowser& v) {
     std::puts("MOVE BROWSER - READ ONLY");
     std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"MOVE CATALOGUE UNAVAILABLE");
     std::puts("===========================");
+    if(v.page==MovePage::Party) {
+        std::puts("CHOOSE PARTY POKEMON (1-6)");
+        const unsigned n=s.demo.partyStatus==Availability::Ready?
+            std::min(6u,s.demo.partyCount):0u;
+        if(!n)std::puts("No party Pokemon available.");
+        for(unsigned i=0;i<n;i++) {
+            const auto& m=s.demo.party[i];
+            std::printf("%c %u: %.17s ID%u%s\n",
+                i==v.partySlot?'>':' ',i+1u,m.name,m.species,
+                m.egg?" EGG":"");
+        }
+        std::puts("Up/Down: choose   A: open");
+        std::puts("B: close (no changes)");
+        std::puts("Empty/egg Pokemon blocked.");
+        return;
+    }
     if(!v.activeParty(s.demo)) {
         std::puts("Party data changed or missing.");
         std::puts("Return and reselect Pokemon.");
@@ -290,23 +306,35 @@ void moveTop(const State& s,const MoveBrowser& v) {
         std::puts("X: delete  Y: apply");
         std::puts("B: cancel search");
         std::puts("No save files are modified.");
-    }else if(v.page==MovePage::Review){
-        std::puts("REPLACEMENT REVIEW - BLOCKED");
-        std::printf("Existing slot %u: ID%u PP%u\n",
-            v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
-        if(const MoveRecord* m=v.selectedMove()){
-            std::puts("Selected catalogue entry:");
-            forEachBoundedLine(m->name,30u,3u,[](const char* row,unsigned n){
+    }else if(v.page==MovePage::Review ||
+             v.page==MovePage::ConfirmOne ||
+             v.page==MovePage::ConfirmTwo){
+        std::puts(v.page==MovePage::Review?"REPLACEMENT COMPARISON":
+                  v.page==MovePage::ConfirmOne?"REVIEW CONFIRM 1 OF 2":
+                  "REVIEW CONFIRM 2 OF 2");
+        std::printf("Party %u: %.16s\n",v.partySlot+1u,p.name);
+        std::printf("Move slot: %u\n",v.slot+1u);
+        const MoveRecord* old=v.existingMove(s.demo,v.slot);
+        std::printf("OLD ID%u PP%u\n",p.moves[v.slot],p.pp[v.slot]);
+        if(old)std::printf("Old: %.29s\n",old->name);
+        else std::puts("Old name: unverified ID");
+        const MoveRecord* m=v.selectedMove();
+        if(m){
+            std::puts("NEW (READ-ONLY):");
+            forEachBoundedLine(m->name,30u,2u,[](const char* row,unsigned n){
                 std::printf("%.*s\n",int(n),row);
             });
-            std::printf("Candidate ID: %u\n",m->id);
+            std::printf("New ID%u\n",m->id);
             if(m->evidence==MoveEvidence::Candidate)
-                std::printf("Research base PP: %u\n",m->basePP);
-            else std::puts("Base PP: NOT VERIFIED");
+                std::printf("Metadata base PP: %u\n",m->basePP);
+            else std::puts("New PP: UNVERIFIED");
             wrappedNotice(evidenceLabel(m->evidence));
         }
-        std::puts("ALWAYS READ ONLY - NO APPLY");
-        std::puts("A: see block reason B: back");
+        std::puts("APPLY DISABLED - NO SD DRAFT");
+        if(v.page==MovePage::ConfirmTwo)
+            std::puts("Release keys; X: view BLOCK");
+        else std::puts("Release keys; A: next review");
+        std::puts("B: cancel (no changes)");
     }else{
         if(v.notice==MoveNotice::EmptySlot){
             std::puts("EMPTY MOVE SLOT");
@@ -321,6 +349,7 @@ void moveTop(const State& s,const MoveBrowser& v) {
             std::puts("MOVE REPLACEMENT BLOCKED");
             std::puts("Exact-ROM move table and PP");
             std::puts("effects not authenticated.");
+            std::puts("Phase18 production Apply OFF.");
             std::puts("No draft or save was changed.");
             std::puts("A/B: back to browse");
         }
@@ -344,7 +373,9 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("START+SELECT: Rosalina");
     std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
               "Real party, SYNTHETIC list.");
-    if(v.page==MovePage::Review)std::puts("Even PP matches are NOT APPROVED.");
+    if(v.page==MovePage::Review || v.page==MovePage::ConfirmOne ||
+       v.page==MovePage::ConfirmTwo)
+        std::puts("Review is UI only; Apply OFF.");
 }
 void bottom(const State& s) {
     consoleClear();
@@ -409,7 +440,8 @@ int main() {
         }
         Key k=Key::X;
         if(viewingMoves) {
-            if(!moveView.activeParty(state.demo)) {
+            if(moveView.page!=MovePage::Party &&
+               !moveView.activeParty(state.demo)) {
                 viewingMoves=false;moveRepeat.reset();redraw=true;
             }else if((held&(KEY_SELECT|KEY_START))!=0u) {
                 // Reserve either-order START+SELECT for Rosalina.
@@ -433,16 +465,25 @@ int main() {
                     else nav=false;
                     moveKey=moveRepeat.poll(mk,nav);
                 } else moveRepeat.reset();
+                if(!moveKey && (held&(KEY_A|KEY_X))==0u)
+                    moveView.releaseApproval();
                 if(moveKey){
-                    if(moveView.page==MovePage::Slots && mk==MoveKey::B){
+                    if(moveView.page==MovePage::Party && mk==MoveKey::B) {
+                        viewingMoves=false;moveRepeat.reset();
+                    }else if(moveView.page==MovePage::Slots &&
+                             mk==MoveKey::B && !moveView.fromPartyPicker){
                         viewingMoves=false;moveRepeat.reset();
                     }else moveView.browse(state.demo,mk);
                     redraw=true;
                 }
             }
-        } else if((down&KEY_Y) && state.screen==Screen::Pokemon &&
-                  !state.fromPC && selectedPokemonValid(state)) {
-            viewingMoves=moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
+        } else if((down&KEY_Y) &&
+                  (state.screen==Screen::Party ||
+                   (state.screen==Screen::Pokemon && !state.fromPC &&
+                    selectedPokemonValid(state)))) {
+            viewingMoves=state.screen==Screen::Party?
+                moveView.beginPartySelection(syntheticMoveCatalog(),state.demo):
+                moveView.initialize(syntheticMoveCatalog(),state.demo,state.mon);
             moveRepeat.reset();
             if(!viewingMoves)
                 openNotice(state,Screen::Pokemon,catalogProblemText(moveView.problem));
