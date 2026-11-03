@@ -64,16 +64,16 @@ int main(int argc,char** argv){
         for(unsigned slot=0;slot<4;slot++){
             Selection request{};
             CHECK(begin(snapshot,original.data(),original.size(),party,slot,request));
-            request.original.replacementId=53;
+            request.original.replacementId=89;
             CHECK(!preview(original.data(),original.size(),forged,request).ok);
             const auto test=previewSynthetic(original.data(),original.size(),
-                                             request,15);
+                                             request,10);
             CHECK(test.ok);
             CHECK(test.candidate.size()==original.size());
             CHECK(test.changedOffsets.size()>0 && test.changedOffsets.size()<=8);
             // Compare exact bytes with the independently implemented v2 engine.
             const auto independent=move_v2::previewSynthetic(original.data(),
-                original.size(),request.original,53,15);
+                original.size(),request.original,89,10);
             CHECK(independent.ok && independent.candidate==test.candidate);
             CHECK(test.candidate!=original);
             raw_v1::Info before{},after{};
@@ -83,7 +83,7 @@ int main(int argc,char** argv){
             CHECK(partyAt(original.data(),original.size(),before,party,old));
             CHECK(partyAt(test.candidate.data(),test.candidate.size(),after,
                           party,newMon));
-            CHECK(newMon.moves[slot]==53 && newMon.pp[slot]==15);
+            CHECK(newMon.moves[slot]==89 && newMon.pp[slot]==10);
             CHECK(newMon.pid==old.pid && newMon.ot==old.ot);
             CHECK(newMon.ivs==old.ivs && newMon.evs==old.evs);
             CHECK(newMon.effectiveNature==old.effectiveNature);
@@ -93,15 +93,15 @@ int main(int argc,char** argv){
                 CHECK(newMon.moves[j]==old.moves[j] &&
                       newMon.pp[j]==old.pp[j]);
             auto stale=original;stale.back()^=1;
-            CHECK(!previewSynthetic(stale.data(),stale.size(),request,15).ok);
+            CHECK(!previewSynthetic(stale.data(),stale.size(),request,10).ok);
             auto corrupted=request;corrupted.original.source.expectedPPBonuses^=1;
-            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,15).ok);
+            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,10).ok);
             corrupted=request;corrupted.original.source.expectedCounter++;
-            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,15).ok);
+            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,10).ok);
             corrupted=request;corrupted.original.replacementId=58;
-            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,15).ok);
+            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,10).ok);
             corrupted=request;corrupted.original.replacementId=0;
-            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,15).ok);
+            CHECK(!previewSynthetic(original.data(),original.size(),corrupted,10).ok);
             CHECK(original==moveFixture(perm)); // imported original unchanged
             ++cases;
         }
@@ -110,8 +110,8 @@ int main(int argc,char** argv){
     auto snapshot=v2::inspect(original.data(),original.size());
     Selection chosen{};
     CHECK(begin(snapshot,original.data(),original.size(),0,0,chosen));
-    chosen.original.replacementId=53;
-    const auto draft=previewSynthetic(original.data(),original.size(),chosen,15);
+    chosen.original.replacementId=89;
+    const auto draft=previewSynthetic(original.data(),original.size(),chosen,10);
     CHECK(draft.ok);
     if(argc>1) {
         std::FILE* f=std::fopen(argv[1],"wb");
@@ -123,7 +123,7 @@ int main(int argc,char** argv){
     for(unsigned sec=0;sec<28;sec++){
         auto invalid=original;
         invalid[sec*raw_v1::Sector+64]^=1;
-        CHECK(!previewSynthetic(invalid.data(),invalid.size(),chosen,15).ok);
+        CHECK(!previewSynthetic(invalid.data(),invalid.size(),chosen,10).ok);
     }
     std::cout<<"PASS MOVE-V3: "<<cases
              <<" generated encrypted replacements (24x6x4), v2 exact"
