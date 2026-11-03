@@ -69,10 +69,10 @@ inline bool verifyFile(const char* path,const uint8_t* bytes,size_t n){
     struct stat st{};
     bool ok=(::fstat(fd,&st)==0 && S_ISREG(st.st_mode) &&
              st.st_size==static_cast<off_t>(n));
-    uint8_t chunk[4096]{};
+    uint8_t chunk[1024]{};
     size_t position=0;
     while(ok && position<n){
-        const size_t want=std::min(size_t(4096),n-position);
+        const size_t want=std::min(size_t(1024),n-position);
         const ssize_t got=::read(fd,chunk,want);
         if(got<=0 || std::memcmp(chunk,bytes+position,size_t(got))!=0){
             ok=false;break;
