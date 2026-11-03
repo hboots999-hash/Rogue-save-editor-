@@ -31,12 +31,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
+          ref: fa7d00859cd18802a752a566c95892f37f916876
           path: dependencies/phase19
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
           path: dependencies/moves
       - name: Confirm pinned source revisions and no private inputs
         shell: bash
@@ -89,6 +89,11 @@ jobs:
               dependencies/phase19/phase19/test_move_browser.cpp \
               -o /tmp/phase20/move-browser-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -Idependencies/phase19/phase19 \
+              dependencies/phase19/phase19/test_move_replacement_ui.cpp \
+              -o /tmp/phase20/move-ui-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-ui-$mode
             g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
               -I. -Idependencies/phase18/phase18 \
               -Idependencies/moves -Idependencies/moves/phase18 \
@@ -148,12 +153,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
+          ref: fa7d00859cd18802a752a566c95892f37f916876
           path: dependencies/phase19
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
           path: dependencies/moves
       - name: Assemble and build combined native preview in disposable workspace
         shell: bash
@@ -238,12 +243,12 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 8c2d6e23ac1686e4fb48d1307d5a28b998db5da7
+          ref: fa7d00859cd18802a752a566c95892f37f916876
           path: dependencies/phase19
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 96f976232931e42ebcd474888314ad3c9875258e
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
           path: dependencies/moves
       - name: Package separate, explicitly non-writing title and verify IDs
         shell: bash
@@ -357,6 +362,14 @@ jobs:
             import -window root evidence/3dsx-home.png
             tap3ds a
             import -window root evidence/3dsx-party.png
+            # X (Azahar z) chooses an independent six-Pokemon picker
+            # without stealing Y from the verified Phase20 batch queue.
+            tap3ds z  # X on Party
+            import -window root evidence/3dsx-move-party-picker.png
+            tap3ds a  # choose first Pokemon
+            import -window root evidence/3dsx-move-picker-slots.png
+            tap3ds s  # back to party picker
+            tap3ds s  # close picker -> Party screen
             # Phase19 integrated READ-ONLY move browser, deliberately
             # fictional demo catalogue. This MUST not create an SD draft.
             tap3ds a  # Party -> Pokemon details
@@ -368,7 +381,11 @@ jobs:
             import -window root evidence/3dsx-move-search.png
             tap3ds s  # cancel keyboard -> catalogue
             tap3ds a  # catalogue -> replacement review
-            tap3ds a  # review -> permanent BLOCKED notice
+            tap3ds a  # review -> confirm stage 1
+            import -window root evidence/3dsx-move-confirm-one.png
+            tap3ds a  # confirm stage 1 -> confirm stage 2
+            import -window root evidence/3dsx-move-confirm-two.png
+            tap3ds z  # final X -> permanent BLOCKED notice (no draft)
             import -window root evidence/3dsx-move-blocked.png
             tap3ds s  # notice -> catalogue
             tap3ds s  # catalogue -> slots
@@ -473,6 +490,10 @@ jobs:
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
           test -s evidence/3dsx-home-return.png
+          test -s evidence/3dsx-move-party-picker.png
+          test -s evidence/3dsx-move-picker-slots.png
+          test -s evidence/3dsx-move-confirm-one.png
+          test -s evidence/3dsx-move-confirm-two.png
           test -s evidence/3dsx-move-slots.png
           test -s evidence/3dsx-move-catalogue.png
           test -s evidence/3dsx-move-search.png

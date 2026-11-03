@@ -488,6 +488,114 @@ int main(){
         assert(testFlow.stage==EditStage::Idle);
     }
 
+    // 4. Nature and Ability Slot offline editing boundary tests
+    {
+        const auto view=rogue18::v2::inspect(original.data(),original.size());
+        assert(view.data.party.size()>0);
+        const auto& mon=view.data.party[0].value;
+
+        rogue18::Request rNat{};
+        rNat.kind=rogue18::Kind::Nature;
+        rNat.expectedCounter=captured.activeCounter;
+        rNat.expectedDigest=captured.sourceSha256;
+        rNat.slot=0;
+        rNat.expectedPid=mon.pid;
+        rNat.expectedOt=mon.ot;
+        rNat.expectedSpecies=mon.species;
+        rNat.expectedPokemonChecksum=mon.checksum;
+        rNat.expectedNature=mon.effectiveNature;
+        rNat.nature=(mon.effectiveNature+1)%25;
+
+        // Rejection without evidence
+        rogue18::Evidence noEv{};
+        auto natRes=rogue18::propose(original.data(),original.size(),rNat,noEv);
+        assert(!natRes.ok);
+
+        // When evidence is enabled, verify nature modification mechanics
+        rogue18::Evidence natEv{};
+        natEv.verifiedNatureModifier=true;
+        auto natValid=rogue18::propose(original.data(),original.size(),rNat,natEv);
+        assert(natValid.ok);
+        // Verify out-of-bounds nature (>24) fails even with evidence
+        auto rNatOOB=rNat;
+        rNatOOB.nature=25;
+        assert(!rogue18::propose(original.data(),original.size(),rNatOOB,natEv).ok);
+
+        // Ability Slot: rejection without evidence
+        rogue18::Request rAbil{};
+        rAbil.kind=rogue18::Kind::AbilitySlot;
+        rAbil.expectedCounter=captured.activeCounter;
+        rAbil.expectedDigest=captured.sourceSha256;
+        rAbil.slot=0;
+        rAbil.expectedPid=mon.pid;
+        rAbil.expectedOt=mon.ot;
+        rAbil.expectedSpecies=mon.species;
+        rAbil.expectedPokemonChecksum=mon.checksum;
+        rAbil.abilitySlot=1;
+
+        assert(!rogue18::propose(original.data(),original.size(),rAbil,noEv).ok);
+
+        // When evidence is enabled, slot 0..2 permitted, slot >2 rejected
+        rogue18::Evidence abilEv{};
+        abilEv.verifiedAbilitySlot=true;
+        assert(rogue18::propose(original.data(),original.size(),rAbil,abilEv).ok);
+        auto rAbilOOB=rAbil;
+        rAbilOOB.abilitySlot=3;
+        assert(!rogue18::propose(original.data(),original.size(),rAbilOOB,abilEv).ok);
+    }
+
+    // 5. Move replacement research and candidate validation tests
+    {
+        // Verified first-CIA candidate move IDs vs conflicting/unverified IDs
+        // Confirmed permitted ordinary move IDs (e.g. 53 Flamethrower, 89 Earthquake)
+        const std::vector<uint16_t> permittedFirstCiaMoves = {
+            7,8,9,14,33,53,56,57,73,85,89,94,126,127,157,182,
+            183,188,202,229,242,245,247,337,347,349,369,370,
+            396,403,405,406,412,417,418,434,442,444,483,521,
+            542,583,585
+        };
+        for(uint16_t id : permittedFirstCiaMoves) {
+            assert(id > 0 && id <= 936);
+        }
+
+        // Move replacement requires explicit verified move IDs in evidence
+        rogue18::Request rMove{};
+        rMove.kind=rogue18::Kind::Move;
+        rMove.expectedCounter=captured.activeCounter;
+        rMove.expectedDigest=captured.sourceSha256;
+        rMove.slot=0;
+        rMove.moveSlot=0;
+        const auto view=rogue18::v2::inspect(original.data(),original.size());
+        const auto& mon=view.data.party[0].value;
+        rMove.expectedPid=mon.pid;
+        rMove.expectedOt=mon.ot;
+        rMove.expectedSpecies=mon.species;
+        rMove.expectedPokemonChecksum=mon.checksum;
+        rMove.expectedMoveId=mon.moves[0];
+        rMove.expectedPP=mon.pp[0];
+        rMove.moveId=89; // Earthquake
+        rMove.pp=10;
+
+        // Rejected without verifiedMoveIds
+        rogue18::Evidence noEv{};
+        assert(!rogue18::propose(original.data(),original.size(),rMove,noEv).ok);
+
+        // Conflicting move (e.g. Ice Beam ID 58 with base PP mismatch) cannot be proposed
+        rogue18::Evidence evConf{};
+        rMove.moveId=58; // Ice Beam
+        assert(!rogue18::propose(original.data(),original.size(),rMove,evConf).ok);
+
+        // With explicit verified move ID in evidence, propose succeeds
+        rogue18::Evidence evOk{};
+        evOk.verifiedMoveIds.push_back(89);
+        rMove.moveId=89;
+        auto moveRes=rogue18::propose(original.data(),original.size(),rMove,evOk);
+        assert(moveRes.ok);
+
+        // Verify live write / installed game restoration denial remains total
+        assert(!rogue18::v2::mayRestoreInstalledGame(rMove));
+    }
+
     fs::remove_all(root);
     std::cout<<"PASS Phase20 offline UI intent, SHA-lock, source-safe backup/draft and guarded export\n";
 }

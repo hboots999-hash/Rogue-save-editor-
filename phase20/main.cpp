@@ -115,7 +115,8 @@ void batchTop(const phase20::BatchFlow& q) {
                e.kind==rogue18::Kind::IVs?"IV":
                e.kind==rogue18::Kind::EVs?"EV":"PP";
             std::printf("%u %s[%u:%u] %u -> %u\n",
-                i+1,kind,e.slot+1,e.field+1,e.expectedValue,e.value);
+                i+1,kind,e.slot+1,e.field+1,
+                unsigned(e.expectedValue),unsigned(e.value));
         }
         std::puts("\nA review export, B browse");
         std::puts("X remove last staged edit");
@@ -165,6 +166,7 @@ void top(const State& s,const phase20::OfflineFlow& edit,
             break;
         case Screen::Party:
             std::puts(s.demo.synthetic?"PARTY - DEMO":"PARTY - OFFLINE COPY");
+            std::puts("X: move picker (READ ONLY)");
             std::printf("Status: %s\n",availabilityText(s.demo.partyStatus));
             for(unsigned i=0;i<count(s);i++) {
                 const auto& m=s.demo.party[i];
@@ -334,9 +336,24 @@ void top(const State& s,const phase20::OfflineFlow& edit,
 void moveTop(const State& s,const MoveBrowser& v) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
-    std::puts(v.catalog && v.catalog->origin==CatalogOrigin::ExactRomReviewed?
-              "EXACT-ROM CATALOG SHA VERIFIED":"SYNTHETIC IDS, NOT ROM DATA");
+    std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"MOVE CATALOGUE UNAVAILABLE");
     std::puts("===========================");
+    if(v.page==MovePage::Party) {
+        std::puts("CHOOSE PARTY POKEMON (1-6)");
+        const unsigned n=s.demo.partyStatus==Availability::Ready?
+            std::min(6u,s.demo.partyCount):0u;
+        if(!n)std::puts("No party Pokemon available.");
+        for(unsigned i=0;i<n;i++) {
+            const auto& m=s.demo.party[i];
+            std::printf("%c %u: %.17s ID%u%s\n",
+                i==v.partySlot?'>':' ',i+1u,m.name,m.species,
+                m.egg?" EGG":"");
+        }
+        std::puts("Up/Down: choose   A: open");
+        std::puts("B: close (no changes)");
+        std::puts("Empty/egg Pokemon blocked.");
+        return;
+    }
     if(!v.activeParty(s.demo)) {
         std::puts("Party data changed or missing.");
         std::puts("Return and reselect Pokemon.");
@@ -366,11 +383,16 @@ void moveTop(const State& s,const MoveBrowser& v) {
             // No false long-name truncation: full name appears on Review.
             // Mark other than matching ordinary candidate with '!'.
             const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
-            std::printf("%c%c %-15.15s %5u\n",
-                v.selected==i?'>':' ',flag,m.name,m.id);
+            char shortName[16]{};
+            formatMoveShortName(m.name,shortName);
+            char ppText[4]="--";
+            if(m.evidence==MoveEvidence::Candidate)
+                std::snprintf(ppText,sizeof(ppText),"%u",m.basePP);
+            std::printf("%c%c %-15s %5u %2s\n",
+                v.selected==i?'>':' ',flag,shortName,m.id,ppText);
         }
         if(!v.matchCount)std::puts("No results. Y: edit search.");
-        else std::printf("%u-%u / %u   ! = UNVERIFIED\n",
+        else std::printf("%u-%u / %u ! NOT VERIFIED\n",
              first+1u,end,v.matchCount);
         std::puts("R/Right: next page");
         std::puts("X/Left: previous page");
@@ -393,38 +415,74 @@ void moveTop(const State& s,const MoveBrowser& v) {
         std::puts("X: delete  Y: apply");
         std::puts("B: cancel search");
         std::puts("No save files are modified.");
-    }else if(v.page==MovePage::Review){
-        std::puts("REPLACEMENT REVIEW - BLOCKED");
-        std::printf("Existing slot %u: ID%u PP%u\n",
-            v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
-        if(const MoveRecord* m=v.selectedMove()){
-            std::puts("Selected catalogue entry:");
-            forEachBoundedLine(m->name,30u,3u,[](const char* row,unsigned n){
+    }else if(v.page==MovePage::Review ||
+             v.page==MovePage::ConfirmOne ||
+             v.page==MovePage::ConfirmTwo){
+        std::puts(v.page==MovePage::Review?"REPLACEMENT COMPARISON":
+                  v.page==MovePage::ConfirmOne?"REVIEW CONFIRM 1 OF 2":
+                  "REVIEW CONFIRM 2 OF 2");
+        std::printf("Party %u: %.16s\n",v.partySlot+1u,p.name);
+        std::printf("Move slot: %u\n",v.slot+1u);
+        const MoveRecord* old=v.existingMove(s.demo,v.slot);
+        std::printf("OLD ID%u PP%u\n",p.moves[v.slot],p.pp[v.slot]);
+        if(old)std::printf("Old: %.29s\n",old->name);
+        else std::puts("Old name: unverified ID");
+        const MoveRecord* m=v.selectedMove();
+        if(m){
+            std::puts("NEW (READ-ONLY):");
+            forEachBoundedLine(m->name,30u,2u,[](const char* row,unsigned n){
                 std::printf("%.*s\n",int(n),row);
             });
-            std::printf("Candidate ID: %u\n",m->id);
+            std::printf("New ID%u\n",m->id);
             if(m->evidence==MoveEvidence::Candidate)
-                std::printf("Research base PP: %u\n",m->basePP);
-            else std::puts("Base PP: NOT VERIFIED");
+                std::printf("Metadata base PP: %u\n",m->basePP);
+            else std::puts("New PP: UNVERIFIED");
             wrappedNotice(evidenceLabel(m->evidence));
         }
-        std::puts("ALWAYS READ ONLY - NO APPLY");
-        std::puts("A: see block reason B: back");
+        std::puts("APPLY DISABLED - NO SD DRAFT");
+        if(v.page==MovePage::ConfirmTwo)
+            std::puts("Release keys; X: view BLOCK");
+        else std::puts("Release keys; A: next review");
+        std::puts("B: cancel (no changes)");
     }else{
-        std::puts("MOVE REPLACEMENT BLOCKED");
-        std::puts("Exact-ROM move table and PP");
-        std::puts("effects not authenticated.");
-        std::puts("No draft or save was changed.");
-        std::puts("A/B: back to browse");
+        if(v.notice==MoveNotice::EmptySlot){
+            std::puts("EMPTY MOVE SLOT");
+            std::puts("Choose an occupied move slot.");
+            std::puts("No replacement is available.");
+            std::puts("A/B: back to move slots");
+        }else if(v.notice==MoveNotice::PartyChanged){
+            std::puts("PARTY DATA CHANGED");
+            std::puts("Return and reselect Pokemon.");
+            std::puts("A/B: back");
+        }else if(v.notice==MoveNotice::CandidateUnavailable){
+            std::puts("MOVE IS UNVERIFIED");
+            std::puts("PP conflict/special/unknown.");
+            std::puts("This move cannot be selected.");
+            std::puts("No draft/save modified.");
+            std::puts("A/B: back to browse");
+        }else if(v.notice==MoveNotice::DuplicateMove ||
+                 v.notice==MoveNotice::SameMove){
+            std::puts(v.notice==MoveNotice::SameMove?
+                      "MOVE ALREADY IN THIS SLOT":
+                      "POKEMON KNOWS THIS MOVE");
+            std::puts("Choose another candidate.");
+            std::puts("No draft/save modified.");
+            std::puts("A/B: back to browse");
+        }else{
+            std::puts("MOVE REPLACEMENT BLOCKED");
+            std::puts("Exact-ROM move table and PP");
+            std::puts("effects not authenticated.");
+            std::puts("Phase18 production Apply OFF.");
+            std::puts("No draft or save was changed.");
+            std::puts("A/B: back to browse");
+        }
     }
 }
 void moveBottom(const State& s,const MoveBrowser& v){
     consoleClear();
     std::puts("PKSM ROGUE - MOVE RESEARCH");
     std::puts("-------------------------");
-    std::puts(v.catalog && v.catalog->origin==CatalogOrigin::ExactRomReviewed?
-              "METADATA SHA: VERIFIED":"ROM MAPPING: NOT VERIFIED");
-    std::puts("Installed ROM: NOT VERIFIED");
+    std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"CATALOGUE MISSING");
     std::puts("936-record API supported.");
     std::puts("40 PP conflicts must be");
     std::puts("flagged by a verified source.");
@@ -438,10 +496,10 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("START+SELECT: Rosalina");
     std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
               "Real party / local move list.");
-    std::puts("Browse ONLY: Apply BLOCKED");
-    if(v.page==MovePage::Review)std::puts("Even PP matches are NOT APPROVED.");
+    if(v.page==MovePage::Review || v.page==MovePage::ConfirmOne ||
+       v.page==MovePage::ConfirmTwo)
+        std::puts("Review is UI only; Apply OFF.");
 }
-
 void bottom(const State& s,const phase20::OfflineFlow& edit,
             const phase20::BatchFlow& batch) {
     consoleClear();
@@ -453,6 +511,9 @@ void bottom(const State& s,const phase20::OfflineFlow& edit,
     std::puts("X/Left: previous (context)");
     std::puts("START release: exit");
     std::puts("START+SELECT: Rosalina");
+    if(s.screen==Screen::Party)
+        std::puts("X: browse party move picker");
+
     if(!s.demo.synthetic) {
         if(batch.collecting)std::printf("Y: review queue (%u edits)\n",
                                        unsigned(batch.pending.edits.size()));
@@ -502,6 +563,7 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
     static phase20::BatchFlow batch{};
@@ -527,30 +589,62 @@ int main() {
         }
         Key k=Key::X;
         if(viewingMoves) {
-            // The MoveBrowser is an isolated, permanently read-only overlay.
-            // Y is reserved for its keyboard while browsing; no batch or
-            // SD exporter is callable from this input path.
-            if(!moveView.activeParty(state.demo))viewingMoves=false;
-            else {
+            if(moveView.page!=MovePage::Party &&
+               !moveView.activeParty(state.demo)) {
+                viewingMoves=false;moveRepeat.reset();redraw=true;
+            }else if((held&(KEY_SELECT|KEY_START))!=0u) {
+                // Reserve either-order START+SELECT for Rosalina.
+                // Never navigate or confirm while either key is held.
+                moveRepeat.reset();
+            }else{
                 MoveKey mk=MoveKey::B;
-                bool moveKey=true;
-                if(down&KEY_B)mk=MoveKey::B;
-                else if(down&KEY_A)mk=MoveKey::A;
-                else if(down&KEY_UP)mk=MoveKey::Up;
-                else if(down&KEY_DOWN)mk=MoveKey::Down;
-                else if(down&KEY_LEFT)mk=MoveKey::Left;
-                else if(down&KEY_RIGHT)mk=MoveKey::Right;
-                else if(down&KEY_R)mk=MoveKey::R;
-                else if(down&KEY_X)mk=MoveKey::X;
-                else if(down&KEY_Y)mk=MoveKey::Y;
-                else moveKey=false;
-                if(moveKey) {
-                    if(moveView.page==MovePage::Slots && mk==MoveKey::B)
-                        viewingMoves=false;
-                    else moveView.browse(state.demo,mk);
+                bool moveKey=false;
+                if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
+                else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
+                else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
+                else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                if(moveKey)moveRepeat.reset();
+                else if((held&(KEY_A|KEY_B|KEY_X|KEY_Y))==0u) {
+                    bool nav=true;
+                    if(held&KEY_UP)mk=MoveKey::Up;
+                    else if(held&KEY_DOWN)mk=MoveKey::Down;
+                    else if(held&KEY_LEFT)mk=MoveKey::Left;
+                    else if(held&KEY_RIGHT)mk=MoveKey::Right;
+                    else if(held&KEY_R)mk=MoveKey::R;
+                    else nav=false;
+                    moveKey=moveRepeat.poll(mk,nav);
+                } else moveRepeat.reset();
+                if(!moveKey && (held&(KEY_A|KEY_X))==0u)
+                    moveView.releaseApproval();
+                if(moveKey){
+                    if(moveView.page==MovePage::Party && mk==MoveKey::B) {
+                        viewingMoves=false;moveRepeat.reset();
+                    }else if(moveView.page==MovePage::Slots &&
+                             mk==MoveKey::B && !moveView.fromPartyPicker){
+                        viewingMoves=false;moveRepeat.reset();
+                    }else moveView.browse(state.demo,mk);
                     redraw=true;
                 }
             }
+        } else if((down&KEY_X) &&
+                   state.screen==Screen::Party &&
+                   editing.stage==phase20::EditStage::Idle &&
+                   batch.stage==phase20::BatchStage::Browse &&
+                   !batch.collecting &&
+                   (held&(KEY_START|KEY_SELECT))==0u) {
+            // In Phase20, Y on Party is reserved for multi-edit queue;
+            // X is the no-L read-only six-Pokemon move-picker shortcut.
+            if(state.demo.synthetic)
+                viewingMoves=moveView.beginPartySelection(syntheticMoveCatalog(),state.demo);
+            else if(localMoves.read())
+                viewingMoves=moveView.beginPartySelection(
+                    *localMoves.verifiedMetadata(),state.demo);
+            else
+                openNotice(state,Screen::Party,
+                  "Missing exact-ROM metadata. Copy the reviewed catalogue "
+                  "into /3ds/PKSM-Rogue/catalogs/. Apply stays disabled.");
+            moveRepeat.reset();
+            redraw=true;
         } else if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
                   batch.stage==phase20::BatchStage::Browse) {
             // Conflict resolution: on Pokémon detail, Y opens the
@@ -574,6 +668,7 @@ int main() {
                         "/3ds/PKSM-Rogue/catalogs/ then retry Y. "
                         "No moves can be applied.");
             }else (void)phase20::batchShortcut(state,observation,batch);
+            moveRepeat.reset();
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
             if(state.screen==Screen::Import && k==Key::A) {
@@ -588,6 +683,7 @@ int main() {
                 }
                 if(inspected) {
                     viewingMoves=false;
+                    moveRepeat.reset();
                     editing=phase20::OfflineFlow{};
                     batch=phase20::BatchFlow{};
                     switchView(state,false);
@@ -598,6 +694,7 @@ int main() {
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
                 viewingMoves=false;
+                moveRepeat.reset();
                 observation=phase20::CopyObservation{};
                 editing=phase20::OfflineFlow{};
                 batch=phase20::BatchFlow{};
