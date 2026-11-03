@@ -8,6 +8,7 @@
 #include "native_store.hpp"
 #include "rehearsal.hpp"
 #include "rollback_lab.hpp"
+#include "rosalina_exit_gate.hpp"
 static_assert(!phase14::LiveWritesEnabled,"GBA VC write permission is forbidden");
 namespace {
 struct Screen {
@@ -71,11 +72,20 @@ int main() {
     gfxInitDefault();
     consoleInit(GFX_TOP,nullptr);
     Screen s{};
+    phase17::StartExitGate exitGate{};
     bool redraw=true;
     while(aptMainLoop()){
         hidScanInput();
-        const u32 k=hidKeysDown();
-        if(k&KEY_START)break;
+        const u32 down=hidKeysDown(),held=hidKeysHeld(),up=hidKeysUp();
+        // Do not consume START+SELECT Rosalina in either press order.
+        // Standalone START exits only on release, not on key-down.
+        if(exitGate.tick((down&KEY_START)!=0,(up&KEY_START)!=0,
+                         (down&KEY_SELECT)!=0,(held&KEY_SELECT)!=0))
+            break;
+        // No recovery test is mapped to L. Ignore other buttons while
+        // START/SELECT is held, so opening Rosalina cannot trigger X/Y.
+        const u32 k=((down|held)&(KEY_START|KEY_SELECT))?
+                    0u:(down&~(KEY_START|KEY_SELECT));
         if(k&KEY_X){
             phase14::NativePxi device;
             phase16::NativeStore files;
