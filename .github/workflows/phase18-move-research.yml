@@ -9,6 +9,7 @@ on:
       - 'phase18/native_move_v1_compile.cpp'
       - 'phase18/move_replacement_v2.hpp'
       - 'phase18/move_replacement_v3.hpp'
+      - 'phase18/offline_move_export_v3.hpp'
       - 'phase18/test_move_replacement_v3.cpp'
       - 'phase18/move_queue_v4.hpp'
       - 'phase18/single_move_draft_v1.hpp'
@@ -52,8 +53,9 @@ jobs:
           grep -F 'return blocked("Move replacement locked:' phase18/move_replacement_v1.hpp
           grep -F 'constexpr bool ApplyApproved=false' phase18/move_replacement_v2.hpp
           grep -F 'constexpr bool MayWriteInstalledGame=false' phase18/move_replacement_v3.hpp
+          grep -F 'constexpr bool MayRestoreInstalledGame=false' phase18/offline_move_export_v3.hpp
           grep -F 'constexpr bool ReleaseDraftExportEnabled=false' phase18/single_move_draft_v1.hpp
-          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE)' phase18/move_replacement_v2.hpp phase18/move_replacement_v3.hpp phase18/move_queue_v4.hpp phase18/single_move_draft_v1.hpp phase18/native_move_v2_compile.cpp; then
+          if grep -En '(FSPXI_|FSUSER_|svcBackdoor|AGBSAVE)' phase18/move_replacement_v2.hpp phase18/move_replacement_v3.hpp phase18/offline_move_export_v3.hpp phase18/move_queue_v4.hpp phase18/single_move_draft_v1.hpp phase18/native_move_v2_compile.cpp; then
             echo "Privileged game archive services forbidden in offline move engine"
             exit 1
           fi
