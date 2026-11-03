@@ -53,7 +53,7 @@ inline bool checkedMoveQueue(const phase19::Demo& display,
         return false;
     const auto snapshot=rogue18::v2::inspect(source,bytes);
     if(!sameVisibleSource(display,observed,snapshot) ||
-       intent.partySlot>=snapshot.data.partyCount) return false;
+       intent.partySlot>=snapshot.data.party.size()) return false;
     const auto& displayed=display.party[intent.partySlot];
     if(displayed.egg || displayed.species!=intent.species ||
        displayed.moves[intent.moveSlot]!=intent.originalMoveId ||
