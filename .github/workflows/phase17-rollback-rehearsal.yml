@@ -125,6 +125,7 @@ jobs:
           cp phase15/diagnostic.hpp phase17-build/include/
           cp phase16/rehearsal.hpp phase16/native_store.hpp phase17-build/include/
           cp phase17/rollback_lab.hpp phase17-build/include/
+          cp phase17/rosalina_exit_gate.hpp phase17-build/include/
           cp phase14/authenticated_restore.hpp phase14/native_pxi.hpp phase14/native_journal.hpp phase14/journal_codec.hpp phase17-build/include/
           cp phase11/live_header.hpp phase17-build/include/
           cp phase13/restore_preflight.hpp phase17-build/include/
