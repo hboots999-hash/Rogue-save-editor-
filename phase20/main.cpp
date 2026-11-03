@@ -115,7 +115,8 @@ void batchTop(const phase20::BatchFlow& q) {
                e.kind==rogue18::Kind::IVs?"IV":
                e.kind==rogue18::Kind::EVs?"EV":"PP";
             std::printf("%u %s[%u:%u] %u -> %u\n",
-                i+1,kind,e.slot+1,e.field+1,e.expectedValue,e.value);
+                i+1,kind,e.slot+1,e.field+1,
+                unsigned(e.expectedValue),unsigned(e.value));
         }
         std::puts("\nA review export, B browse");
         std::puts("X remove last staged edit");
@@ -562,7 +563,6 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
-    MoveNavRepeat moveRepeat{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
