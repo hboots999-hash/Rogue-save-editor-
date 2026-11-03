@@ -37,6 +37,12 @@ int main(){
     assert(browser.browse(d,phase19::MoveKey::A));
     assert(browser.page==phase19::MovePage::Review);
     assert(browser.browse(d,phase19::MoveKey::A));
+    assert(browser.page==phase19::MovePage::ConfirmOne);
+    browser.releaseApproval(); // no held A may auto-confirm
+    assert(browser.browse(d,phase19::MoveKey::A));
+    assert(browser.page==phase19::MovePage::ConfirmTwo);
+    browser.releaseApproval();
+    assert(browser.browse(d,phase19::MoveKey::X));
     assert(browser.page==phase19::MovePage::Notice);
     assert(!rogue18::move_v2::ApplyApproved);
     std::cout<<"PASS Phase20 optional exact-ROM metadata rejects bad inputs; "
