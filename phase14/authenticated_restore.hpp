@@ -36,16 +36,29 @@ template<class Signer> bool stableMac(Signer& signer,const Digest& digest,Mac& o
 }
 struct Layout {size_t active=0, target=0; uint32_t counter=0;};
 inline bool layout(const Bytes& b,Layout& l) {
+    // A failed recheck must not leak a previously selected slot/counter.
+    l=Layout{};
     using namespace rogue_live;
     if(b.size()<ContainerMin || b.size()>MaxContainer) return false;
     const auto a=parseHeader(b.data(),HeaderSize,0);
     const auto z=parseHeader(b.data()+SlotSize,HeaderSize,SlotSize);
-    // Stronger than the read-only Phase 11 selector: no unknown-size/foreign
-    // slot fallback, equal/rollover counters or uninitialized recovery slot.
-    if(!a.valid || !z.valid || a.title!=ExpectedTitle || z.title!=ExpectedTitle ||
-       a.timesSaved==z.timesSaved) return false;
+    // Restore-only wrapper policy: REQUIRE two adjacent, monotonically
+    // increasing counters before selecting a source slot. Phase18's internal
+    // raw-H168 bank-counter rollover rules are a DIFFERENT on-disk domain
+    // and cannot establish safe GBA VC wrapper-slot ordering. If an older
+    // wrapper slot was skipped, is equal, or is near 32-bit rollover, fail
+    // closed rather than guessing which slot the console/game will load.
+    // This intentionally rejects UINT32_MAX and the 0/UINT32_MAX rollover
+    // pair until independent physical AGB_FIRM slot-selection evidence.
+    if(!a.valid || !z.valid || a.title!=ExpectedTitle || z.title!=ExpectedTitle)
+        return false;
+    const uint32_t low=std::min(a.timesSaved,z.timesSaved);
+    const uint32_t high=std::max(a.timesSaved,z.timesSaved);
+    // The staged target increments the active counter. Disallow the final
+    // increment that would produce UINT32_MAX, which this same layout policy
+    // rejects on readback, as well as the overflowing case.
+    if(high>=UINT32_MAX-1u || high-low!=1u) return false;
     const auto chosen=a.timesSaved>z.timesSaved?a:z;
-    if(chosen.timesSaved==UINT32_MAX) return false;
     if(std::memcmp(b.data()+0x40,b.data()+SlotSize+0x40,16)) return false;
     l.active=chosen.offset; l.target=l.active?0:SlotSize; l.counter=chosen.timesSaved;
     return true;
@@ -56,8 +69,11 @@ template<class Signer> bool authenticate(const Bytes& image,Signer& signer,Layou
         Mac actual{}; h168::Info info{};
         if(!stableMac(signer,slotHash(image,off),actual) ||
            std::memcmp(actual.data(),image.data()+off+0x10,actual.size()) ||
-           !h168::inspect(image.data()+off+rogue_live::HeaderSize,h168::Size,info))
+           !h168::inspect(image.data()+off+rogue_live::HeaderSize,h168::Size,info)) {
+            // Header selection alone is NOT authenticated save identity.
+            l=Layout{};
             return false;
+        }
     }
     return true;
 }

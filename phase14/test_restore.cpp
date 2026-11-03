@@ -87,6 +87,78 @@ int main(int argc,char** argv) {
     }
     c=source;h168::w32(c.data(),0x34,12);assert(!layout(c,l));
     c=source;h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX);assert(!layout(c,l));
+    // QA-02: wrapper counters must be adjacent in the non-wrapping
+    // transaction domain, irrespective of which physical slot is active.
+    // Raw H168 internal bank counters follow a distinct validation policy.
+    c=source;h168::w32(c.data(),0x34,10);assert(!layout(c,l)); // 10,12
+    c=source;h168::w32(c.data(),0x34,14);assert(!layout(c,l)); // 14,12
+    c=source;h168::w32(c.data(),0x34,15);assert(!layout(c,l)); // 15,12
+    c=source;h168::w32(c.data(),0x34,0);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX);
+    assert(!layout(c,l)); // explicit rollover refusal
+    c=source;h168::w32(c.data(),0x34,0);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,1);
+    assert(layout(c,l) && l.counter==1 && l.active==rogue_live::SlotSize);
+    c=source;h168::w32(c.data(),0x34,UINT32_MAX-1);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX);
+    assert(!layout(c,l)); // high counter cannot be incremented safely
+    c=source;h168::w32(c.data(),0x34,UINT32_MAX-2u);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,UINT32_MAX-1u);
+    assert(!layout(c,l)); // would stage forbidden UINT32_MAX
+    // Normal two-slot orientation must work with the real observed 49/48.
+    c=source;h168::w32(c.data(),0x34,49);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,48);
+    assert(layout(c,l) && l.counter==49 && l.active==0);
+    c=source;h168::w32(c.data(),0x34,48);
+    h168::w32(c.data(),rogue_live::SlotSize+0x34,49);
+    assert(layout(c,l) && l.counter==49 && l.active==rogue_live::SlotSize);
+    // Full wrapper selector matrix. A failed second inspection must not
+    // accidentally reuse the selected offset/counter from the prior success.
+    // All test records are synthetic and NEVER used to authorise native IO.
+    struct CounterPair { uint32_t a,b; bool accepted; size_t active; };
+    const CounterPair pairs[]={
+        {48,49,true,rogue_live::SlotSize},
+        {49,48,true,0},
+        {0,1,true,rogue_live::SlotSize},
+        {1,0,true,0},
+        {49,49,false,0},
+        {0,0,false,0},
+        {48,60,false,0},
+        {60,48,false,0},
+        {50,48,false,0},
+        {48,50,false,0},
+        {UINT32_MAX,0,false,0},
+        {0,UINT32_MAX,false,0},
+        {UINT32_MAX-2u,UINT32_MAX-1u,false,0},
+        {UINT32_MAX-1u,UINT32_MAX,false,0}
+    };
+    for(const auto& pair:pairs){
+        c=source;
+        h168::w32(c.data(),0x34,pair.a);
+        h168::w32(c.data(),rogue_live::SlotSize+0x34,pair.b);
+        l={rogue_live::SlotSize,0,12345}; // poisoned prior result
+        const bool valid=layout(c,l);
+        assert(valid==pair.accepted);
+        if(valid){
+            assert(l.active==pair.active);
+            assert(l.target==(pair.active?0:rogue_live::SlotSize));
+            assert(l.counter==std::max(pair.a,pair.b));
+        }else {
+            assert(l.active==0 && l.target==0 && l.counter==0);
+        }
+    }
+    // A structurally selectable layout can still fail CMAC/sector proofs.
+    // No stale "authenticated" layout may survive such a failure.
+    c=source;
+    l={rogue_live::SlotSize,0,49};
+    c[rogue_live::SlotSize+rogue_live::HeaderSize+10]^=1;
+    assert(!authenticate(c,signer,l));
+    assert(l.active==0 && l.target==0 && l.counter==0);
+    c=source;
+    c[0x40]^=1; // CID disagreement even though both headers still exist
+    l={rogue_live::SlotSize,0,49};
+    assert(!layout(c,l));
+    assert(l.active==0 && l.target==0 && l.counter==0);
     c=source;c.resize(rogue_live::ContainerMin-1);assert(!layout(c,l));
     c.resize(MaxContainer+1);assert(!layout(c,l));
     Signer unstable;unstable.unstable=true;Mac m{};
