@@ -1,0 +1,27 @@
+name: Independent Rogue ROM compatibility research
+on:
+  push:
+    branches: [research/rogue-exact-rom-compatibility]
+  pull_request:
+    paths:
+      - 'research/rom_compatibility/**'
+      - '.github/workflows/rogue-rom-compatibility-research.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-source-semantics:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test audit infrastructure using synthetic data
+        run: python3 -m unittest discover -s research/rom_compatibility -p test_audit_tools.py -v
+      - name: Fetch and verify pinned public source only
+        run: python3 research/rom_compatibility/fetch_public_source.py "$RUNNER_TEMP/rogue-public-source"
+      - name: Probe actual upstream functions with synthetic dependencies
+        run: python3 research/rom_compatibility/test_public_source.py "$RUNNER_TEMP/rogue-public-source"
+      - name: ASan and UBSan source probe
+        env:
+          ASAN_OPTIONS: detect_leaks=1:halt_on_error=1
+          UBSAN_OPTIONS: halt_on_error=1
+        run: python3 research/rom_compatibility/test_public_source.py "$RUNNER_TEMP/rogue-public-source" --sanitize

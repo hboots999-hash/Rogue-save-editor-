@@ -1,0 +1,20 @@
+{
+  "repository": "Pokabbie/pokeemerald-rogue",
+  "ref": "559792325f500d480b892799218ee015962f93a2",
+  "files": {
+    "include/pokemon.h": "e5222649c04a52865f3bbf86e485ed86c1bb7102",
+    "src/pokemon.c": "5d0fcbd6adc05dd694507efe25569860351a56f6",
+    "src/rogue_controller.c": "730d021737bcfddb2f9e1135942dbc6ede46fe8a",
+    "src/rogue_baked.c": "7c5e1dd40094626d269530ab74b59621b06195c5",
+    "include/rogue.h": "98a6cf56a86be1b8286020154e0b992c246c8f4d",
+    "include/rogue_baked.h": "179f8018b4079ebe660711011fce34f9b364e2d4",
+    "src/load_save.c": "1cd87ef2b371f7f3751a40d699b963c4a2101213",
+    "src/party_menu.c": "9ccddadcb8dddcd093d846c76eb85c83639cc5bd",
+    "src/rogue_gifts.c": "8469b1814d2a6bea85914e5c1ecd214542f91bd8",
+    "include/constants/rogue.h": "d0d14f3d45a8424e50e9d43477eb5f569baedcf3",
+    "src/data/battle_moves.h": "10a48540d382b35a1a55f9952cf1cf1df266d362",
+    "src/data/battle_moves_revised.h": "339fe34f3f728051595c5561996d686f585e0e2b",
+    "Makefile": "517c64873ccadcaae6a5d685ca4d029ebf6655dc",
+    "src/rogue_save.c": "5aa6627831bc44087a819c09e844a280c2525596"
+  }
+}
