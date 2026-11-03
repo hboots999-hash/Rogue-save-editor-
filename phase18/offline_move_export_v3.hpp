@@ -100,19 +100,17 @@ inline bool allowedRoot(const char* root,bool testOnly){
 #endif
     return false;
 }
-inline bool exportChecked(const uint8_t* source,size_t n,
-                          const move_v2::Catalog& db,
+inline bool writeVerified(const uint8_t* source,size_t n,
                           const move_v3::Selection& selected,
+                          const Result& result,
                           const char* root,const char* token,
                           Receipt& report,bool testOnly){
     report=Receipt{};
     if(!source || n!=raw_v1::Size || !tokenSafe(token) ||
-       !allowedRoot(root,testOnly))return false;
-
-    const auto result=move_v3::preview(source,n,db,selected);
-    if(!result.ok || result.candidate.size()!=n ||
-       !move_v3::verify(source,n,result.candidate.data(),
-                        result.candidate.size(),db,selected))
+       !allowedRoot(root,testOnly) || !result.ok ||
+       result.candidate.size()!=n ||
+       sourceDigest(source,n)!=selected.original.source.expectedOriginalSha256 ||
+       result.changedOffsets.empty() || result.changedOffsets.size()>8)
         return false;
 
     // No scalar multi-edit, installed title, archive, or CMAC operations.
@@ -149,6 +147,18 @@ inline bool exportChecked(const uint8_t* source,size_t n,
     report.ok=true;
     return true;
 }
+inline bool exportChecked(const uint8_t* source,size_t n,
+                          const move_v2::Catalog& db,
+                          const move_v3::Selection& selected,
+                          const char* root,const char* token,
+                          Receipt& report,bool testOnly){
+    const auto proposed=move_v3::preview(source,n,db,selected);
+    if(!proposed.ok ||
+       !move_v3::verify(source,n,proposed.candidate.data(),
+                        proposed.candidate.size(),db,selected))
+        return false;
+    return writeVerified(source,n,selected,proposed,root,token,report,testOnly);
+}
 } // namespace detail
 
 inline bool exportOfflineDraft(const uint8_t* source,size_t n,
@@ -162,11 +172,18 @@ inline bool exportOfflineDraft(const uint8_t* source,size_t n,
 }
 #if defined(ROGUE18_TEST_MOVE_V2)
 inline bool exportSyntheticToTemp(const uint8_t* source,size_t n,
-                                  const move_v2::Catalog& db,
                                   const move_v3::Selection& selected,
+                                  uint8_t fabricatedPP,
                                   const char* temp,const char* token,
                                   Receipt& report){
-    return detail::exportChecked(source,n,db,selected,
+    const auto candidate=move_v3::previewSynthetic(source,n,selected,
+                                                    fabricatedPP);
+    const auto independent=move_v2::previewSynthetic(
+        source,n,selected.original,
+        selected.original.replacementId,fabricatedPP);
+    if(!candidate.ok || !independent.ok ||
+       candidate.candidate!=independent.candidate)return false;
+    return detail::writeVerified(source,n,selected,candidate,
                                  temp,token,report,true);
 }
 #endif
