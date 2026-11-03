@@ -42,6 +42,10 @@ for mode in strict sanitized; do
     -o "$tmp/probe-c"
   ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
     "$tmp/probe-c"
+  g++ "${flags[@]}" "${extra[@]}" phase17/test_rosalina_exit_gate.cpp \
+    -o "$tmp/start-gate"
+  ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
+    "$tmp/start-gate"
 done
 # Read-only independent PC hash verifier uses ONLY synthetic temporary files.
 python3 phase17/test_verify_offline_sd_hashes.py
