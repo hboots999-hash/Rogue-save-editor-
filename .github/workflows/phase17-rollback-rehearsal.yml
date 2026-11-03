@@ -74,7 +74,8 @@ jobs:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-          ref: 5a79bcbc522ad4e8d37f14bebfa9e7ac12143de2
+          # Current PR #12 as inspected for PKSM Issue #15; do not float HEAD.
+          ref: 1a8a9975d94729d1e957f63c2add0b34800f8332
           path: dependencies/phase20
       - uses: actions/checkout@v4
         with:
