@@ -493,8 +493,8 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("X/Left: back (browser)");
     std::puts("START: release to exit");
     std::puts("START+SELECT: Rosalina");
-    std::puts(s.demo.synthetic?"DEMO Pokemon + fictional moves.":
-              "Real party + authenticated metadata.");
+    std::puts(s.demo.synthetic?"Fictional Pokemon and IDs.":
+              "Real party / local move list.");
     if(v.page==MovePage::Review || v.page==MovePage::ConfirmOne ||
        v.page==MovePage::ConfirmTwo)
         std::puts("Review is UI only; Apply OFF.");
@@ -510,6 +510,9 @@ void bottom(const State& s,const phase20::OfflineFlow& edit,
     std::puts("X/Left: previous (context)");
     std::puts("START release: exit");
     std::puts("START+SELECT: Rosalina");
+    if(s.screen==Screen::Party)
+        std::puts("X: browse party move picker");
+
     if(!s.demo.synthetic) {
         if(batch.collecting)std::printf("Y: review queue (%u edits)\n",
                                        unsigned(batch.pending.edits.size()));
@@ -559,6 +562,7 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    MoveNavRepeat moveRepeat{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
@@ -622,21 +626,23 @@ int main() {
                     redraw=true;
                 }
             }
-        } else if((down&KEY_X) && state.screen==Screen::Party &&
-                  editing.stage==phase20::EditStage::Idle &&
-                  batch.stage==phase20::BatchStage::Browse &&
-                  !batch.collecting) {
-            // X on Party launches the 6-Pokémon picker, preserving Y's
-            // existing multi-edit queue action and all L-free controls.
+        } else if((down&KEY_X) &&
+                   state.screen==Screen::Party &&
+                   editing.stage==phase20::EditStage::Idle &&
+                   batch.stage==phase20::BatchStage::Browse &&
+                   !batch.collecting &&
+                   (held&(KEY_START|KEY_SELECT))==0u) {
+            // In Phase20, Y on Party is reserved for multi-edit queue;
+            // X is the no-L read-only six-Pokemon move-picker shortcut.
             if(state.demo.synthetic)
-                viewingMoves=moveView.beginPartySelection(
-                                      syntheticMoveCatalog(),state.demo);
+                viewingMoves=moveView.beginPartySelection(syntheticMoveCatalog(),state.demo);
             else if(localMoves.read())
                 viewingMoves=moveView.beginPartySelection(
                     *localMoves.verifiedMetadata(),state.demo);
-            else openNotice(state,Screen::Party,
-                "Missing authenticated move metadata in /3ds/PKSM-Rogue/"
-                "catalogs/. No move edits are enabled.");
+            else
+                openNotice(state,Screen::Party,
+                  "Missing exact-ROM metadata. Copy the reviewed catalogue "
+                  "into /3ds/PKSM-Rogue/catalogs/. Apply stays disabled.");
             moveRepeat.reset();
             redraw=true;
         } else if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
