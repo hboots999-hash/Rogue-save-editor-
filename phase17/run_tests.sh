@@ -27,6 +27,21 @@ for mode in strict sanitized; do
     "$tmp/sha.o" -o "$tmp/sd-review"
   ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
     "$tmp/sd-review"
+  # Issue #15: read-only installed H168 active slot presentation, independent
+  # of Phase16 journal; identical source under strict and ASan/UBSan.
+  g++ "${flags[@]}" "${extra[@]}" -c \
+    phase17/installed_save_probe_v1.cpp -o "$tmp/installed-probe.o"
+  g++ "${flags[@]}" "${extra[@]}" \
+    phase17/test_installed_save_probe_v1.cpp "$tmp/installed-probe.o" \
+    "$tmp/sha.o" -o "$tmp/installed-probe"
+  ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
+    "$tmp/installed-probe" "$tmp/two.sav"
+  gcc -std=c11 -Wall -Wextra -Wpedantic -Werror "${extra[@]}" \
+    -Iphase17 -c phase17/test_installed_save_probe_abi.c -o "$tmp/probe-c.o"
+  g++ "${extra[@]}" "$tmp/probe-c.o" "$tmp/installed-probe.o" \
+    -o "$tmp/probe-c"
+  ASAN_OPTIONS="${ASAN_OPTIONS:-detect_leaks=1}" UBSAN_OPTIONS=halt_on_error=1 \
+    "$tmp/probe-c"
 done
 # Read-only independent PC hash verifier uses ONLY synthetic temporary files.
 python3 phase17/test_verify_offline_sd_hashes.py
