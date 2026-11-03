@@ -2,6 +2,7 @@
 // Never executed or linked into CIA. No installed-game APIs.
 #include "move_queue_v4.hpp"
 #include "single_move_draft_v1.hpp"
+#include "offline_move_export_v3.hpp"
 namespace phase18_move_v2_native {
 static_assert(!rogue18::move_v2::ApplyApproved,
               "Do not unlock without source/binary/runtime release gates");
@@ -25,6 +26,27 @@ bool compileQueue(const uint8_t* source,size_t n,
     const auto result=rogue18::move_queue_v4::preview(source,n,queue);
     return staged && !result.ok &&
            !rogue18::move_queue_v4::mayWriteInstalledGame(queue);
+}
+bool compileMoveV3(const uint8_t* bytes,size_t n,
+                   const rogue18::move_v2::Catalog& db){
+    const auto view=rogue18::v2::inspect(bytes,n);
+    rogue18::move_v3::Selection selection{};
+    if(!rogue18::move_v3::begin(view,bytes,n,0,0,selection))return false;
+    if(!rogue18::move_v3::select(db,selection,89))return false;
+    const auto draft=rogue18::move_v3::preview(bytes,n,db,selection);
+    if(!draft.ok)return false;
+    const bool independent=rogue18::move_v3::verify(
+        bytes,n,draft.candidate.data(),draft.candidate.size(),db,selection);
+    return independent &&
+           !rogue18::move_v3::mayWriteInstalledGame(selection);
+}
+bool compileExportV3(const uint8_t* bytes,size_t n,
+                     const rogue18::move_v2::Catalog& db,
+                     const rogue18::move_v3::Selection& selection){
+    rogue18::move_export_v3::Receipt receipt{};
+    const bool exported=rogue18::move_export_v3::exportOfflineDraft(
+         bytes,n,db,selection,"test001",receipt);
+    return !exported || !rogue18::move_export_v3::mayWriteInstalledGame(receipt);
 }
 bool compileSingleReview(const uint8_t* source,size_t n,
                          const rogue18::move_v2::Catalog& db,
