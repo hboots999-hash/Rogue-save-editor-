@@ -106,8 +106,17 @@ int main() {
     const auto beforeDigest=summary.sourceSha256;
     const unsigned beforeMoney=displayed.money;
     const unsigned beforeParty=displayed.party[0].species;
-    for(size_t length: {size_t(0),size_t(1),size_t(131071),
-                        size_t(131073),size_t(263168)}) {
+
+    // Null pointer and zero length checks
+    assert(!phase20::inspectCopy(nullptr,source.size(),displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+    assert(!phase20::inspectCopy(source.data(),0,displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+    assert(!phase20::inspectCopy(nullptr,0,displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+
+    for(size_t length: {size_t(0),size_t(1),size_t(512),size_t(4096),size_t(65536),
+                        size_t(131071),size_t(131073),size_t(263168),size_t(526400)}) {
         auto bad=source;bad.resize(length,0);
         assert(!phase20::inspectCopy(bad.data(),bad.size(),displayed,summary,reason));
         assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
@@ -117,7 +126,35 @@ int main() {
         assert(!phase20::inspectCopy(bad.data(),bad.size(),displayed,summary,reason));
         assert(displayed.money==beforeMoney && displayed.party[0].species==beforeParty);
         assert(summary.sourceSha256==beforeDigest);
+
+        // Also test direct sector checksum corruption at footer 0xFF6
+        auto badCsum=source;badCsum[sector*rogue18::raw_v1::Sector+0xff6]^=0xff;
+        assert(!phase20::inspectCopy(badCsum.data(),badCsum.size(),displayed,summary,reason));
+        assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
     }
+
+    // Corrupted Pokemon data: partyCount > 6 fails closed
+    {
+        auto bad=source;
+        h168::Info info{};
+        assert(rogue18::validate(bad.data(),bad.size(),info));
+        const size_t s1=info.banks[info.active].sector[1];
+        bad[s1+0x234]=7;
+        assert(!phase20::inspectCopy(bad.data(),bad.size(),displayed,summary,reason));
+        assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+    }
+
+    // Corrupted Pokemon data: invalid party Pokemon internal checksum
+    {
+        auto bad=source;
+        h168::Info info{};
+        assert(rogue18::validate(bad.data(),bad.size(),info));
+        const size_t s1=info.banks[info.active].sector[1];
+        bad[s1+0x238+28]^=0xff;
+        assert(!phase20::inspectCopy(bad.data(),bad.size(),displayed,summary,reason));
+        assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+    }
+
     // The 4 unchecksummed trailing sectors still contribute to the digest.
     auto stale=source;
     stale.back()^=1u;
@@ -128,6 +165,7 @@ int main() {
     // Restore display to the validated original for remaining tests.
     assert(phase20::inspectCopy(source.data(),source.size(),displayed,summary,reason));
 
+    // Stream tests: valid stream
     std::unique_ptr<std::FILE,int(*)(std::FILE*)> input(std::tmpfile(),&std::fclose);
     assert(input);
     assert(std::fwrite(source.data(),1,source.size(),input.get())==source.size());
@@ -137,6 +175,26 @@ int main() {
     std::vector<uint8_t> after(source.size());
     assert(std::fread(after.data(),1,after.size(),input.get())==after.size());
     assert(after==source);
+
+    // Stream tests: null stream
+    assert(!phase20::inspectStream(nullptr,displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+
+    // Stream tests: empty file (0 bytes)
+    std::unique_ptr<std::FILE,int(*)(std::FILE*)> emptyStream(std::tmpfile(),&std::fclose);
+    assert(emptyStream);
+    assert(!phase20::inspectStream(emptyStream.get(),displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+
+    // Stream tests: truncated file (short read)
+    std::unique_ptr<std::FILE,int(*)(std::FILE*)> truncStream(std::tmpfile(),&std::fclose);
+    assert(truncStream);
+    std::vector<uint8_t> shortBytes(512,0xaa);
+    assert(std::fwrite(shortBytes.data(),1,shortBytes.size(),truncStream.get())==shortBytes.size());
+    assert(std::fflush(truncStream.get())==0);
+    assert(!phase20::inspectStream(truncStream.get(),displayed,summary,reason));
+    assert(displayed.money==beforeMoney && summary.sourceSha256==beforeDigest);
+
     // Wrapped container is not auto-trimmed into a candidate.
     std::unique_ptr<std::FILE,int(*)(std::FILE*)> wrapped(std::tmpfile(),&std::fclose);
     assert(wrapped);
