@@ -5,7 +5,7 @@
 ## Required files
 
 - `phase18/move_replacement_v3.hpp`: **production-compiled** encrypted replacement and SHA-256/identity/sector checksum/byte-footprint proof; independently reconstructs candidate in `verify`.
-- `phase18/offline_move_export_v3.hpp`: exclusive-create backup and draft on SD, fsync, reopen, compare **all 131072 bytes**, return SHA256 receipt; fixed destination `sdmc:/3ds/PKSMRogue/drafts` (folder must already exist).
+- `phase18/offline_move_export_v3.hpp`: exclusive-create backup and draft on SD, fsync, reopen, compare **all 131072 bytes**, return SHA256 receipt; fixed destination `sdmc:/3ds/PKSM-Rogue/drafts` (folder must already exist).
 - `phase18/move_queue_v4.hpp`: existing staging unchanged; new **`previewSingleMoveDraft`** and **`exportSingleMoveDraft`** adapters, which only work with exactly ONE replacement and ZERO queued scalar edits. Existing `v4::preview` remains blocked when any replacement is present.
 - `phase18/move_replacement_v2.hpp`: verified packed exact-ROM catalogue loader/search interface. Full 936-record fingerprint remains:
   - ROM SHA256: `111b0008bcec519c59a02de57895a924fee5d3633c8b8fbb394a497153778ca3`
@@ -38,7 +38,7 @@ if (!candidate.ok) return; // show failure, never silently write
 
 // User explicitly confirms EXPERIMENTAL OFFLINE DRAFT, NOT installed game.
 // An alphanumeric token (e.g. "trial_001") must be unique, 1..24 chars.
-// Create sdmc:/3ds/PKSMRogue/drafts folder before showing Export.
+// Create sdmc:/3ds/PKSM-Rogue/drafts folder before showing Export.
 rogue18::move_export_v3::Receipt proof{};
 const bool made = rogue18::move_queue_v4::exportSingleMoveDraft(
       importedRaw,131072,authenticatedCatalog,staged,"trial_001",proof);
