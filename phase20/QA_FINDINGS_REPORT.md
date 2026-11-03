@@ -119,24 +119,11 @@ Tests in `phase20/test_offline_edit_v1.cpp` verify:
 
 ---
 
-## 7. Analysis of Moves, EVs, IVs, Natures, and Abilities
+## 7. Deliverables & Integration Instructions
 
-### 7.1 Status of Editable Attributes in Phase 20
-| Field / Attribute | Status | Target Location / Encoding | Safety Gates |
-| :--- | :--- | :--- | :--- |
-| **IVs (0–31)** | **Active & Verified** | Substructure M (offset +40, 5 bits per stat) | Bounded 0–31; payload & sector checksums recomputed. |
-| **EVs (0–252)** | **Active & Verified** | Substructure E (offset +24, 6 bytes) | Bounded 0–252; total cap ≤ 510; batch queue permits trade-offs. |
-| **Move PP (0–64)** | **Active & Verified** | Substructure A (offset +20, 1 byte per slot) | Bounded to max PP; no PP-Up tampering. |
-| **Move Replacement** | **Research / Gated Draft** | Substructure A (Move ID & Base PP) + Substructure G (+8 PP-Up reset) | Production Apply permanently blocked. 43 permitted First-CIA move IDs with PP agreement; 40 conflicting base PP moves blocked. Max 8 changed bytes. |
-| **Nature (Mints)** | **Verified Offline Math (Gated)** | Unencrypted header byte `monAt + 18` (`oldMon.natureFromPid ^ req.nature`) | PID, gender, and shininess remain untouched; requires `evidence.verifiedNatureModifier=true`. Range 0–24. |
-| **Ability Slot (0..2)** | **Verified Offline Math (Gated)** | Substructure M (word 44, bits 29–30) | Controls Slot 0, Slot 1, or Hidden Ability; requires `evidence.verifiedAbilitySlot=true`. Range 0–2. |
-
----
-
-## 8. Deliverables & Integration Instructions
-
-- **Clean PR Branch:** `feature/phase20-qa-improvements-9065036775014488963` rebased cleanly on `feature/phase20-readonly-integration` HEAD (`1a8a9975d94729d1e957f63c2add0b34800f8332`).
-- **Clean PR Scope:** Strictly contains focused QA improvements:
+- **Superceded PR:** PR #13 (unmerged, identified as superseded due to base branch file pollution).
+- **Clean PR Branch:** `feature/phase20-qa-improvements-9065036775014488963` rebased cleanly on `feature/phase20-readonly-integration` HEAD (`7ddd7a20e4ec6b9a6294f7b060754956da722be9`).
+- **Clean PR Scope:** Strictly contains 3 files:
   - `phase20/QA_FINDINGS_REPORT.md`
   - `phase20/test_read_only_v1.cpp`
   - `phase20/test_offline_edit_v1.cpp`
