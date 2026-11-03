@@ -130,6 +130,8 @@ struct SingleMoveReview {
     uint16_t previousId=0,replacementId=0;
     uint8_t currentPP=0,catalogBasePP=0,originalPPUps=0;
     bool mayExport=false,mayRestoreInstalledGame=false;
+    // Separate explicitly-labelled experimental SD-only draft capability.
+    bool mayExportExperimentalDraft=false;
 };
 inline bool reviewSingle(const uint8_t* original,size_t n,
                          const move_v2::Catalog& db,
@@ -156,6 +158,7 @@ inline bool reviewSingle(const uint8_t* original,size_t n,
     out.currentPP=source.expectedPP;
     out.catalogBasePP=move.basePP;
     out.originalPPUps=move_v1::ppUps(source.expectedPPBonuses,source.moveSlot);
+    out.mayExportExperimentalDraft=move_v3::selectedOrdinary(move.id);
     return true;
 }
 // Opt-in experimental copy-only flow for the FIRST CIA. No v3 scalar
