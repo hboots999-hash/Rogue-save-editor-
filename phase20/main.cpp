@@ -10,6 +10,7 @@
 #include "rosalina_input.hpp"
 #include "move_browser.hpp"
 #include "phase20/move_catalog_bridge_v1.hpp"
+#include "phase20/move_draft_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -439,7 +440,9 @@ void moveTop(const State& s,const MoveBrowser& v) {
             else std::puts("New PP: UNVERIFIED");
             wrappedNotice(evidenceLabel(m->evidence));
         }
-        std::puts("APPLY DISABLED - NO SD DRAFT");
+        std::puts("Apply to game DISABLED.");
+        std::puts("Y: experimental SD-only draft");
+        std::puts("(only 43 reviewed move IDs).");
         if(v.page==MovePage::ConfirmTwo)
             std::puts("Release keys; X: view BLOCK");
         else std::puts("Release keys; A: next review");
@@ -478,6 +481,45 @@ void moveTop(const State& s,const MoveBrowser& v) {
         }
     }
 }
+void moveDraftTop(const phase20::MoveDraftFlow& f) {
+    consoleClear();
+    std::puts("EXPERIMENTAL OFFLINE MOVE DRAFT");
+    std::puts("==============================");
+    std::puts("No installed save writes.");
+    if(f.stage==phase20::MoveDraftStage::ConfirmOne ||
+       f.stage==phase20::MoveDraftStage::ConfirmTwo) {
+        std::printf("Party %u / Slot %u\n",f.review.partySlot+1,
+                    f.review.moveSlot+1);
+        std::printf("Move ID %u -> %u\n",unsigned(f.review.previousId),
+                    unsigned(f.review.replacementId));
+        std::printf("PP %u -> %u (PP Ups reset)\n",
+                    unsigned(f.review.currentPP),
+                    unsigned(f.review.catalogBasePP));
+        std::puts("\nExperimental 128KiB SD DRAFT.");
+        std::puts("NOT verified in gameplay.");
+        std::puts("Move legality NOT proven.");
+        std::puts("Do NOT inject into your game.");
+        std::printf("\nConfirmation %u / 2\n",
+                    f.stage==phase20::MoveDraftStage::ConfirmOne?1u:2u);
+        std::puts("A: accept   B: CANCEL");
+    } else {
+        std::puts(f.succeeded?"OFFLINE DRAFT CREATED":"DRAFT REFUSED");
+        wrappedNotice(f.message);
+        std::puts("A/B: back to move browser.");
+        std::puts("No original game-save write.");
+    }
+}
+void moveDraftBottom() {
+    consoleClear();
+    std::puts("PKSM ROGUE - RESEARCH PREVIEW");
+    std::puts("Only 43 reviewed move IDs.");
+    std::puts("Only ONE move per draft.");
+    std::puts("Source and catalog reverified");
+    std::puts("at final confirmation.");
+    std::puts("Requires /drafts/ folder.");
+    std::puts("Never edits installed game.");
+    std::puts("L button not required.");
+}
 void moveBottom(const State& s,const MoveBrowser& v){
     consoleClear();
     std::puts("PKSM ROGUE - MOVE RESEARCH");
@@ -486,9 +528,9 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("936-record API supported.");
     std::puts("40 PP conflicts must be");
     std::puts("flagged by a verified source.");
-    std::puts("NO MOVE REPLACEMENT ACTIVE");
+    std::puts("GAME APPLY/RESTORE DISABLED");
     std::puts("No installed game write.");
-    std::puts("No offline draft export.");
+    std::puts("Y on Review: SD draft (43 IDs)");
     std::puts("L button is NOT required.");
     std::puts("R/Right: forward (browser)");
     std::puts("X/Left: back (browser)");
@@ -563,6 +605,7 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    static phase20::MoveDraftFlow moveDraft{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
@@ -588,7 +631,12 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if(viewingMoves) {
+        if(moveDraft.stage!=phase20::MoveDraftStage::Idle) {
+            if((held&(KEY_START|KEY_SELECT))==0u)
+                phase20::moveDraftInput(moveDraft,(down&KEY_A)!=0u,
+                    (down&KEY_B)!=0u,state.demo,observation,localMoves);
+            redraw=true;
+        } else if(viewingMoves) {
             if(moveView.page!=MovePage::Party &&
                !moveView.activeParty(state.demo)) {
                 viewingMoves=false;moveRepeat.reset();redraw=true;
@@ -616,7 +664,12 @@ int main() {
                 } else moveRepeat.reset();
                 if(!moveKey && (held&(KEY_A|KEY_X))==0u)
                     moveView.releaseApproval();
-                if(moveKey){
+                if(moveKey && mk==MoveKey::Y &&
+                   moveView.page==MovePage::Review) {
+                    (void)phase20::beginExperimentalMoveDraft(moveDraft,
+                        moveView,state.demo,observation,localMoves);
+                    redraw=true;
+                }else if(moveKey){
                     if(moveView.page==MovePage::Party && mk==MoveKey::B) {
                         viewingMoves=false;moveRepeat.reset();
                     }else if(moveView.page==MovePage::Slots &&
@@ -708,10 +761,14 @@ int main() {
         }
         if(redraw) {
             consoleSelect(&upper);
-            if(viewingMoves)moveTop(state,moveView);
+            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                moveDraftTop(moveDraft);
+            else if(viewingMoves)moveTop(state,moveView);
             else top(state,editing,batch);
             consoleSelect(&lower);
-            if(viewingMoves)moveBottom(state,moveView);
+            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                moveDraftBottom();
+            else if(viewingMoves)moveBottom(state,moveView);
             else bottom(state,editing,batch);
             redraw=false;
         }
