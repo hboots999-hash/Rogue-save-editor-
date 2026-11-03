@@ -42,29 +42,24 @@ inline bool select(const move_v2::Catalog& db,Selection& selection,uint16_t id){
         return false;
     return move_v2::choose(db,selection.original,id);
 }
-// This is the smallest copy-only replacement operation, deliberately
-// separate from the Phase18 v3 PP-only scalar edit and Phase20 v4 queue.
-// No caller-supplied PP or caller-supplied "approved" bool.
-inline Result preview(const uint8_t* raw,size_t n,
-                      const move_v2::Catalog& db,
-                      const Selection& selection){
+// Internal checked candidate constructor. Public preview alone admits
+// base PP after authenticating the entire immutable exact-ROM metadata.
+namespace detail {
+inline Result construct(const uint8_t* raw,size_t n,
+                        const Selection& selection,uint8_t basePP){
     try{
         const auto& req=selection.original;
-        move_v2::Move chosen{};
         if(selection.contract!=ContractVersion ||
            req.version!=move_v2::ContractVersion ||
            req.catalogDigest!=move_v2::CatalogSha ||
-           !selectedOrdinary(req.replacementId) ||
-           !move_v2::lookup(db,req.replacementId,chosen) ||
-           chosen.id!=req.replacementId || !raw ||
+           !selectedOrdinary(req.replacementId) || !raw ||
            n!=raw_v1::Size || !hasDigest(req.source.expectedOriginalSha256) ||
            sourceDigest(raw,n)!=req.source.expectedOriginalSha256 ||
            req.source.version!=move_v1::ContractVersion ||
            req.source.partySlot>=6 || req.source.moveSlot>=4 ||
-           chosen.basePP<1 || chosen.basePP>64 ||
+           basePP<1 || basePP>64 ||
            req.replacementId==req.source.expectedMoveId)
-            return blocked("Move V3: untrusted ROM, source, slot, or move ID");
-
+            return blocked("Move V3: untrusted source, slot, or move ID");
         raw_v1::Info before{};Mon mon{};
         if(!validate(raw,n,before) ||
            before.banks[before.active].counter!=req.source.expectedCounter ||
@@ -94,7 +89,7 @@ inline Result preview(const uint8_t* raw,size_t n,
         plain[8]=move_v1::clearedSlotBonuses(plain[8],req.source.moveSlot);
         raw_v1::w16(plain.data(),12+2*req.source.moveSlot,
                     req.replacementId);
-        plain[20+req.source.moveSlot]=chosen.basePP;
+        plain[20+req.source.moveSlot]=basePP;
 
         Bytes draft(raw,raw+n);
         encode(draft.data(),at,plain);
@@ -123,7 +118,7 @@ inline Result preview(const uint8_t* raw,size_t n,
            updated.effectiveNature!=mon.effectiveNature ||
            updated.gigantamaxFactor!=mon.gigantamaxFactor ||
            updated.moves[req.source.moveSlot]!=req.replacementId ||
-           updated.pp[req.source.moveSlot]!=chosen.basePP)
+           updated.pp[req.source.moveSlot]!=basePP)
             return blocked("Move V3: unrelated Pokémon identity changed");
         for(unsigned j=0;j<4;j++)
             if(j!=req.source.moveSlot &&
@@ -163,6 +158,24 @@ inline Result preview(const uint8_t* raw,size_t n,
         return blocked("Move V3: exception during offline preview");
     }
 }
+} // namespace detail
+// The exact-ROM gate is mandatory and cannot be overridden by callers.
+inline Result preview(const uint8_t* raw,size_t n,
+                      const move_v2::Catalog& db,
+                      const Selection& selection){
+    move_v2::Move chosen{};
+    if(selection.contract!=ContractVersion ||
+       !selectedOrdinary(selection.original.replacementId) ||
+       !move_v2::lookup(db,selection.original.replacementId,chosen))
+        return blocked("Move V3: exact-ROM catalog or move not approved");
+    return detail::construct(raw,n,selection,chosen.basePP);
+}
+#if defined(ROGUE18_TEST_MOVE_V2)
+inline Result previewSynthetic(const uint8_t* raw,size_t n,
+                               const Selection& selection,uint8_t fabricatedPP){
+    return detail::construct(raw,n,selection,fabricatedPP);
+}
+#endif
 inline bool verify(const uint8_t* original,size_t n,
                    const uint8_t* candidate,size_t len,
                    const move_v2::Catalog& db,const Selection& selection){
