@@ -61,3 +61,31 @@ for precise caller responsibilities, QA issues and residual risks. The
 `P17_RO_RAM_REHEARSAL_READABLE` code is strictly an observation for RAM
 testing and is **not** approval to edit or restore the installed game.
 
+
+
+## Issue #15 — original PKSM UI read-only H168 bridge (3 Nov 2026)
+
+The familiar FlagBrew PKSM editor must use a Rogue-specific **read-only
+adapter**, not the stock Gen3 save writer. Phase17 now provides:
+`installed_save_probe_v1.h/.cpp` (128-byte C metadata/status ABI),
+`installed_save_probe_private.hpp` (triple fresh read + file-bound
+CMAC/raw validation), and the optional native **FS_OPEN_READ-only**
+`installed_save_probe_native_v1.h/.cpp` entrypoint. The latter is
+cross-compiled in CI but intentionally **not linked into the existing
+Phase17 diagnostic or Phase20 editor** without a separately reviewed
+PKSM frontend integration. It can supply an authenticated **copy of
+only the active 131072-byte raw slot** to a validated read-only Phase18
+parser, with no restoration or game-save write power.
+
+Phase17's diagnostic now uses `rosalina_exit_gate.hpp` to reserve
+**START+SELECT for Rosalina** regardless of key order; solo START exits
+on release. No L-button-dependent action exists. Host strict/ASan/UBSan
+tests verify this behavior.
+
+See [ISSUE15_PKSM_READONLY_SAVE_API.md](ISSUE15_PKSM_READONLY_SAVE_API.md)
+for ABI/caller contract, independent SD draft/backup verification,
+old vs new status interfaces, precise remaining release gates and safe
+integration order. Verified Phase16 full-container backup and
+rehearsal journal must remain untouched. `LiveWritesEnabled=false`
+and all native installed-save restore paths remain BLOCKED.
+
