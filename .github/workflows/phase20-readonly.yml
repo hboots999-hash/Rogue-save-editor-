@@ -1,0 +1,530 @@
+name: Phase20 copied-save OFFLINE editor integration (no installed-game writes)
+on:
+  push:
+    branches: [feature/phase20-readonly-integration]
+  pull_request:
+    paths:
+      - 'phase20/**'
+      - '.github/workflows/phase20-readonly.yml'
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  combined-host:
+    name: P17 ABI + P18 guarded offline exporter + P19 UI, strict and ASan/UBSan
+    runs-on: ubuntu-latest
+    timeout-minutes: 22
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 9908eab15a79c5b64126335d746b140028d05af1
+          path: dependencies/phase17
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 3625e160a17f805821098cf35a47a0f96aba8e16
+          path: dependencies/phase18
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: fa7d00859cd18802a752a566c95892f37f916876
+          path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
+          path: dependencies/moves
+      - name: Confirm pinned source revisions and no private inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+          for p in phase17 phase18 phase19; do git -C dependencies/$p rev-parse HEAD; done
+          if git ls-files phase20 | grep -Ei '\.(sav|gba|rom|cia|3ds|3dsx|elf)$'; then
+            echo 'FAIL: binary, save or ROM tracked'; exit 1
+          fi
+          if grep -En 'rogue18::propose\(|FSUSER_|FSPXI_|FSFILE_Write|AGBSAVE|ARCHIVE_USER_SAVEDATA|fwrite\(' phase20/main.cpp phase20/read_only_v1.hpp; then
+            echo 'FAIL: forbidden mutation/native save operation in Phase20'; exit 1
+          fi
+          grep -Fq 'std::fopen(phase19::OfflineImportPath,"rb")' phase20/read_only_v1.hpp
+          grep -Fq 'phase19::OfflineImportPath,"sdmc:/3ds/PKSM-Rogue"' phase20/offline_edit_v1.hpp
+          grep -Fq 'ARCHIVE_SDMC' dependencies/phase18/phase18/raw_v1_sd.hpp
+          if grep -E 'ARCHIVE_USER_SAVEDATA|ARCHIVE_SAVEDATA|AGBSAVE|FSPXI_' phase20/{main.cpp,offline_edit_v1.hpp,read_only_v1.hpp}; then
+            echo 'FAIL: prohibited installed-game archive'; exit 1
+          fi
+      - name: Compile and run combined host contract twice (strict, sanitizers)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/phase20
+          for mode in strict sanitized; do
+            if [ "$mode" = strict ]; then
+              FLAGS="-O2"
+            else
+              FLAGS="-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie"
+            fi
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase17/phase17 \
+              -Idependencies/phase18 -Idependencies/phase18/phase18 \
+              -Idependencies/phase19 -Idependencies/phase19/phase19 \
+              phase20/test_read_only_v1.cpp \
+              dependencies/phase17/phase17/readonly_status_v1.cpp \
+              -o /tmp/phase20/$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase17/phase17 \
+              -Idependencies/phase18 -Idependencies/phase18/phase18 \
+              -Idependencies/phase19 -Idependencies/phase19/phase19 \
+              phase20/test_offline_edit_v1.cpp \
+              dependencies/phase17/phase17/readonly_status_v1.cpp \
+              -o /tmp/phase20/offline-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/offline-$mode
+            # Actual Phase19 searchable read-only move browser remains
+            # permanently nonwriting (fictional entries until metadata import).
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -Idependencies/phase19/phase19 \
+              dependencies/phase19/phase19/test_move_browser.cpp \
+              -o /tmp/phase20/move-browser-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-browser-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -Idependencies/phase19/phase19 \
+              dependencies/phase19/phase19/test_move_replacement_ui.cpp \
+              -o /tmp/phase20/move-ui-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-ui-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase18/phase18 \
+              -Idependencies/moves -Idependencies/moves/phase18 \
+              -Idependencies/phase19/phase19 \
+              phase20/test_move_catalog_bridge_v1.cpp \
+              -o /tmp/phase20/catalog-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/catalog-$mode
+            # QA-08: compile the actual Phase17 legacy header and Phase18 v2
+            # in one TU, repeatedly. Fail the build on any collision.
+            P17="-Idependencies/phase17/phase17 -Idependencies/phase17/phase14 -Idependencies/phase17/phase13 -Idependencies/phase17/phase11 -Idependencies/phase17/phase10/preview"
+            for attempt in 1 2 3; do
+              g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+                $P17 -Idependencies/phase18/phase18 \
+                dependencies/phase18/phase18/test_unified_v2.cpp \
+                -o /tmp/phase20/unified-$mode-$attempt
+              ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/unified-$mode-$attempt
+            done
+          done
+      - name: Generate deterministic NON-PLAYABLE H168 save for emulator integration
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p synthetic-fixture
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -Idependencies/phase18/phase18 \
+            dependencies/phase18/phase18/test_offline_engine.cpp \
+            -o /tmp/phase20/phase18-fixture
+          /tmp/phase20/phase18-fixture synthetic-fixture/00000001.sav
+          test "$(stat -c '%s' synthetic-fixture/00000001.sav)" -eq 131072
+          sha256sum synthetic-fixture/00000001.sav
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase20-NONPLAYABLE-H168-CI-FIXTURE
+          path: synthetic-fixture/00000001.sav
+          retention-days: 1
+  native-3ds:
+    name: Phase20 combined ARM11 3DSX/ELF (no hardware)
+    needs: [combined-host]
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    container:
+      image: devkitpro/devkitarm:latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 9908eab15a79c5b64126335d746b140028d05af1
+          path: dependencies/phase17
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 3625e160a17f805821098cf35a47a0f96aba8e16
+          path: dependencies/phase18
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: fa7d00859cd18802a752a566c95892f37f916876
+          path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
+          path: dependencies/moves
+      - name: Assemble and build combined native preview in disposable workspace
+        shell: bash
+        run: |
+          set -euo pipefail
+          export PATH="$DEVKITARM/bin:$DEVKITPRO/tools/bin:$DEVKITPRO/portlibs/3ds/bin:$PATH"
+          dkp-pacman -S --noconfirm --needed 3ds-dev 3dstools
+          mkdir -p phase20-build/source phase20-build/include/phase18 phase20-build/include/phase19 phase20-build/include/phase20
+          curl -fLsS --retry 3 -o phase20-build/Makefile \
+            https://raw.githubusercontent.com/devkitPro/3ds-examples/be2001fee08cf8ec7d3366e095e83f6f75da8942/templates/application/Makefile
+          sed -i 's/-fno-exceptions//g;s/-std=gnu++11/-std=gnu++17/g' phase20-build/Makefile
+          # A 37 KiB PC research frame previously contributed to ARM11 crashes.
+          # Enforce the same native hard stop as the audited Phase19 viewer.
+          sed -i '/^CXXFLAGS[[:space:]]*:=/s/$/ -Werror=frame-larger-than=4096 -fstack-usage/' phase20-build/Makefile
+          grep -Fq -- '-Werror=frame-larger-than=4096 -fstack-usage' phase20-build/Makefile
+          sed -i 's/TARGET\s*:=\s*$(notdir $(CURDIR))/TARGET := PKSMRoguePhase20/g' phase20-build/Makefile
+          printf '\nNO_SMDH := 1\nAPP_TITLE := PKSM Rogue Phase20 Offline Draft\n' >> phase20-build/Makefile
+          cp phase20/main.cpp phase20-build/source/main.cpp
+          cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
+          cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp} phase20-build/include/phase20/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
+          cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/
+          cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
+          cp dependencies/moves/phase18/{move_replacement_v1.hpp,move_replacement_v2.hpp} phase20-build/include/phase18/
+          make -C phase20-build -j2
+          test -s phase20-build/build/main.su
+          cp phase20-build/build/main.su phase20-build/STACK_USAGE.txt
+          head -n 30 phase20-build/STACK_USAGE.txt
+          # The exporter is deliberately limited to immutable SD copies.
+          # Native ARM11 stack-usage cap applies to ALL transitive sources,
+          # including editor_model and optional PC research code now heap-backed.
+          grep -Fq 'return rogue18::exportCopied(raw,n,sourcePath,root,request);' phase20/offline_edit_v1.hpp
+          grep -Fq 'ARCHIVE_SDMC' phase20-build/include/phase18/raw_v1_sd.hpp
+          if grep -R -E 'ARCHIVE_USER_SAVEDATA|ARCHIVE_SAVEDATA|AGBSAVE|FSPXI_' phase20-build/source/ phase20-build/include/phase20/; then
+            echo 'FAIL: installed-game write dependency'; exit 1
+          fi
+          test -s phase20-build/PKSMRoguePhase20.3dsx
+          test -s phase20-build/PKSMRoguePhase20.elf
+          arm-none-eabi-nm -C phase20-build/PKSMRoguePhase20.elf > phase20-build/ELF_SYMBOLS.txt
+          # LTO and inlining may erase harmless read-only C++ symbol names.
+          # Verify the wired call in source and linked executable existence,
+          # while still rejecting any forbidden mutation symbols below.
+          grep -Fq 'phase20::inspectFixedSDCopy(active,observation,reason)' phase20/main.cpp
+          grep -Fq 'p17_readonly_status_init_blocked_v1' phase20/main.cpp
+          test -s phase20-build/ELF_SYMBOLS.txt
+          # SDMC immutable backup and draft writes ARE now allowed. No
+          # installed-title / AGB VC transport or restoration symbols allowed.
+          if grep -E 'AGBSAVE|FSPXI_|ARCHIVE_USER_SAVEDATA|rogue_restore::execute' phase20-build/ELF_SYMBOLS.txt; then
+            echo 'FAIL: unexpected installed-save restore symbol'; exit 1
+          fi
+          grep -Fq 'exportFixedSDCopy(const phase19::Demo& display' phase20/offline_edit_v1.hpp
+          grep -Fq 'exportFixedBatch(const phase19::Demo& d' phase20/offline_edit_v1.hpp
+          grep -Fq 'phase20::batchShortcut(state,observation,batch)' phase20/main.cpp
+          grep -Fq 'moveView.initialize(syntheticMoveCatalog()' phase20/main.cpp
+          grep -Fq 'localMoves.verifiedMetadata()' phase20/main.cpp
+          grep -Fq 'static_assert(!rogue18::move_v2::ApplyApproved' phase20/move_catalog_bridge_v1.hpp
+          grep -Fq 'viewingMoves)moveTop(state,moveView)' phase20/main.cpp
+          sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
+          path: |
+            phase20-build/PKSMRoguePhase20.3dsx
+            phase20-build/PKSMRoguePhase20.elf
+            phase20-build/SHA256SUMS.txt
+            phase20-build/STACK_USAGE.txt
+          retention-days: 7
+  experimental-cia:
+    name: Isolated Phase20 offline CIA metadata and package (not release)
+    needs: [native-3ds]
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
+          path: binary
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: fa7d00859cd18802a752a566c95892f37f916876
+          path: dependencies/phase19
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 37492f9dbc904bae6ff10a6e673ae28af19f00d5
+          path: dependencies/moves
+      - name: Package separate, explicitly non-writing title and verify IDs
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fLsS --retry 3 -o /tmp/makerom.zip \
+            https://github.com/3DSGuy/Project_CTR/releases/download/makerom-v0.18.3/makerom-v0.18.3-ubuntu_x86_64.zip
+          echo '6f36f77946742d2b8286a92d887e845e06d430998ed4a9c4856d8ea2d4eebd6f  /tmp/makerom.zip' | sha256sum -c -
+          unzip -qo /tmp/makerom.zip -d /tmp/makerom-tools
+          chmod +x /tmp/makerom-tools/makerom
+          mkdir -p experimental
+          sed 's/0xF73A5/0xF73A7/;s/Phase 19/Phase 20/;s/PRU1/PRU2/' \
+            dependencies/phase19/phase19/rsf > experimental/phase20.rsf
+          # Note: Phase19 dependency is checked out below to guarantee pinned RSF.
+          /tmp/makerom-tools/makerom -f cia \
+            -o experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia \
+            -target t -elf binary/PKSMRoguePhase20.elf -rsf experimental/phase20.rsf \
+            -desc app:4 -exefslogo
+          test -s experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia
+          python3 - <<'PY'
+          from pathlib import Path
+          raw=Path("experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia").read_bytes()
+          assert raw.count(bytes.fromhex("000400000f73a700"))>=2
+          for old in ("0004000007d7ba00","000400000f73a400","000400000f73a500","000400000f73a600"):
+              assert bytes.fromhex(old) not in raw, old
+          print("PASS: isolated Phase20 preview title; no game-title replacement")
+          PY
+          sha256sum experimental/*.cia > experimental/SHA256SUMS.txt
+          printf '%s\n' \
+            'NOT FOR INSTALLATION AS A RELEASE. PHASE20 OFFLINE COPY EDITOR EXPERIMENT.' \
+            'Separate title 000400000F73A700. No installed-game save writer.' \
+            'Reads fixed 128KiB SD copy and exports immutable backup plus separate SD draft.' \
+            'Phase17 status defaults NOT CHECKED. No producer/live access.' \
+            'ROM identity and edited draft gameplay/persistence unverified.' \
+            > experimental/READ_ME_FIRST.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: phase20-CIA-OFFLINE-NOT-RELEASE
+          path: experimental/
+          retention-days: 7
+  azahar-smoke:
+    name: Optional Azahar 3DSX and installed CIA boot smoke
+    needs: [experimental-cia]
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase20-3DSX-ELF-OFFLINE-EXPERIMENTAL
+          path: binary
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase20-CIA-OFFLINE-NOT-RELEASE
+          path: experimental
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+          ref: 3625e160a17f805821098cf35a47a0f96aba8e16
+          path: dependencies/phase18
+      - uses: actions/download-artifact@v4
+        with:
+          name: phase20-NONPLAYABLE-H168-CI-FIXTURE
+          path: synthetic-fixture
+      - name: Synthetic save import, on-screen offline edit and draft verification in Azahar
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends xvfb xauth xdotool openbox \
+            imagemagick mesa-utils libgl1-mesa-dri libegl1 libopengl0 libglu1-mesa \
+            libxkbcommon-x11-0 libxcb-cursor0 libfuse2t64
+          curl -fLsS --retry 3 -o azahar.AppImage \
+            https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar.AppImage
+          echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
+          chmod +x azahar.AppImage
+          mkdir -p evidence demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue
+          printf 'DO-NOT-TOUCH-PHASE20-CANARY\n' > demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/canary.txt
+          sha256sum demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/canary.txt > evidence/canary-before.txt
+          export XDG_DATA_HOME="$PWD/demo-data" XDG_CONFIG_HOME="$PWD/demo-config"
+          export LIBGL_ALWAYS_SOFTWARE=1 GALLIUM_DRIVER=llvmpipe
+          export MESA_GL_VERSION_OVERRIDE=4.5 MESA_GLSL_VERSION_OVERRIDE=450 QT_QPA_PLATFORM=xcb
+          export BIN="$(realpath binary/PKSMRoguePhase20.3dsx)"
+          export CIA="$(realpath experimental/PKSMRogue-Phase20-OFFLINE-NOT-RELEASE.cia)"
+          xvfb-run -a -s '-screen 0 1280x900x24' bash -c '
+            set -u
+            openbox > evidence/wm.log 2>&1 &
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$BIN" > evidence/3dsx.log 2>&1 &
+            guest=$!
+            sleep 18
+            # Azahar 2126.2 default Qt map from upstream config.cpp:
+            # A=a, B=s, D-pad Down=g, Start=m, Select=n.
+            # Arrow keys only map to Circle Pad and z/x map to X/Y, so
+            # earlier automation never reached these D-pad-only menus.
+            azwin=$(xdotool search --onlyvisible --name "Azahar" | head -n 1)
+            if test -n "$azwin"; then
+              xdotool windowactivate --sync "$azwin" || true
+              xdotool windowfocus --sync "$azwin" || true
+            fi
+            # Xdotool quick taps are shorter than a 3DS VBlank, causing
+            # menu presses to be missed. Hold each emulated button for
+            # several frames and release explicitly.
+            tap3ds() {
+              xdotool keydown "$1" || true
+              sleep 0.24
+              xdotool keyup "$1" || true
+              sleep 0.24
+            }
+            import -window root evidence/3dsx-home.png
+            tap3ds a
+            import -window root evidence/3dsx-party.png
+            # X (Azahar z) chooses an independent six-Pokemon picker
+            # without stealing Y from the verified Phase20 batch queue.
+            tap3ds z  # X on Party
+            import -window root evidence/3dsx-move-party-picker.png
+            tap3ds a  # choose first Pokemon
+            import -window root evidence/3dsx-move-picker-slots.png
+            tap3ds s  # back to party picker
+            tap3ds s  # close picker -> Party screen
+            # Phase19 integrated READ-ONLY move browser, deliberately
+            # fictional demo catalogue. This MUST not create an SD draft.
+            tap3ds a  # Party -> Pokemon details
+            tap3ds x  # Y on Pokemon opens move browser, not batch
+            import -window root evidence/3dsx-move-slots.png
+            tap3ds a  # Slots -> alphabetical catalogue
+            import -window root evidence/3dsx-move-catalogue.png
+            tap3ds x  # Y opens D-pad search keyboard inside browser
+            import -window root evidence/3dsx-move-search.png
+            tap3ds s  # cancel keyboard -> catalogue
+            tap3ds a  # catalogue -> replacement review
+            tap3ds a  # review -> confirm stage 1
+            import -window root evidence/3dsx-move-confirm-one.png
+            tap3ds a  # confirm stage 1 -> confirm stage 2
+            import -window root evidence/3dsx-move-confirm-two.png
+            tap3ds z  # final X -> permanent BLOCKED notice (no draft)
+            import -window root evidence/3dsx-move-blocked.png
+            tap3ds s  # notice -> catalogue
+            tap3ds s  # catalogue -> slots
+            tap3ds s  # slots -> Pokemon
+            tap3ds s  # Pokemon -> Party
+            tap3ds s  # Party -> Home
+            import -window root evidence/3dsx-home-return.png
+            for i in 1 2 3 4 5 6; do tap3ds g; done
+            tap3ds a
+            import -window root evidence/3dsx-import-menu.png
+            tap3ds a
+            import -window root evidence/3dsx-missing-copy.png
+            # Keep the SAME native 3DSX process running. Opening a new
+            # Azahar instance can show its library UI rather than the app,
+            # silently redirecting the keyboard events to its search filter.
+            # This fixture is synthesized from code, not a real save/ROM.
+            outroot=demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue
+            mkdir -p "$outroot/imports"
+            cp synthetic-fixture/00000001.sav "$outroot/imports/00000001.sav"
+            sha256sum "$outroot/imports/00000001.sav" > evidence/import-before.txt
+            tap3ds s  # Dismiss missing-copy notice -> import menu
+            tap3ds a  # Validate the now-existing synthetic SD copy -> Home
+            sleep 2
+            import -window root evidence/3dsx-imported-home.png
+            # Home -> Money -> A enters the Phase20 native offline editor.
+            for i in 1 2 3; do tap3ds g; done
+            tap3ds a
+            import -window root evidence/3dsx-money.png
+            tap3ds a
+            import -window root evidence/3dsx-offline-money-editor.png
+            tap3ds t  # Azahar 2126.2 D-pad Up=t: synthetic money +1
+            import -window root evidence/3dsx-money-plus-one.png
+            tap3ds a  # Review
+            tap3ds a  # Confirm step 1
+            tap3ds a  # Confirm step 2 -> SD-only separate backup/draft
+            sleep 3
+            import -window root evidence/3dsx-draft-export-result.png
+            # Hard evidence: the emulator produced TWO separately named
+            # SD drafts, and the original import remains byte-exact.
+            test -s "$outroot/backups/phase18_original_001.sav"
+            test -s "$outroot/drafts/phase18_draft_001.sav"
+            test "$(stat -c %s "$outroot/drafts/phase18_draft_001.sav")" -eq 131072
+            sha256sum -c evidence/import-before.txt
+            cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_001.sav"
+            # Exercise the Y-driven 3DSX v3 multi-edit path in this SAME
+            # running emulator, with non-playable generated data only.
+            # Azahar 2126.2 default keys: Y=x Up=t Down=g A=a B=s.
+            tap3ds s  # close single-draft result -> Money
+            tap3ds s  # Money -> Home; selection stays on Money (index 3)
+            tap3ds x  # Y: start RAM-only queue
+            tap3ds a  # Home -> Money
+            tap3ds a  # Money -> value editor
+            tap3ds t  # money +1
+            tap3ds a  # review selected scalar
+            tap3ds a  # STAGE money scalar (no SD output)
+            import -window root evidence/3dsx-batch-money-staged.png
+            tap3ds s  # dismiss staged notice
+            tap3ds s  # Money -> Home
+            tap3ds t  # home selection Money -> Bag
+            tap3ds a  # Bag list
+            tap3ds a  # edit existing item quantity
+            tap3ds t  # quantity 10 -> 11
+            tap3ds a  # review item scalar
+            tap3ds a  # STAGE item scalar
+            import -window root evidence/3dsx-batch-two-staged.png
+            tap3ds s  # dismiss staged notice
+            tap3ds s  # Bag -> Home
+            tap3ds x  # Y: review both pending scalars
+            import -window root evidence/3dsx-batch-review.png
+            tap3ds a  # batch confirmation 1
+            tap3ds a  # batch confirmation 2
+            tap3ds a  # export ONE v3 SD-only combined draft
+            sleep 3
+            import -window root evidence/3dsx-batch-export-result.png
+            test -s "$outroot/backups/phase18_original_002.sav"
+            test -s "$outroot/drafts/phase18_draft_002.sav"
+            test "$(stat -c %s "$outroot/drafts/phase18_draft_002.sav")" -eq 131072
+            cmp "$outroot/imports/00000001.sav" "$outroot/backups/phase18_original_002.sav"
+            # Return to HOME, then test standalone START release exit.
+            tap3ds s
+            tap3ds s
+            tap3ds m
+            import -window root evidence/3dsx-exit-attempt.png
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+            APPIMAGE_EXTRACT_AND_RUN=1 timeout 50s ./azahar.AppImage --install "$CIA" > evidence/install.log 2>&1 &
+            installer=$!
+            sleep 12
+            xdotool key Return || true
+            wait "$installer" || true
+            content=$(find demo-data -type f -name "*.app" -path "*0f73a700*" -print -quit)
+            test -n "$content" || exit 1
+            real=$(realpath "$content")
+            echo "$real" > evidence/installed-path.txt
+            APPIMAGE_EXTRACT_AND_RUN=1 ./azahar.AppImage "$real" > evidence/cia.log 2>&1 &
+            guest=$!
+            sleep 18
+            import -window root evidence/cia-home.png
+            kill "$guest" 2>/dev/null || true
+            wait "$guest" 2>/dev/null || true
+          '
+          test -s evidence/3dsx-home.png
+          test -s evidence/3dsx-party.png
+          test -s evidence/3dsx-home-return.png
+          test -s evidence/3dsx-move-party-picker.png
+          test -s evidence/3dsx-move-picker-slots.png
+          test -s evidence/3dsx-move-confirm-one.png
+          test -s evidence/3dsx-move-confirm-two.png
+          test -s evidence/3dsx-move-slots.png
+          test -s evidence/3dsx-move-catalogue.png
+          test -s evidence/3dsx-move-search.png
+          test -s evidence/3dsx-move-blocked.png
+          test -s evidence/3dsx-import-menu.png
+          test -s evidence/3dsx-missing-copy.png
+          test -s evidence/3dsx-exit-attempt.png
+          test -s evidence/cia-home.png
+          test -s evidence/3dsx-imported-home.png
+          test -s evidence/3dsx-draft-export-result.png
+          test -s evidence/3dsx-batch-review.png
+          test -s evidence/3dsx-batch-export-result.png
+          sha256sum -c evidence/canary-before.txt
+          sha256sum -c evidence/import-before.txt
+          # An independent host compile of Phase18 v2 verifies the WHOLE
+          # modified save against its original, not just a changed money field.
+          g++ -std=c++17 -O2 -Wall -Wextra -Wpedantic -Werror \
+            -I. -Idependencies/phase18 -Idependencies/phase18/phase18 \
+            phase20/verify_emulator_draft.cpp -o /tmp/phase20-azahar-verify
+          /tmp/phase20-azahar-verify \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/imports/00000001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups/phase18_original_001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts/phase18_draft_001.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/backups/phase18_original_002.sav \
+            demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/drafts/phase18_draft_002.sav \
+            | tee evidence/offline-draft-verified.txt
+          echo 'PASS: Azahar native 3DSX single-edit + Y-queued multi-edit batch; CIA boot; SD canary intact' | tee evidence/result.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: phase20-azahar-startup-EVIDENCE-OPTIONAL
+          path: evidence/
+          retention-days: 7
+          if-no-files-found: warn
