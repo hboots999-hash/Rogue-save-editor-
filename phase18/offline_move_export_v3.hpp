@@ -16,7 +16,7 @@
 namespace rogue18 { namespace move_export_v3 {
 constexpr uint32_t ContractVersion=3;
 constexpr bool MayRestoreInstalledGame=false;
-constexpr const char* FixedSdDraftDir="sdmc:/3ds/PKSMRogue/drafts";
+constexpr const char* FixedSdDraftDir="sdmc:/3ds/PKSM-Rogue/drafts";
 struct Receipt {
     bool ok=false;
     uint32_t version=ContractVersion;
