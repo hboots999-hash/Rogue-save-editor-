@@ -2,6 +2,7 @@
 // Replacement additions are recorded, never executed until a new release gate.
 #pragma once
 #include "move_replacement_v2.hpp"
+#include "offline_move_export_v3.hpp"
 #include "multi_edit_v3.hpp"
 #include <vector>
 namespace rogue18 { namespace move_queue_v4 {
@@ -156,6 +157,30 @@ inline bool reviewSingle(const uint8_t* original,size_t n,
     out.catalogBasePP=move.basePP;
     out.originalPPUps=move_v1::ppUps(source.expectedPPBonuses,source.moveSlot);
     return true;
+}
+// Opt-in experimental copy-only flow for the FIRST CIA. No v3 scalar
+// multi-edit and no installed-game Apply. Existing queue preview stays locked.
+inline Result previewSingleMoveDraft(const uint8_t* imported,size_t n,
+                                     const move_v2::Catalog& db,
+                                     const Queue& queue){
+    SingleMoveReview review{};
+    if(!reviewSingle(imported,n,db,queue,review))
+        return blocked("Move queue: missing authenticated single-move review");
+    move_v3::Selection sel{};
+    sel.original=queue.replacements.front();
+    return move_v3::preview(imported,n,db,sel);
+}
+inline bool exportSingleMoveDraft(const uint8_t* imported,size_t n,
+                                  const move_v2::Catalog& db,
+                                  const Queue& queue,const char* token,
+                                  move_export_v3::Receipt& out){
+    out=move_export_v3::Receipt{};
+    const auto previewed=previewSingleMoveDraft(imported,n,db,queue);
+    if(!previewed.ok)return false;
+    move_v3::Selection sel{};
+    sel.original=queue.replacements.front();
+    return move_export_v3::exportOfflineDraft(imported,n,db,sel,
+                                              token,out);
 }
 inline bool mayWriteInstalledGame(const Queue&){return false;}
 }} // namespace rogue18::move_queue_v4
