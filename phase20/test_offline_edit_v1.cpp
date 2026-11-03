@@ -378,6 +378,116 @@ int main(){
     assert(takeOfflineKey(state,flow,captured,phase19::Key::B));
     assert(flow.stage==EditStage::Idle);
     assert(readBytes(input)==original);
+    // Additional QA Coverage (Assignment 2):
+    // 1. Min/max boundary checks across all 5 offline edit operations
+    // Money: min 0, max 999999
+    {
+        rogue18::Request rMin{}, rMax{};
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::Money,0,0,0},rMin,message));
+        assert(rMin.money==0);
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::Money,0,0,999999},rMax,message));
+        assert(rMax.money==999999);
+    }
+    // ExistingItem: min 1, max 999
+    {
+        rogue18::Request rMin{}, rMax{};
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::ExistingItem,0,0,1},rMin,message));
+        assert(rMin.quantity==1);
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::ExistingItem,0,0,999},rMax,message));
+        assert(rMax.quantity==999);
+    }
+    // IV: min 0, max 31
+    {
+        rogue18::Request rMin{}, rMax{};
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::IV,0,0,0},rMin,message));
+        assert(rMin.stats[0]==0);
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::IV,0,0,31},rMax,message));
+        assert(rMax.stats[0]==31);
+    }
+    // EV: min 0, max bounded by 252 and total 510
+    {
+        rogue18::Request rMin{}, rMax{};
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::EV,0,0,0},rMin,message));
+        assert(rMin.stats[0]==0);
+        unsigned other=0;
+        for(unsigned j=1;j<6;j++) other+=display.party[0].ev[j];
+        unsigned maxEv=std::min(252u,510u-other);
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::EV,0,0,maxEv},rMax,message));
+        assert(rMax.stats[0]==maxEv);
+    }
+    // PP: min 0, max 64
+    {
+        rogue18::Request rMin{}, rMax{};
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::PP,0,0,0},rMin,message));
+        assert(rMin.pp==0);
+        assert(requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::PP,0,0,64},rMax,message));
+        assert(rMax.pp==64);
+    }
+
+    // 2. Invalid party slots, missing Pokemon, empty move slots and invalid item entries
+    {
+        rogue18::Request rBad{};
+        // Out-of-bounds party slot
+        assert(!requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::IV,display.partyCount,0,10},rBad,message));
+        assert(!requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::EV,display.partyCount,0,10},rBad,message));
+        assert(!requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::PP,display.partyCount,0,10},rBad,message));
+        // Empty move slot check
+        for(unsigned m=0;m<4;m++) {
+            if(display.party[0].moves[m]==0) {
+                assert(!requestForCopy(original.data(),original.size(),display,captured,
+                                      {OfflineKind::PP,0,m,10},rBad,message));
+            }
+        }
+        // Out-of-bounds bag slot
+        assert(!requestForCopy(original.data(),original.size(),display,captured,
+                              {OfflineKind::ExistingItem,display.bagCount,0,5},rBad,message));
+    }
+
+    // 3. UI flow: cancellation at ConfirmOne, ConfirmTwo, and reset via X
+    {
+        state.screen=phase19::Screen::Money;
+        OfflineFlow testFlow{};
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::A));
+        assert(testFlow.stage==EditStage::Value);
+        // Up (+1)
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::Up));
+        assert(testFlow.proposed==testFlow.original+1);
+        // X resets to original
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::X));
+        assert(testFlow.proposed==testFlow.original);
+        // Up again (+1) and proceed to ConfirmOne
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::Up));
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::A));
+        assert(testFlow.stage==EditStage::ConfirmOne);
+        // Cancel with B returns to Value
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::B));
+        assert(testFlow.stage==EditStage::Value);
+        // Re-advance to ConfirmTwo
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::A));
+        assert(testFlow.stage==EditStage::ConfirmOne);
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::A));
+        assert(testFlow.stage==EditStage::ConfirmTwo);
+        // Cancel with B returns to Value
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::B));
+        assert(testFlow.stage==EditStage::Value);
+        // Cancel with B returns to Idle
+        assert(takeOfflineKey(state,testFlow,captured,phase19::Key::B));
+        assert(testFlow.stage==EditStage::Idle);
+    }
+
     fs::remove_all(root);
     std::cout<<"PASS Phase20 offline UI intent, SHA-lock, source-safe backup/draft and guarded export\n";
 }
