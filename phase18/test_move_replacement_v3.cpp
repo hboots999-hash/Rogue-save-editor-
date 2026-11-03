@@ -2,7 +2,7 @@
 #ifndef ROGUE18_TEST_MOVE_V2
 #error "Synthetic fixture tests must not ship in the CIA"
 #endif
-#include "move_replacement_v3.hpp"
+#include "offline_move_export_v3.hpp"
 #define main offline_fixture_main_unused_v3
 #pragma GCC diagnostic push
 #pragma GCC diagnostic ignored "-Wreturn-type"
@@ -113,6 +113,34 @@ int main(int argc,char** argv){
     chosen.original.replacementId=89;
     const auto draft=previewSynthetic(original.data(),original.size(),chosen,10);
     CHECK(draft.ok);
+    char tempName[]="/tmp/pksm_v3_XXXXXX";
+    const char* tempDir=::mkdtemp(tempName);
+    CHECK(tempDir!=nullptr);
+    move_export_v3::Receipt receipt{};
+    CHECK(move_export_v3::exportSyntheticToTemp(
+        original.data(),original.size(),chosen,10,tempDir,"first001",receipt));
+    CHECK(receipt.ok && receipt.newMove==89 && receipt.partySlot==0);
+    CHECK(receipt.originalSha==sourceDigest(original.data(),original.size()));
+    CHECK(receipt.draftSha==sourceDigest(draft.candidate.data(),
+                                      draft.candidate.size()));
+    CHECK(receipt.changedBytes<=8 && receipt.changedBytes>0);
+    CHECK(move_export_v3::verifyFile(receipt.backupFile,
+                                   original.data(),original.size()));
+    CHECK(move_export_v3::verifyFile(receipt.draftFile,
+                                   draft.candidate.data(),draft.candidate.size()));
+    CHECK(!move_export_v3::exportSyntheticToTemp(
+        original.data(),original.size(),chosen,10,tempDir,"first001",receipt));
+    CHECK(move_export_v3::verifyFile(receipt.backupFile,
+                                   original.data(),original.size()));
+    CHECK(!move_export_v3::exportSyntheticToTemp(
+        original.data(),original.size(),chosen,10,tempDir,"../unsafe",receipt));
+    CHECK(!move_export_v3::exportSyntheticToTemp(
+        original.data(),original.size(),chosen,10,tempDir,
+        "abcdefghijklmnopqrstuvwxyz",receipt));
+    CHECK(::unlink(receipt.backupFile)==0);
+    CHECK(::unlink(receipt.draftFile)==0);
+    CHECK(::rmdir(tempDir)==0);
+    CHECK(!move_export_v3::mayWriteInstalledGame(receipt));
     if(argc>1) {
         std::FILE* f=std::fopen(argv[1],"wb");
         CHECK(f!=nullptr);
