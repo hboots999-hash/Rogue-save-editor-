@@ -36,6 +36,7 @@ int main(){
     assert(browser.browse(d,phase19::MoveKey::A));
     assert(browser.browse(d,phase19::MoveKey::A));
     assert(browser.page==phase19::MovePage::Review);
+    browser.releaseApproval(); // require key release before the first review
     assert(browser.browse(d,phase19::MoveKey::A));
     assert(browser.page==phase19::MovePage::ConfirmOne);
     browser.releaseApproval(); // no held A may auto-confirm
