@@ -152,6 +152,7 @@ jobs:
           arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
             -fexceptions -march=armv6k -mtune=mpcore \
             -mfloat-abi=hard -mfpu=vfp \
+            -I"$DEVKITPRO/libctru/include" \
             -Iphase17 -Iphase14 -Iphase11 -Iphase13 \
             -Iphase10/preview \
             -c phase17/installed_save_probe_native_v1.cpp \
