@@ -488,18 +488,18 @@ void moveDraftTop(const phase20::MoveDraftFlow& f) {
     std::puts("No installed save writes.");
     if(f.stage==phase20::MoveDraftStage::ConfirmOne ||
        f.stage==phase20::MoveDraftStage::ConfirmTwo) {
-        std::printf("Party %u / Slot %u\\n",f.review.partySlot+1,
+        std::printf("Party %u / Slot %u\n",f.review.partySlot+1,
                     f.review.moveSlot+1);
-        std::printf("Move ID %u -> %u\\n",unsigned(f.review.previousId),
+        std::printf("Move ID %u -> %u\n",unsigned(f.review.previousId),
                     unsigned(f.review.replacementId));
-        std::printf("PP %u -> %u (PP Ups reset)\\n",
+        std::printf("PP %u -> %u (PP Ups reset)\n",
                     unsigned(f.review.currentPP),
                     unsigned(f.review.catalogBasePP));
-        std::puts("\\nExperimental 128KiB SD DRAFT.");
+        std::puts("\nExperimental 128KiB SD DRAFT.");
         std::puts("NOT verified in gameplay.");
         std::puts("Move legality NOT proven.");
         std::puts("Do NOT inject into your game.");
-        std::printf("\\nConfirmation %u / 2\\n",
+        std::printf("\nConfirmation %u / 2\n",
                     f.stage==phase20::MoveDraftStage::ConfirmOne?1u:2u);
         std::puts("A: accept   B: CANCEL");
     } else {
