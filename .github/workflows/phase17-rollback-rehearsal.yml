@@ -51,13 +51,14 @@ jobs:
           set -euo pipefail
           CXXFLAGS="-std=c++17 -Wall -Wextra -Wpedantic -Werror -O2"
           g++ $CXXFLAGS -Iphase17 -c phase17/readonly_status_v1.cpp -o /tmp/status.o
+          g++ $CXXFLAGS -Iphase17 -c phase17/installed_save_probe_v1.cpp -o /tmp/saveprobe.o
           g++ $CXXFLAGS -Iphase17 -Idependencies/phase18 \
             -Idependencies/phase18/phase18 \
             -c phase17/test_phase18_abi_boundary.cpp -o /tmp/phase18_consumer.o
-          g++ $CXXFLAGS /tmp/phase18_consumer.o /tmp/status.o -o /tmp/phase18_abi
+          g++ $CXXFLAGS /tmp/phase18_consumer.o /tmp/status.o /tmp/saveprobe.o -o /tmp/phase18_abi
           /tmp/phase18_abi
           nm -C /tmp/status.o | grep -F p17_readonly_status_shape_valid_v1
-          if nm -C /tmp/status.o | grep -E 'FSPXI_WriteFile|phase14::execute|phase14::recover|rogue18::propose'; then
+          if nm -C /tmp/status.o /tmp/saveprobe.o | grep -E 'FSPXI_WriteFile|phase14::execute|phase14::recover|rogue18::propose'; then
             echo 'BLOCK: write/recovery operation referenced by the public ABI' >&2
             exit 1
           fi
@@ -137,6 +138,30 @@ jobs:
             -march=armv6k -mtune=mpcore -mfloat-abi=hard -mfpu=vfp \
             -Iphase17 -c phase17/readonly_status_v1.cpp -o phase17-build/readonly-status-v1.o
           test -s phase17-build/readonly-status-v1.o
+          # PKSM Issue #15 private native read-only adapter is compiled in
+          # its own translation unit: no Phase18 h168 types and no UI call.
+          # The existing Phase17 3DSX is intentionally not given this API
+          # until an independently reviewed PKSM UI integration is ready.
+          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
+            -fexceptions -march=armv6k -mtune=mpcore \
+            -mfloat-abi=hard -mfpu=vfp \
+            -Iphase17 -Iphase14 -Iphase11 -Iphase13 \
+            -Iphase10/preview \
+            -c phase17/installed_save_probe_v1.cpp \
+            -o phase17-build/installed-save-probe-v1.o
+          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
+            -fexceptions -march=armv6k -mtune=mpcore \
+            -mfloat-abi=hard -mfpu=vfp \
+            -Iphase17 -Iphase14 -Iphase11 -Iphase13 \
+            -Iphase10/preview \
+            -c phase17/installed_save_probe_native_v1.cpp \
+            -o phase17-build/installed-save-probe-native.o
+          test -s phase17-build/installed-save-probe-v1.o
+          test -s phase17-build/installed-save-probe-native.o
+          if arm-none-eabi-nm -u phase17-build/installed-save-probe-native.o | grep FSPXI_WriteFile; then
+            echo 'ERROR: optional PKSM read-only probe linked a privileged write symbol' >&2
+            exit 1
+          fi
           if arm-none-eabi-nm -u phase17-build/build/main.o | grep FSPXI_WriteFile; then
             echo 'ERROR: unexpected privileged write symbol in Phase17 main'; exit 1
           fi
