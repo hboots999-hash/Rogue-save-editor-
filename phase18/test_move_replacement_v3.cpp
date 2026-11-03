@@ -128,17 +128,19 @@ int main(int argc,char** argv){
                                    original.data(),original.size()));
     CHECK(move_export_v3::verifyFile(receipt.draftFile,
                                    draft.candidate.data(),draft.candidate.size()));
+    const std::string backupPath=receipt.backupFile;
+    const std::string draftPath=receipt.draftFile;
     CHECK(!move_export_v3::exportSyntheticToTemp(
         original.data(),original.size(),chosen,10,tempDir,"first001",receipt));
-    CHECK(move_export_v3::verifyFile(receipt.backupFile,
+    CHECK(move_export_v3::verifyFile(backupPath.c_str(),
                                    original.data(),original.size()));
     CHECK(!move_export_v3::exportSyntheticToTemp(
         original.data(),original.size(),chosen,10,tempDir,"../unsafe",receipt));
     CHECK(!move_export_v3::exportSyntheticToTemp(
         original.data(),original.size(),chosen,10,tempDir,
         "abcdefghijklmnopqrstuvwxyz",receipt));
-    CHECK(::unlink(receipt.backupFile)==0);
-    CHECK(::unlink(receipt.draftFile)==0);
+    CHECK(::unlink(backupPath.c_str())==0);
+    CHECK(::unlink(draftPath.c_str())==0);
     CHECK(::rmdir(tempDir)==0);
     CHECK(!move_export_v3::mayWriteInstalledGame(receipt));
     if(argc>1) {
