@@ -101,12 +101,12 @@ jobs:
               phase20/test_move_catalog_bridge_v1.cpp \
               -o /tmp/phase20/catalog-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/catalog-$mode
-            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \\
-              -I. -Idependencies/phase17/phase17 \\
-              -Idependencies/phase18 -Idependencies/phase18/phase18 \\
-              -Idependencies/moves -Idependencies/moves/phase18 \\
-              -Idependencies/phase19 -Idependencies/phase19/phase19 \\
-              phase20/test_move_draft_v1.cpp \\
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase17/phase17 \
+              -Idependencies/phase18 -Idependencies/phase18/phase18 \
+              -Idependencies/moves -Idependencies/moves/phase18 \
+              -Idependencies/phase19 -Idependencies/phase19/phase19 \
+              phase20/test_move_draft_v1.cpp \
               -o /tmp/phase20/move-draft-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-draft-$mode
             # QA-08: compile the actual Phase17 legacy header and Phase18 v2
