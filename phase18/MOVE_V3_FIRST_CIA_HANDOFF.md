@@ -36,6 +36,9 @@ const auto candidate = rogue18::move_queue_v4::previewSingleMoveDraft(
       importedRaw,131072,authenticatedCatalog,staged);
 if (!candidate.ok) return; // show failure, never silently write
 
+// Phase20 can also call reviewSingle(...) and check
+// review.mayExportExperimentalDraft. NEVER use review.mayExport,
+// which remains false for non-experimental release authorisation.
 // User explicitly confirms EXPERIMENTAL OFFLINE DRAFT, NOT installed game.
 // An alphanumeric token (e.g. "trial_001") must be unique, 1..24 chars.
 // Create sdmc:/3ds/PKSM-Rogue/drafts folder before showing Export.
