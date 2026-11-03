@@ -142,14 +142,20 @@ jobs:
           # its own translation unit: no Phase18 h168 types and no UI call.
           # The existing Phase17 3DSX is intentionally not given this API
           # until an independently reviewed PKSM UI integration is ready.
-          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
+          # libctru public headers use GNU extensions (anonymous structs,
+          # flexible arrays). Keep -Wall/-Wextra/-Werror, but not -Wpedantic
+          # when compiling a TU that includes third-party <3ds.h>.
+          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Werror \
             -fexceptions -march=armv6k -mtune=mpcore \
             -mfloat-abi=hard -mfpu=vfp \
             -Iphase17 -Iphase14 -Iphase11 -Iphase13 \
             -Iphase10/preview \
             -c phase17/installed_save_probe_v1.cpp \
             -o phase17-build/installed-save-probe-v1.o
-          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Wpedantic -Werror \
+          # libctru public headers use GNU extensions (anonymous structs,
+          # flexible arrays). Keep -Wall/-Wextra/-Werror, but not -Wpedantic
+          # when compiling a TU that includes third-party <3ds.h>.
+          arm-none-eabi-g++ -std=gnu++17 -Wall -Wextra -Werror \
             -fexceptions -march=armv6k -mtune=mpcore \
             -mfloat-abi=hard -mfpu=vfp \
             -I"$DEVKITPRO/libctru/include" \
