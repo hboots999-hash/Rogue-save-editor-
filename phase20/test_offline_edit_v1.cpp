@@ -488,6 +488,66 @@ int main(){
         assert(testFlow.stage==EditStage::Idle);
     }
 
+    // 4. Nature and Ability slot offline invariants and bitfield safety tests
+    {
+        const auto view=rogue18::v2::inspect(original.data(),original.size());
+        assert(view.data.party.size()>0);
+        const auto& mon=view.data.party[0].value;
+
+        // Nature edit requires verifiedNatureModifier evidence
+        rogue18::Request rNat{};
+        rNat.kind=rogue18::Kind::Nature;
+        rNat.expectedCounter=captured.activeCounter;
+        rNat.expectedDigest=captured.sourceSha256;
+        rNat.slot=0;
+        rNat.expectedPid=mon.pid;
+        rNat.expectedOt=mon.ot;
+        rNat.expectedSpecies=mon.species;
+        rNat.expectedPokemonChecksum=mon.checksum;
+        rNat.expectedNature=mon.effectiveNature;
+        rNat.nature=(mon.effectiveNature+1)%25;
+
+        rogue18::Evidence noEv{};
+        assert(!rogue18::propose(original.data(),original.size(),rNat,noEv).ok);
+
+        // When evidence is active, nature update preserves lower 3 language bits
+        rogue18::Evidence natEv{};
+        natEv.verifiedNatureModifier=true;
+        auto natRes=rogue18::propose(original.data(),original.size(),rNat,natEv);
+        assert(natRes.ok);
+
+        // Out-of-bounds nature (>24) fails closed
+        auto rNatOOB=rNat;
+        rNatOOB.nature=25;
+        assert(!rogue18::propose(original.data(),original.size(),rNatOOB,natEv).ok);
+
+        // Ability slot requires verifiedAbilitySlot evidence
+        rogue18::Request rAbil{};
+        rAbil.kind=rogue18::Kind::AbilitySlot;
+        rAbil.expectedCounter=captured.activeCounter;
+        rAbil.expectedDigest=captured.sourceSha256;
+        rAbil.slot=0;
+        rAbil.expectedPid=mon.pid;
+        rAbil.expectedOt=mon.ot;
+        rAbil.expectedSpecies=mon.species;
+        rAbil.expectedPokemonChecksum=mon.checksum;
+        rAbil.abilitySlot=1;
+
+        assert(!rogue18::propose(original.data(),original.size(),rAbil,noEv).ok);
+
+        // When evidence is active, slot 0..2 permitted; slot >2 rejected
+        rogue18::Evidence abilEv{};
+        abilEv.verifiedAbilitySlot=true;
+        assert(rogue18::propose(original.data(),original.size(),rAbil,abilEv).ok);
+        auto rAbilOOB=rAbil;
+        rAbilOOB.abilitySlot=3;
+        assert(!rogue18::propose(original.data(),original.size(),rAbilOOB,abilEv).ok);
+
+        // Live write and restore remain permanently disabled
+        assert(!rogue18::v2::mayRestoreInstalledGame(rNat));
+        assert(!rogue18::v2::mayRestoreInstalledGame(rAbil));
+    }
+
     fs::remove_all(root);
     std::cout<<"PASS Phase20 offline UI intent, SHA-lock, source-safe backup/draft and guarded export\n";
 }

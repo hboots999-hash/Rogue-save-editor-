@@ -119,11 +119,39 @@ Tests in `phase20/test_offline_edit_v1.cpp` verify:
 
 ---
 
-## 7. Deliverables & Integration Instructions
+## 7. Phase 21 Source-Audit Findings: Move Tables, Nature Mints, and Abilities
 
-- **Superceded PR:** PR #13 (unmerged, identified as superseded due to base branch file pollution).
-- **Clean PR Branch:** `feature/phase20-qa-improvements-9065036775014488963` rebased cleanly on `feature/phase20-readonly-integration` HEAD (`7ddd7a20e4ec6b9a6294f7b060754956da722be9`).
-- **Clean PR Scope:** Strictly contains 3 files:
-  - `phase20/QA_FINDINGS_REPORT.md`
-  - `phase20/test_read_only_v1.cpp`
-  - `phase20/test_offline_edit_v1.cpp`
+Based on independent source audits of Pokabbie's EX-v2.1 source and Phase 18 implementation:
+
+### 7.1 Move Tables: Mainline vs Revised Modes
+- `include/pokemon.h` defines:
+  `gBattleMoves = Rogue_GetRevisionModeActive() ? gBattleMoves_Revised : gBattleMoves_Mainline`
+- Table A (`0x00BD27D0`, Ice Beam PP=10) corresponds to **Mainline Mode**.
+- Table B (`0x00BD8E30`, Ice Beam PP=15) corresponds to **Revised Mode**.
+- Revised Mode is controlled by user settings and cached at the start of a rogue run (`gRogueRun.revisedModeEnabled`). It is not merely a Hub vs Run split.
+- **Production Status:** The 43 mutually agreeing move IDs are enabled in Phase 20 experimental SD draft export (`phase20/move_draft_v1.hpp`, PR #16). Universal replacement across all 936 moves remains gated until runtime mode negotiation is verified on physical hardware.
+
+### 7.2 Nature Mints: Preservation of Language Bitfield
+- `include/pokemon.h` BoxPokemon struct packs `language:3` (bits 0..2) and `hiddenNatureModifier:5` (bits 3..7) into the same byte at `monAt + 18`.
+- In `src/pokemon.c`, effective nature is:
+  `effectiveNature = (pid % 25) ^ hiddenNatureModifier`
+- To change nature, the setter calculates:
+  `modifier = (pid % 25) ^ requestedNature;`
+  `draft[monAt + 18] = (source[monAt + 18] & 0x07u) | ((modifier & 0x1Fu) << 3u);`
+- **Crucial Invariant:** Overwriting the entire byte at `monAt + 18` corrupts the Pokémon's language bits. Phase 18's `Kind::Nature` in `offline_engine.hpp` already correctly masks with `& 7u`.
+- **Stat Recalculation:** `SetNature` in-game triggers `CalculateMonStats(mon)`. A raw save edit does not automatically recalculate cached stored party stats. Nature export remains gated until in-game stat reload behavior is fully verified.
+
+### 7.3 Abilities: Slot Bitfields vs Species Mapping
+- `include/pokemon.h` places `abilityNum:2` at bits 29–30 of the 32-bit encrypted Substruct 3 final word.
+- Candidate mask in Phase 18:
+  `(word & ~(3u << 29)) | (slot << 29)` (with `slot <= 2`).
+- In `src/pokemon.c`, `GetAbilityBySpecies_ForRevised` resolves actual abilities via `Rogue_GetPokemonBaseStatsFor` and per-species profiles. Empty ability slots fall back to primary abilities.
+- Setting an invalid slot (e.g. Slot 2 on a single-ability Pokémon) risks game crashes or null references. Ability export remains gated until the full species-to-ability schema is extracted from the 2.1.2 ROM.
+
+---
+
+## 8. Deliverables & Integration Instructions
+
+- **Live PR #16:** `feature/phase20-experimental-move-draft` provides verified First-CIA 43-move offline SD draft export.
+- **Phase 21 Full Editor Branch:** `feature/phase21-full-editor` integrates PR #16's move draft pipeline while adding Nature and Ability slot safety invariants.
+- **Safety Affirmations:** No installed-game writes, no CMAC signing, and no live restoration are permitted or linked. All output files are isolated SD backups and drafts.
