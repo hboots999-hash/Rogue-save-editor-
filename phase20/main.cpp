@@ -512,7 +512,8 @@ void moveDraftTop(const phase20::MoveDraftFlow& f) {
 void moveDraftBottom() {
     consoleClear();
     std::puts("PKSM ROGUE - RESEARCH PREVIEW");
-    std::puts("Only 43 reviewed move IDs.");
+    std::puts("Any non-egg party species.");
+    std::puts("43 reviewed move IDs only.");
     std::puts("Only ONE move per draft.");
     std::puts("Source and catalog reverified");
     std::puts("at final confirmation.");
