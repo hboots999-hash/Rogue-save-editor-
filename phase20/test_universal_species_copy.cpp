@@ -41,7 +41,7 @@ int main() {
             const uint32_t growth=raw_v1::r32(plain.data(),0);
             raw_v1::w32(plain.data(),0,(growth&~uint32_t(0x7ff))|species[p]);
             for(unsigned slot=0;slot<4;slot++) {
-                raw_v1::w16(plain.data(),12+slot*2,uint16_t(33+slot*12));
+                raw_v1::w16(plain.data(),12+slot*2,uint16_t(20+slot*20));
                 plain[20+slot]=uint8_t(15+slot);
             }
             // Every party entry exercises the same one of 24 encryptions.
@@ -61,7 +61,8 @@ int main() {
             move_v3::Selection chosen{};
             CHECK(move_v3::begin(snapshot,original.data(),original.size(),
                                  p,slot,chosen));
-            chosen.original.replacementId=89;
+            const uint16_t wanted=move_v3::FirstCiaIds[cases%move_v3::FirstCiaIds.size()];
+            chosen.original.replacementId=wanted;
             const auto result=move_v3::previewSynthetic(
                 original.data(),original.size(),chosen,10);
             CHECK(result.ok && result.candidate.size()==original.size());
@@ -74,7 +75,7 @@ int main() {
             CHECK(partyAt(original.data(),original.size(),before,p,oldMon));
             CHECK(partyAt(result.candidate.data(),result.candidate.size(),after,p,newMon));
             CHECK(oldMon.species==species[p] && newMon.species==species[p]);
-            CHECK(newMon.moves[slot]==89 && newMon.pp[slot]==10);
+            CHECK(newMon.moves[slot]==wanted && newMon.pp[slot]==10);
             CHECK(newMon.pid==oldMon.pid && newMon.ot==oldMon.ot);
             CHECK(newMon.ivs==oldMon.ivs && newMon.evs==oldMon.evs);
             CHECK(newMon.abilitySlot==oldMon.abilitySlot);
@@ -91,7 +92,7 @@ int main() {
         }
     }
     CHECK(cases==576);
-    std::cout<<"PASS: 576 synthetic replacements, six distinct species,"
+    std::cout<<"PASS: 576 synthetic replacements covering all 43 allowed move IDs, six species,"
              <<" all 24 block permutations, four occupied slots;"
              <<" no species learnset gate; no live writes or gameplay claims\n";
     return 0;
