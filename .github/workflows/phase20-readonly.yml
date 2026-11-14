@@ -130,6 +130,11 @@ jobs:
               ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/unified-$mode-$attempt
             done
           done
+      - name: Verify phone setup and independent synthetic move-draft checker
+        shell: bash
+        run: |
+          set -euo pipefail
+          node phase20/tools/test_offline_sd_setup.js
       - name: Generate deterministic NON-PLAYABLE H168 save for emulator integration
         shell: bash
         run: |
