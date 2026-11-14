@@ -114,8 +114,8 @@ jobs:
             # previewSynthetic is never linked into the end-user CIA.
             g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
               -DROGUE18_TEST_MOVE_V2 \
-              -Idependencies/phase18/phase18 \
               -Idependencies/moves -Idependencies/moves/phase18 \
+              -Idependencies/phase18/phase18 \
               -I. phase20/test_universal_species_copy.cpp \
               -o /tmp/phase20/universal-species-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/universal-species-$mode
