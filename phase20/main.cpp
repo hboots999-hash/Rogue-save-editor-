@@ -11,6 +11,7 @@
 #include "move_browser.hpp"
 #include "phase20/move_catalog_bridge_v1.hpp"
 #include "phase20/move_draft_v1.hpp"
+#include "phase20/graphic_panel_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -621,9 +622,42 @@ int main() {
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
         hidScanInput();
-        const u32 down=hidKeysDown();
+        u32 down=hidKeysDown();
         const u32 held=hidKeysHeld();
         const u32 up=hidKeysUp();
+        // Optional genuine touch navigation: only one clean touch press,
+        // only during idle read-only / SD-copy browsing. Reuse existing
+        // native A/B/X/Y handlers so NO edit confirmation is ever skipped.
+        if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u &&
+           !(held&(KEY_START|KEY_SELECT)) && !viewingMoves &&
+           moveDraft.stage==phase20::MoveDraftStage::Idle &&
+           editing.stage==phase20::EditStage::Idle &&
+           batch.stage==phase20::BatchStage::Browse &&
+           !batch.collecting) {
+            touchPosition pos{};
+            hidTouchRead(&pos);
+            const auto page=state.screen==Screen::Home?phase20::gui::Page::Home:
+                            state.screen==Screen::Party?phase20::gui::Page::Party:
+                            state.screen==Screen::Pokemon?phase20::gui::Page::Pokemon:
+                            phase20::gui::Page::Other;
+            const auto touch=phase20::gui::hitTest(page,pos.px,pos.py,
+                                                    count(state),state.fromPC);
+            switch(touch.action){
+                case phase20::gui::Action::HomeItem:
+                    state.homeRow=touch.index;down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::PartyItem:
+                    state.selected=touch.index;down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::Back:
+                    down|=KEY_B;redraw=true;break;
+                case phase20::gui::Action::PartyMoves:
+                    down|=KEY_X;redraw=true;break;
+                case phase20::gui::Action::PokemonEdit:
+                    down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::PokemonMoves:
+                    down|=KEY_Y;redraw=true;break;
+                case phase20::gui::Action::None:break;
+            }
+        }
         // Do not steal START+SELECT from Rosalina in either press order.
         // A standalone START exits only when released.
         if(startGate.tick((down&KEY_START)!=0,(up&KEY_START)!=0,
@@ -771,6 +805,10 @@ int main() {
                 moveDraftBottom();
             else if(viewingMoves)moveBottom(state,moveView);
             else bottom(state,editing,batch);
+            if(!viewingMoves && moveDraft.stage==phase20::MoveDraftStage::Idle &&
+               editing.stage==phase20::EditStage::Idle &&
+               batch.stage==phase20::BatchStage::Browse && !batch.collecting)
+                (void)phase20::gui::draw(state);
             redraw=false;
         }
         gspWaitForVBlank();
