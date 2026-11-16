@@ -12,6 +12,7 @@
 #include "phase20/move_catalog_bridge_v1.hpp"
 #include "phase20/move_draft_v1.hpp"
 #include "phase20/graphic_panel_v1.hpp"
+#include "phase20/graphic_move_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -682,10 +683,21 @@ int main() {
             }else{
                 MoveKey mk=MoveKey::B;
                 bool moveKey=false;
-                if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
-                else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
-                else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
-                else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                // Touch is permitted ONLY during ordinary move browsing.
+                // It selects a visible row or forwards an existing button,
+                // but cannot accept either confirmation stage.
+                if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u) {
+                    touchPosition pos{};
+                    hidTouchRead(&pos);
+                    moveKey=phase20::gui::moveTapKey(
+                        state,moveView,pos.px,pos.py,mk);
+                }
+                if(!moveKey) {
+                    if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
+                    else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
+                    else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
+                    else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                }
                 if(moveKey)moveRepeat.reset();
                 else if((held&(KEY_A|KEY_B|KEY_X|KEY_Y))==0u) {
                     bool nav=true;
@@ -805,9 +817,12 @@ int main() {
                 moveDraftBottom();
             else if(viewingMoves)moveBottom(state,moveView);
             else bottom(state,editing,batch);
-            if(!viewingMoves && moveDraft.stage==phase20::MoveDraftStage::Idle &&
-               editing.stage==phase20::EditStage::Idle &&
-               batch.stage==phase20::BatchStage::Browse && !batch.collecting)
+            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                (void)phase20::gui::drawMoveDraft(state,moveDraft);
+            else if(viewingMoves)
+                (void)phase20::gui::drawMoveBrowser(state,moveView);
+            else if(editing.stage==phase20::EditStage::Idle &&
+                    batch.stage==phase20::BatchStage::Browse && !batch.collecting)
                 (void)phase20::gui::draw(state);
             redraw=false;
         }
