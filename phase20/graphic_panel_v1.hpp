@@ -21,9 +21,15 @@ struct Canvas {
     void pixel(int x,int y,Color c) const {
         if(x<0 || y<0 || x>=static_cast<int>(width) ||
            y>=static_cast<int>(height))return;
-        // GSP_BGR8: the 3DS framebuffer is column-major and bottom-first.
-        const size_t at=(size_t(x)*height+(height-1u-unsigned(y)))*3u;
-        pixels[at]=c.b;pixels[at+1]=c.g;pixels[at+2]=c.r;
+        // libctru consoleInit(GFX_BOTTOM, ...) switches the framebuffer to
+        // RGB565 and disables double buffering. Physical pixels are 320x240,
+        // but gfxGetFramebuffer reports the rotated memory dimensions 240x320.
+        // Never write three bytes to the two-byte console framebuffer.
+        const size_t at=size_t(x)*height+(height-1u-unsigned(y));
+        const uint16_t rgb565=uint16_t(((unsigned(c.r)>>3)<<11)|
+                                       ((unsigned(c.g)>>2)<<5)|
+                                       (unsigned(c.b)>>3));
+        reinterpret_cast<uint16_t*>(pixels)[at]=rgb565;
     }
     void rect(int x,int y,int w,int h,Color c) const {
         if(!pixels || w<=0 || h<=0)return;
@@ -142,8 +148,11 @@ inline bool draw(const phase19::State& s) {
        s.screen!=phase19::Screen::Pokemon)return false;
     u16 width=0,height=0;
     uint8_t* buffer=gfxGetFramebuffer(GFX_BOTTOM,GFX_LEFT,&width,&height);
-    if(!buffer || width!=320 || height!=240)return false;
-    const Canvas c{buffer,width,height};
+    // ctru's reported dimensions describe rotated framebuffer storage:
+    // 240 pixel stride, 320 columns. Require known console RGB565 format.
+    if(!buffer || width!=240 || height!=320 ||
+       gfxGetScreenFormat(GFX_BOTTOM)!=GSP_RGB565_OES)return false;
+    const Canvas c{buffer,320,240};
     c.rect(0,0,320,240,BG);
     header(c,s);
     if(s.screen==phase19::Screen::Home) {
