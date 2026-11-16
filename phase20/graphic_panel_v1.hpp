@@ -9,6 +9,7 @@
 #include <cstring>
 #include "ui.hpp"
 #include "phase20/touch_layout_v1.hpp"
+#include "phase20/sprite_bmp_v1.hpp"
 namespace phase20 { namespace gui {
 struct Color { uint8_t r,g,b; };
 constexpr Color BG{8,18,32}, PANEL{19,39,56}, PANEL_HI{22,62,68},
@@ -128,6 +129,67 @@ inline void emblem(const Canvas& c,int cx,int cy,unsigned kind,Color tint) {
         c.rect(cx-3,cy+3,6,3,WHITE);
     }
 }
+// Optional locally supplied species portrait. Assets are read ONLY from SDMC;
+// no official Pokémon sprites are bundled, and no executable, save or title
+// archive is ever read/written for artwork. 8 cache slots ~54 KiB static BSS.
+struct CachedSprite {
+    unsigned species=0;
+    bool attempted=false,valid=false;
+    uint8_t bgr[48*48*3]{};
+};
+inline const CachedSprite* spriteFor(unsigned species){
+    if(!species || species>9999u)return nullptr;
+    static CachedSprite cache[8]{};
+    CachedSprite& item=cache[species%8];
+    if(item.attempted && item.species==species)return item.valid?&item:nullptr;
+    item.species=species;item.attempted=true;item.valid=false;
+    char path[96]{};
+    const int n=std::snprintf(path,sizeof(path),
+        "sdmc:/3ds/PKSM-Rogue/sprites/%04u.bmp",species);
+    if(n<=0 || static_cast<size_t>(n)>=sizeof(path))return nullptr;
+    std::FILE* file=std::fopen(path,"rb");
+    if(!file)return nullptr;
+    uint8_t header[54]{};
+    SpriteBmpInfo info{};
+    const bool ok=std::fread(header,1,sizeof(header),file)==sizeof(header) &&
+        validateSpriteBmp(header,sizeof(header),info) &&
+        std::fseek(file,0,SEEK_END)==0;
+    const long length=ok?std::ftell(file):-1;
+    if(ok && length==long(bmp32(header,2)) &&
+       length>=long(info.pixelOffset+sizeof(item.bgr)) &&
+       std::fseek(file,long(info.pixelOffset),SEEK_SET)==0 &&
+       std::fread(item.bgr,1,sizeof(item.bgr),file)==sizeof(item.bgr))
+        item.valid=true;
+    std::fclose(file);
+    return item.valid?&item:nullptr;
+}
+inline void drawCreaturePlaceholder(const Canvas& c,int x,int y,int size,
+                                   unsigned species){
+    // Generic, original pixel avatar rather than an unlicensed species image.
+    const Color fur=species%3==0?GREEN:(species%3==1?GOLD:MUTED);
+    c.circle(x+size/2,y+size/2,size/2-1,PANEL_HI);
+    c.rect(x+size/4,y+size/5,size/7,size/3,fur);
+    c.rect(x+size*4/7,y+size/5,size/7,size/3,fur);
+    c.circle(x+size/2,y+size*3/5,size/3,fur);
+    c.rect(x+size/3,y+size/2,size/12,size/12,DARK);
+    c.rect(x+size*3/5,y+size/2,size/12,size/12,DARK);
+    c.rect(x+size*2/5,y+size*3/4,size/5,size/18,DARK);
+}
+inline void drawSpeciesPortrait(const Canvas& c,int x,int y,unsigned species,
+                               int size){
+    if(size<20 || size>70)return;
+    const CachedSprite* data=spriteFor(species);
+    if(!data){drawCreaturePlaceholder(c,x,y,size,species);return;}
+    c.rect(x,y,size,size,PANEL_HI);
+    for(int py=0;py<size;py++)for(int px=0;px<size;px++){
+        const int sx=px*48/size, sy=py*48/size;
+        const size_t idx=size_t((47-sy)*48+sx)*3u;
+        const uint8_t b=data->bgr[idx],g=data->bgr[idx+1],r=data->bgr[idx+2];
+        // Pure magenta (#FF00FF) is reserved as optional transparency.
+        if(r==255 && g==0 && b==255)continue;
+        c.pixel(x+px,y+py,Color{r,g,b});
+    }
+}
 inline void tile(const Canvas& c,int x,int y,int w,int h,const char* label,
                  bool chosen,unsigned iconKind,bool enabled=true) {
     const Color fill=chosen?PANEL_HI:PANEL;
@@ -175,12 +237,12 @@ inline bool draw(const phase19::State& s) {
             const auto& mon=s.demo.party[i];
             c.rect(x,y,146,46,s.selected==i?GOLD:LINE);
             c.rect(x+2,y+2,142,42,s.selected==i?PANEL_HI:PANEL);
-            emblem(c,x+20,y+21,0,GREEN);
-            lettering(c,x+38,y+8,mon.name,WHITE,1,16);
+            drawSpeciesPortrait(c,x+4,y+6,mon.species,34);
+            lettering(c,x+42,y+8,mon.name,WHITE,1,16);
             char lv[26]{};
             if(mon.level)std::snprintf(lv,sizeof(lv),"LV %u",mon.level);
             else std::snprintf(lv,sizeof(lv),"SPECIES %u",mon.species);
-            lettering(c,x+39,y+24,lv,MUTED,1);
+            lettering(c,x+42,y+24,lv,MUTED,1);
         }
         if(count==0)lettering(c,20,108,"NO VALID PARTY DATA",GOLD,2);
         c.rect(8,210,102,26,PANEL);
@@ -192,25 +254,30 @@ inline bool draw(const phase19::State& s) {
             lettering(c,12,90,"POKEMON UNAVAILABLE",RED,2);
         } else {
             const auto& mon=phase19::pokemon(s);
-            lettering(c,12,40,mon.name,WHITE,2,19);
+            drawSpeciesPortrait(c,12,40,mon.species,58);
+            lettering(c,83,43,mon.name,WHITE,2,19);
             char info[72]{};
-            std::snprintf(info,sizeof(info),"LV %u  ABILITY %u  NATURE %u",
-                          mon.level,mon.ability,mon.nature);
-            lettering(c,12,66,info,MUTED,1,43);
-            c.rect(8,78,304,51,PANEL);
+            std::snprintf(info,sizeof(info),"LV %u    SPECIES %u",
+                          mon.level,mon.species);
+            lettering(c,85,65,info,MUTED,1,36);
+            std::snprintf(info,sizeof(info),"ABILITY %u   NATURE %u",
+                          mon.ability,mon.nature);
+            lettering(c,85,83,info,GREEN,1,36);
+            c.rect(8,104,304,49,PANEL);
             static constexpr const char* stat[6]{"HP","ATK","DEF","SPA","SPD","SPE"};
             for(unsigned i=0;i<6;i++){
-                const int x=15+int(i%2)*151,y=85+int(i/2)*15;
+                const int x=15+int(i%2)*151,y=111+int(i/2)*14;
                 std::snprintf(info,sizeof(info),"%s IV%u EV%u",
                               stat[i],mon.iv[i],mon.ev[i]);
                 lettering(c,x,y,info,WHITE,1,23);
             }
-            lettering(c,12,135,"ACTIVE MOVES",MUTED);
+            lettering(c,12,156,"ACTIVE MOVES",MUTED);
             for(unsigned i=0;i<4;i++){
-                const int x=8+int(i%2)*158,y=149+int(i/2)*24;
-                c.rect(x,y,150,22,PANEL);
-                std::snprintf(info,sizeof(info),"M%u ID%u PP%u",i+1,mon.moves[i],mon.pp[i]);
-                lettering(c,x+7,y+8,info,WHITE,1,23);
+                const int x=8+int(i%2)*158,y=168+int(i/2)*18;
+                c.rect(x,y,150,16,PANEL);
+                std::snprintf(info,sizeof(info),"M%u ID%u PP%u",
+                              i+1,mon.moves[i],mon.pp[i]);
+                lettering(c,x+7,y+4,info,WHITE,1,23);
             }
         }
         c.rect(8,204,94,32,PANEL);
