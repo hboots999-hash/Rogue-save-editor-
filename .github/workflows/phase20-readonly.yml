@@ -145,6 +145,26 @@ jobs:
               -o /tmp/phase20/touch-layout-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/touch-layout-$mode
           done
+      - name: Check graphical move touch and optional sprite input (strict and sanitizers)
+        shell: bash
+        run: |
+          set -euo pipefail
+          for mode in strict sanitized; do
+            if [ "$mode" = strict ]; then
+              FLAGS="-O2"
+            else
+              FLAGS="-O1 -g -fsanitize=address,undefined -fno-omit-frame-pointer -fno-pie -no-pie"
+            fi
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. -Idependencies/phase19/phase19 \
+              phase20/test_move_touch_v1.cpp \
+              -o /tmp/phase20/move-touch-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-touch-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. phase20/test_sprite_bmp_v1.cpp \
+              -o /tmp/phase20/sprite-bmp-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/sprite-bmp-$mode
+          done
       - name: Verify phone setup and independent synthetic move-draft checker
         shell: bash
         run: |
@@ -217,7 +237,7 @@ jobs:
           cp phase20/main.cpp phase20-build/source/main.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
-          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp,move_draft_v1.hpp,graphic_panel_v1.hpp,touch_layout_v1.hpp} phase20-build/include/phase20/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp,move_draft_v1.hpp,graphic_panel_v1.hpp,touch_layout_v1.hpp,graphic_move_v1.hpp,move_touch_v1.hpp,sprite_bmp_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/
           cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
