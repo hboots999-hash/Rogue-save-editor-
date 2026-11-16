@@ -4,6 +4,7 @@
 #pragma once
 #include "phase20/graphic_panel_v1.hpp"
 #include "phase20/move_touch_v1.hpp"
+#include "phase20/move_draft_v1.hpp"
 #include "move_browser.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -31,6 +32,38 @@ inline void moveNav(const Canvas& c,const char* primary="BACK",bool left=false,
         pill(c,116,208,196,left?"SEARCH":"SD DRAFT",GREEN,PANEL_HI);
     }
 }
+// Translate only the geometric, read-only tap selection to a normal
+// Phase19 MoveKey. Confirmation A/X is deliberately absent from touch maps.
+inline bool moveTapKey(const phase19::State& s,phase19::MoveBrowser& v,
+                      unsigned x,unsigned y,phase19::MoveKey& key){
+    using phase19::MovePage;
+    const unsigned count=s.demo.partyStatus==phase19::Availability::Ready?
+        std::min(6u,s.demo.partyCount):0u;
+    const auto hit=moveTouchHit(v.page,x,y,count,v.matchCount,
+                                v.selected,v.fromPartyPicker);
+    switch(hit.action){
+        case MoveTapAction::PartyRow:
+            if(v.page!=MovePage::Party || hit.index>=count)return false;
+            v.partySlot=hit.index;key=phase19::MoveKey::A;return true;
+        case MoveTapAction::SlotRow:
+            if(v.page!=MovePage::Slots || hit.index>=4u)return false;
+            v.slot=hit.index;key=phase19::MoveKey::A;return true;
+        case MoveTapAction::CatalogRow:
+            if(v.page!=MovePage::Catalog || hit.index>=v.matchCount)return false;
+            v.selected=hit.index;key=phase19::MoveKey::A;return true;
+        case MoveTapAction::KeyboardRow:
+            if(v.page!=MovePage::Keyboard || hit.index>=30u)return false;
+            v.keyboardIndex=hit.index;key=phase19::MoveKey::A;return true;
+        case MoveTapAction::Back:key=phase19::MoveKey::B;return true;
+        case MoveTapAction::Previous:key=phase19::MoveKey::Left;return true;
+        case MoveTapAction::Next:key=phase19::MoveKey::Right;return true;
+        case MoveTapAction::Search:
+        case MoveTapAction::ApplySearch:
+        case MoveTapAction::StartDraft:key=phase19::MoveKey::Y;return true;
+        case MoveTapAction::None:return false;
+    }
+    return false;
+}
 inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& v) {
     u16 width=0,height=0;
     uint8_t* buffer=gfxGetFramebuffer(GFX_BOTTOM,GFX_LEFT,&width,&height);
@@ -41,8 +74,6 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
     header(c,s);
     using phase19::MovePage;
     using phase19::MoveEvidence;
-    const bool haveMon=v.partySlot<s.demo.party.size() &&
-        v.partySlot<s.demo.partyCount && s.demo.partyStatus==phase19::Availability::Ready;
     if(v.page==MovePage::Party){
         lettering(c,10,36,"CHOOSE POKEMON",MUTED);
         const unsigned count=s.demo.partyStatus==phase19::Availability::Ready?
