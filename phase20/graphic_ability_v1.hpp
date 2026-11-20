@@ -4,21 +4,6 @@
 #include "phase20/graphic_panel_v1.hpp"
 #include "phase20/ability_slot_v1.hpp"
 namespace phase20 { namespace gui {
-enum class AbilityTapKind : uint8_t { None, Slot, Back, Review };
-struct AbilityTap { AbilityTapKind kind=AbilityTapKind::None; unsigned index=0; };
-inline AbilityTap abilityTouchHit(phase20::AbilityPage page,unsigned x,unsigned y){
-    if(x>=320u || y>=240u)return {};
-    if(page==phase20::AbilityPage::Select) {
-        for(unsigned i=0;i<3;i++)
-            if(within(x,y,8,55+i*46u,304,41))
-                return {AbilityTapKind::Slot,i};
-        if(within(x,y,8,208,94,28))return {AbilityTapKind::Back,0};
-        if(within(x,y,110,208,202,28))return {AbilityTapKind::Review,0};
-    }else{
-        if(within(x,y,8,208,94,28))return {AbilityTapKind::Back,0};
-    }
-    return {};
-}
 inline bool drawAbility(const phase19::State& s,const phase20::AbilityFlow& f){
     u16 width=0,height=0;
     uint8_t* pixels=gfxGetFramebuffer(GFX_BOTTOM,GFX_LEFT,&width,&height);
