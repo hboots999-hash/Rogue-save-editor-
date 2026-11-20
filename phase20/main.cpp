@@ -15,6 +15,7 @@
 #include "phase20/graphic_move_v1.hpp"
 #include "phase20/ability_slot_v1.hpp"
 #include "phase20/graphic_ability_v1.hpp"
+#include "phase20/profile_view_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -205,7 +206,8 @@ void top(const State& s,const phase20::OfflineFlow& edit,
             else std::printf("%s Lv? (Species %u)\n",m.name,m.species);
             std::printf("Source: %s\n",s.fromPC?"PC demo":
                         s.demo.synthetic?"Party demo":"Copied SD import");
-            std::printf("Ability slot %u  Nature %u\n",m.ability,m.nature);
+            std::printf("Ability slot %u  Nature %s\n",
+                        m.ability+1u,phase20::profile::natureName(m.nature));
             std::puts("\nStat       IV     EV");
             for(unsigned i=0;i<6;i++)
                 std::printf("%-7s   %2u    %3u\n",names[i],m.iv[i],m.ev[i]);
@@ -214,7 +216,8 @@ void top(const State& s,const phase20::OfflineFlow& edit,
                 std::printf("%u:%u PP%u  %u:%u PP%u\n",
                     i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
             std::puts(s.fromPC?"\n\nPC editing unsupported":!s.demo.synthetic?"\n\nA: OFFLINE IV / EV / PP":"\n\nA: explore party edit demo");
-            if(!s.fromPC)std::puts("Y: browse moves (READ ONLY)");
+            if(!s.fromPC)std::puts("Y: moves, X: ability (VIEW)");
+            std::puts("Left/Right: switch detail tabs");
             break;
         }
         case Screen::Edit: {
@@ -642,6 +645,7 @@ int main() {
     static MoveBrowser moveView{};
     static phase20::MoveDraftFlow moveDraft{};
     static phase20::AbilityFlow abilityFlow{};
+    static phase20::profile::View profileView{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
@@ -691,6 +695,10 @@ int main() {
                     down|=KEY_Y;redraw=true;break;
                 case phase20::gui::Action::PokemonAbility:
                     down|=KEY_X;redraw=true;break;
+                case phase20::gui::Action::PokemonTab:
+                    profileView.sync(state);
+                    profileView.tab=phase20::profile::fromIndex(touch.index);
+                    down&=~KEY_TOUCH;redraw=true;break;
                 case phase20::gui::Action::None:break;
             }
         }
@@ -742,6 +750,20 @@ int main() {
             if(!phase20::beginAbility(abilityFlow,state))
                 openNotice(state,Screen::Pokemon,
                            "Ability preview refused: invalid or egg Pokemon.");
+            redraw=true;
+        } else if((down&(KEY_LEFT|KEY_RIGHT|KEY_R)) &&
+                  state.screen==Screen::Pokemon &&
+                  editing.stage==phase20::EditStage::Idle &&
+                  batch.stage==phase20::BatchStage::Browse &&
+                  !batch.collecting && !viewingMoves &&
+                  moveDraft.stage==phase20::MoveDraftStage::Idle &&
+                  (held&(KEY_START|KEY_SELECT))==0u &&
+                  selectedPokemonValid(state)) {
+            // X opens the ability selector, Y the move browser, and
+            // D-pad left/right (or R) switches detail tabs without writing.
+            profileView.sync(state);
+            profileView.tab=phase20::profile::cycle(
+                 profileView.tab,(down&(KEY_RIGHT|KEY_R))!=0u);
             redraw=true;
         } else if(moveDraft.stage!=phase20::MoveDraftStage::Idle) {
             if((held&(KEY_START|KEY_SELECT))==0u)
@@ -858,6 +880,9 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    // Metadata loading is optional and READ-ONLY. A missing or
+                    // corrupt exact-ROM catalogue never creates guessed names.
+                    (void)localMoves.read();
                     viewingMoves=false;
                     moveRepeat.reset();
                     editing=phase20::OfflineFlow{};
@@ -883,6 +908,7 @@ int main() {
             redraw=true;
         }
         if(redraw) {
+            profileView.sync(state);
             consoleSelect(&upper);
             if(abilityFlow.page!=phase20::AbilityPage::Idle)
                 abilityTop(state,abilityFlow);
@@ -905,7 +931,10 @@ int main() {
                 (void)phase20::gui::drawMoveBrowser(state,moveView);
             else if(editing.stage==phase20::EditStage::Idle &&
                     batch.stage==phase20::BatchStage::Browse && !batch.collecting)
-                (void)phase20::gui::draw(state);
+                (void)phase20::gui::draw(
+                    state,profileView.tab,
+                    state.demo.synthetic?&syntheticMoveCatalog():
+                                         localMoves.verifiedMetadata());
             redraw=false;
         }
         gspWaitForVBlank();
