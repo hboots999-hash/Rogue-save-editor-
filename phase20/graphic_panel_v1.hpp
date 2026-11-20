@@ -280,12 +280,14 @@ inline bool draw(const phase19::State& s) {
                 lettering(c,x+7,y+4,info,WHITE,1,23);
             }
         }
-        c.rect(8,204,94,32,PANEL);
-        lettering(c,28,216,"BACK",WHITE,1);
-        c.rect(110,204,94,32,s.fromPC?LINE:PANEL_HI);
-        lettering(c,132,216,"EDIT",s.fromPC?MUTED:GREEN);
-        c.rect(212,204,100,32,s.fromPC?LINE:PANEL_HI);
-        lettering(c,234,216,"MOVES",s.fromPC?MUTED:GREEN);
+        c.rect(8,204,74,32,PANEL);
+        lettering(c,24,216,"BACK",WHITE,1);
+        c.rect(86,204,68,32,s.fromPC?LINE:PANEL_HI);
+        lettering(c,105,216,"EDIT",s.fromPC?MUTED:GREEN);
+        c.rect(157,204,73,32,s.fromPC?LINE:PANEL_HI);
+        lettering(c,174,216,"ABILITY",s.fromPC?MUTED:GREEN);
+        c.rect(233,204,79,32,s.fromPC?LINE:PANEL_HI);
+        lettering(c,249,216,"MOVES",s.fromPC?MUTED:GREEN);
         if(s.fromPC)lettering(c,8,194,"PC EDITS NOT SUPPORTED",GOLD);
     }
     gfxFlushBuffers();
