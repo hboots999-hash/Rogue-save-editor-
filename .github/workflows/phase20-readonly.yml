@@ -458,6 +458,15 @@ jobs:
             # Phase19 integrated READ-ONLY move browser, deliberately
             # fictional demo catalogue. This MUST not create an SD draft.
             tap3ds a  # Party -> Pokemon details
+            tap3ds z  # X: new read-only ability slot selector
+            import -window root evidence/3dsx-ability-slots.png
+            tap3ds g  # choose next of 3 index slots
+            tap3ds a  # preview proposed slot
+            import -window root evidence/3dsx-ability-review.png
+            tap3ds a  # all ability exports MUST remain blocked
+            import -window root evidence/3dsx-ability-locked.png
+            tap3ds s  # back to selector
+            tap3ds s  # back to Pokemon
             tap3ds x  # Y on Pokemon opens move browser, not batch
             import -window root evidence/3dsx-move-slots.png
             tap3ds a  # Slots -> alphabetical catalogue
@@ -575,6 +584,9 @@ jobs:
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
           test -s evidence/3dsx-home-return.png
+          test -s evidence/3dsx-ability-slots.png
+          test -s evidence/3dsx-ability-review.png
+          test -s evidence/3dsx-ability-locked.png
           test -s evidence/3dsx-move-party-picker.png
           test -s evidence/3dsx-move-picker-slots.png
           test -s evidence/3dsx-move-confirm-one.png
