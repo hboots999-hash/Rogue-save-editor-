@@ -20,6 +20,15 @@ int main(){
     assert(hitTest(Page::Pokemon,140,218,6,false).action==Action::PokemonEdit);
     assert(hitTest(Page::Pokemon,250,218,6,false).action==Action::PokemonMoves);
     assert(hitTest(Page::Pokemon,180,218,6,false).action==Action::PokemonAbility);
+    for(unsigned i=0;i<3;i++){
+        auto tab=hitTest(Page::Pokemon,20+i*103,115,6,false);
+        assert(tab.action==Action::PokemonTab && tab.index==i);
+        auto pcTab=hitTest(Page::Pokemon,20+i*103,115,6,true);
+        assert(pcTab.action==Action::PokemonTab && pcTab.index==i);
+    }
+    assert(hitTest(Page::Pokemon,108,115,6,false).action==Action::None);
+    assert(hitTest(Page::Pokemon,20,133,6,false).action==Action::None);
+
     assert(hitTest(Page::Pokemon,180,218,6,true).action==Action::None);
     assert(hitTest(Page::Pokemon,140,218,6,true).action==Action::None);
     assert(hitTest(Page::Pokemon,250,218,6,true).action==Action::None);
