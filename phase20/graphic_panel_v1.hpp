@@ -312,8 +312,8 @@ inline bool draw(const phase19::State& s,
                     std::snprintf(info,sizeof(info),"PP %u",mon.pp[i]);
                     lettering(c,265,y+4,info,GREEN,1,9);
                 }
-                if(!verifiedMoves)
-                    lettering(c,12,198,"IDS ONLY - CATALOG NOT LOADED",GOLD,1,45);
+                // Without authenticated ROM metadata, numeric move IDs
+                // are intentionally shown rather than fabricated names.
             }
         }
         c.rect(8,204,74,32,PANEL);
@@ -324,7 +324,8 @@ inline bool draw(const phase19::State& s,
         lettering(c,174,216,"ABILITY",s.fromPC?MUTED:GREEN);
         c.rect(233,204,79,32,s.fromPC?LINE:PANEL_HI);
         lettering(c,249,216,"MOVES",s.fromPC?MUTED:GREEN);
-        if(s.fromPC)lettering(c,8,196,"PC VIEW ONLY",GOLD);
+        // PC controls are disabled above; no edit/ability/move shortcuts
+        // are enabled for unsupported PC storage candidates.
 
     }
     gfxFlushBuffers();
