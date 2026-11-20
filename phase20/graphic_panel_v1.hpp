@@ -10,6 +10,7 @@
 #include "ui.hpp"
 #include "phase20/touch_layout_v1.hpp"
 #include "phase20/sprite_bmp_v1.hpp"
+#include "phase20/profile_view_v1.hpp"
 namespace phase20 { namespace gui {
 struct Color { uint8_t r,g,b; };
 constexpr Color BG{8,18,32}, PANEL{19,39,56}, PANEL_HI{22,62,68},
@@ -205,7 +206,9 @@ inline void header(const Canvas& c,const phase19::State& s) {
     c.rect(204,7,106,18,s.demo.synthetic?PANEL:PANEL_HI);
     lettering(c,210,12,s.demo.synthetic?"DEMO MODE":"SD COPY",s.demo.synthetic?GOLD:GREEN,1);
 }
-inline bool draw(const phase19::State& s) {
+inline bool draw(const phase19::State& s,
+                 profile::Tab detail=profile::Tab::Overview,
+                 const phase19::MoveCatalog* verifiedMoves=nullptr) {
     if(s.screen!=phase19::Screen::Home && s.screen!=phase19::Screen::Party &&
        s.screen!=phase19::Screen::Pokemon)return false;
     u16 width=0,height=0;
@@ -254,30 +257,63 @@ inline bool draw(const phase19::State& s) {
             lettering(c,12,90,"POKEMON UNAVAILABLE",RED,2);
         } else {
             const auto& mon=phase19::pokemon(s);
-            drawSpeciesPortrait(c,12,40,mon.species,58);
-            lettering(c,83,43,mon.name,WHITE,2,19);
+            drawSpeciesPortrait(c,10,40,mon.species,54);
+            lettering(c,74,42,mon.name,WHITE,2,19);
             char info[72]{};
-            std::snprintf(info,sizeof(info),"LV %u    SPECIES %u",
+            std::snprintf(info,sizeof(info),"LV %u  SPECIES %u",
                           mon.level,mon.species);
-            lettering(c,85,65,info,MUTED,1,36);
-            std::snprintf(info,sizeof(info),"ABILITY %u   NATURE %u",
-                          mon.ability,mon.nature);
-            lettering(c,85,83,info,GREEN,1,36);
-            c.rect(8,104,304,49,PANEL);
-            static constexpr const char* stat[6]{"HP","ATK","DEF","SPA","SPD","SPE"};
-            for(unsigned i=0;i<6;i++){
-                const int x=15+int(i%2)*151,y=111+int(i/2)*14;
-                std::snprintf(info,sizeof(info),"%s IV%u EV%u",
-                              stat[i],mon.iv[i],mon.ev[i]);
-                lettering(c,x,y,info,WHITE,1,23);
+            lettering(c,76,67,info,MUTED,1,36);
+            std::snprintf(info,sizeof(info),"NATURE %s",
+                          profile::natureName(mon.nature));
+            lettering(c,76,83,info,GREEN,1,36);
+            static constexpr const char* tabs[3]{
+                "OVERVIEW","IV / EV","MOVES"
+            };
+            for(unsigned i=0;i<3;i++){
+                const int x=8+int(i*103);
+                const bool chosen=static_cast<unsigned>(detail)==i;
+                c.rect(x,105,98,24,chosen?GOLD:LINE);
+                c.rect(x+2,107,94,20,chosen?PANEL_HI:PANEL);
+                lettering(c,x+13,113,tabs[i],chosen?WHITE:MUTED,1,13);
             }
-            lettering(c,12,156,"ACTIVE MOVES",MUTED);
-            for(unsigned i=0;i<4;i++){
-                const int x=8+int(i%2)*158,y=168+int(i/2)*18;
-                c.rect(x,y,150,16,PANEL);
-                std::snprintf(info,sizeof(info),"M%u ID%u PP%u",
-                              i+1,mon.moves[i],mon.pp[i]);
-                lettering(c,x+7,y+4,info,WHITE,1,23);
+            if(detail==profile::Tab::Overview) {
+                c.rect(8,134,304,65,PANEL);
+                lettering(c,15,140,"NATURE",MUTED,1);
+                lettering(c,93,140,profile::natureName(mon.nature),WHITE,2,17);
+                lettering(c,15,159,"ABILITY",MUTED,1);
+                lettering(c,93,159,profile::abilitySlotLabel(mon.ability),GREEN,2,16);
+                lettering(c,15,184,"ABILITY NAME REQUIRES ROM DATA",GOLD,1,47);
+            } else if(detail==profile::Tab::Training) {
+                static constexpr const char* stats[6]{
+                    "HP","ATK","DEF","SPA","SPD","SPE"
+                };
+                for(unsigned i=0;i<6;i++){
+                    const int x=8+int(i%2)*154,y=134+int(i/2)*19;
+                    c.rect(x,y,150,17,PANEL);
+                    std::snprintf(info,sizeof(info),"%s IV %u EV %u",
+                                  stats[i],mon.iv[i],mon.ev[i]);
+                    lettering(c,x+5,y+5,info,WHITE,1,24);
+                }
+                std::snprintf(info,sizeof(info),"TOTAL EV %u / 510",
+                              profile::evTotal(mon));
+                lettering(c,12,192,info,GREEN,1,26);
+            } else {
+                for(unsigned i=0;i<4;i++){
+                    const int y=133+int(i)*17;
+                    c.rect(8,y,304,16,PANEL);
+                    const char* name=profile::knownMoveName(
+                        verifiedMoves,s.demo.synthetic,mon.moves[i]);
+                    if(name)
+                        std::snprintf(info,sizeof(info),"%u %.24s",i+1,name);
+                    else
+                        std::snprintf(info,sizeof(info),"%u MOVE ID %u",i+1,
+                                      mon.moves[i]);
+                    lettering(c,15,y+4,info,mon.moves[i]?WHITE:MUTED,1,36);
+                    std::snprintf(info,sizeof(info),"PP %u",mon.pp[i]);
+                    lettering(c,265,y+4,info,GREEN,1,9);
+                }
+                if(!verifiedMoves)
+                    lettering(c,12,198,"IDS ONLY - CATALOG NOT LOADED",GOLD,1,45);
             }
         }
         c.rect(8,204,74,32,PANEL);
@@ -288,7 +324,8 @@ inline bool draw(const phase19::State& s) {
         lettering(c,174,216,"ABILITY",s.fromPC?MUTED:GREEN);
         c.rect(233,204,79,32,s.fromPC?LINE:PANEL_HI);
         lettering(c,249,216,"MOVES",s.fromPC?MUTED:GREEN);
-        if(s.fromPC)lettering(c,8,194,"PC EDITS NOT SUPPORTED",GOLD);
+        if(s.fromPC)lettering(c,8,196,"PC VIEW ONLY",GOLD);
+
     }
     gfxFlushBuffers();
     return true;
