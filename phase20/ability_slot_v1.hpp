@@ -4,6 +4,7 @@
 // no exact-ROM ability ID mapping is available here to authorise it.
 #pragma once
 #include "ui.hpp"
+#include "phase20/touch_layout_v1.hpp"
 #include <array>
 #include <cstdint>
 namespace phase20 {
@@ -82,4 +83,21 @@ constexpr bool abilityProductionSaveWriteApproved=false;
 constexpr bool arbitraryAbilityIdStorageVerified=false;
 static_assert(!abilityProductionSaveWriteApproved && !arbitraryAbilityIdStorageVerified,
               "Real-game ability ID or installed-save edits are not verified");
+namespace gui {
+enum class AbilityTapKind : uint8_t { None, Slot, Back, Review };
+struct AbilityTap { AbilityTapKind kind=AbilityTapKind::None; unsigned index=0; };
+inline AbilityTap abilityTouchHit(phase20::AbilityPage page,unsigned x,unsigned y){
+    if(x>=320u || y>=240u)return {};
+    if(page==phase20::AbilityPage::Select) {
+        for(unsigned i=0;i<3;i++)
+            if(within(x,y,8,55+i*46u,304,41))
+                return {AbilityTapKind::Slot,i};
+        if(within(x,y,8,208,94,28))return {AbilityTapKind::Back,0};
+        if(within(x,y,110,208,202,28))return {AbilityTapKind::Review,0};
+    }else{
+        if(within(x,y,8,208,94,28))return {AbilityTapKind::Back,0};
+    }
+    return {};
+}
+} // namespace gui
 } // namespace phase20
