@@ -5,7 +5,7 @@
 #include <cstdint>
 namespace phase20 { namespace gui {
 enum class Page : uint8_t { Home, Party, Pokemon, Other };
-enum class Action : uint8_t { None, HomeItem, PartyItem, Back, PartyMoves, PokemonEdit, PokemonMoves };
+enum class Action : uint8_t { None, HomeItem, PartyItem, Back, PartyMoves, PokemonEdit, PokemonMoves, PokemonAbility };
 struct Hit { Action action=Action::None; unsigned index=0; };
 inline bool within(unsigned x,unsigned y,unsigned left,unsigned top,unsigned width,unsigned height) {
     return x>=left && x<left+width && y>=top && y<top+height;
@@ -28,9 +28,10 @@ inline Hit hitTest(Page page,unsigned x,unsigned y,unsigned partyCount,bool from
         if(within(x,y,8,210,102,26))return {Action::Back,0};
         if(within(x,y,116,210,196,26))return {Action::PartyMoves,0};
     }else if(page==Page::Pokemon){
-        if(within(x,y,8,204,94,32))return {Action::Back,0};
-        if(!fromPC && within(x,y,110,204,94,32))return {Action::PokemonEdit,0};
-        if(!fromPC && within(x,y,212,204,100,32))return {Action::PokemonMoves,0};
+        if(within(x,y,8,204,74,32))return {Action::Back,0};
+        if(!fromPC && within(x,y,86,204,68,32))return {Action::PokemonEdit,0};
+        if(!fromPC && within(x,y,157,204,73,32))return {Action::PokemonAbility,0};
+        if(!fromPC && within(x,y,233,204,79,32))return {Action::PokemonMoves,0};
     }
     return {};
 }
