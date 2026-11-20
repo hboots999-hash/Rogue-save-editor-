@@ -13,6 +13,8 @@
 #include "phase20/move_draft_v1.hpp"
 #include "phase20/graphic_panel_v1.hpp"
 #include "phase20/graphic_move_v1.hpp"
+#include "phase20/ability_slot_v1.hpp"
+#include "phase20/graphic_ability_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -336,6 +338,36 @@ void top(const State& s,const phase20::OfflineFlow& edit,
 }
 // Move Browser uses fictional test metadata. Not a verified ROM database,
 // writer, move replacement API or part of any SD draft export.
+void abilityTop(const State& s,const phase20::AbilityFlow& f) {
+    consoleClear();
+    std::puts("PKSM ROGUE - ABILITY RESEARCH");
+    std::puts("============================");
+    if(f.party<s.demo.partyCount) {
+        std::printf("Pokemon: %.18s / Species %u\n",
+                    s.demo.party[f.party].name,f.species);
+    }
+    std::printf("Original slot: %u (%s)\n",
+                f.originalSlot+1u,phase20::slotLabel(f.originalSlot));
+    std::printf("Selected slot: %u (%s)\n",
+                f.selectedSlot+1u,phase20::slotLabel(f.selectedSlot));
+    if(f.page==phase20::AbilityPage::Select) {
+        std::puts("\nUP/DOWN choose 1 of 3 slots");
+        std::puts("A review  B back");
+    } else if(f.page==phase20::AbilityPage::Review) {
+        std::puts("\nA: show why locked");
+        std::puts("B: return to selection");
+    } else {
+        std::puts("\nCHANGING ABILITY BLOCKED");
+        std::puts("A/B: return to selection");
+    }
+    std::puts("\nNo verified per-species");
+    std::puts("ability ID / ruleset mapping.");
+    std::puts("Third slot NOT always distinct.");
+    std::puts("No unrestricted ability ID");
+    std::puts("is stored in this selector.");
+    std::puts("\nNO INSTALLED GAME WRITES");
+    std::puts("Original SD import unchanged.");
+}
 void moveTop(const State& s,const MoveBrowser& v) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
@@ -609,6 +641,7 @@ int main() {
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
     static phase20::MoveDraftFlow moveDraft{};
+    static phase20::AbilityFlow abilityFlow{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
@@ -656,6 +689,8 @@ int main() {
                     down|=KEY_A;redraw=true;break;
                 case phase20::gui::Action::PokemonMoves:
                     down|=KEY_Y;redraw=true;break;
+                case phase20::gui::Action::PokemonAbility:
+                    down|=KEY_X;redraw=true;break;
                 case phase20::gui::Action::None:break;
             }
         }
@@ -667,7 +702,48 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if(moveDraft.stage!=phase20::MoveDraftStage::Idle) {
+        if(abilityFlow.page!=phase20::AbilityPage::Idle) {
+            // UI-only ability slot research. No writes/restore and no
+            // delegated ability ID request to the Phase18 engine.
+            if((held&(KEY_START|KEY_SELECT))==0u) {
+                using phase20::AbilityAction;
+                if(down&KEY_B)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::B);
+                else if(down&KEY_UP)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::Up);
+                else if(down&KEY_DOWN)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::Down);
+                else if(down&KEY_A)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::A);
+                else if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u) {
+                    touchPosition pos{};
+                    hidTouchRead(&pos);
+                    const auto tap=phase20::gui::abilityTouchHit(
+                        abilityFlow.page,pos.px,pos.py);
+                    if(tap.kind==phase20::gui::AbilityTapKind::Back)
+                        (void)phase20::abilityInput(abilityFlow,state,AbilityAction::B);
+                    else if(tap.kind==phase20::gui::AbilityTapKind::Slot &&
+                            tap.index<3u && phase20::abilitySourceValid(abilityFlow,state))
+                        abilityFlow.selectedSlot=tap.index;
+                    else if(tap.kind==phase20::gui::AbilityTapKind::Review)
+                        (void)phase20::abilityInput(abilityFlow,state,AbilityAction::A);
+                }
+            }
+            redraw=true;
+        } else if((down&KEY_X) &&
+                  state.screen==Screen::Pokemon && !state.fromPC &&
+                  editing.stage==phase20::EditStage::Idle &&
+                  batch.stage==phase20::BatchStage::Browse &&
+                  !batch.collecting && !viewingMoves &&
+                  moveDraft.stage==phase20::MoveDraftStage::Idle &&
+                  (held&(KEY_START|KEY_SELECT))==0u) {
+            // On the detail page, X is a dedicated no-L ability shortcut.
+            // This only opens the display-only three-slot selector.
+            if(!phase20::beginAbility(abilityFlow,state))
+                openNotice(state,Screen::Pokemon,
+                           "Ability preview refused: invalid or egg Pokemon.");
+            redraw=true;
+        } else if(moveDraft.stage!=phase20::MoveDraftStage::Idle) {
             if((held&(KEY_START|KEY_SELECT))==0u)
                 phase20::moveDraftInput(moveDraft,(down&KEY_A)!=0u,
                     (down&KEY_B)!=0u,state.demo,observation,localMoves);
@@ -808,16 +884,22 @@ int main() {
         }
         if(redraw) {
             consoleSelect(&upper);
-            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                abilityTop(state,abilityFlow);
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
                 moveDraftTop(moveDraft);
             else if(viewingMoves)moveTop(state,moveView);
             else top(state,editing,batch);
             consoleSelect(&lower);
-            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                consoleClear();
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
                 moveDraftBottom();
             else if(viewingMoves)moveBottom(state,moveView);
             else bottom(state,editing,batch);
-            if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                (void)phase20::gui::drawAbility(state,abilityFlow);
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
                 (void)phase20::gui::drawMoveDraft(state,moveDraft);
             else if(viewingMoves)
                 (void)phase20::gui::drawMoveBrowser(state,moveView);
