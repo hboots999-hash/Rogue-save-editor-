@@ -58,7 +58,7 @@ int main(){
     s.mon=1;view.sync(s);
     assert(view.tab==Tab::Overview);
     view.tab=Tab::Training;
-    s.demo.sourceSha256[0]=1;view.sync(s);
+    d.sourceSha256[0]=1;view.sync(s);
     assert(view.tab==Tab::Overview);
     view.tab=Tab::Moves;
     d.party[1].ability=1;view.sync(s);
