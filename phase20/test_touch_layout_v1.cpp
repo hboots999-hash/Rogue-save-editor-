@@ -19,6 +19,8 @@ int main(){
     assert(hitTest(Page::Pokemon,20,218,6,false).action==Action::Back);
     assert(hitTest(Page::Pokemon,140,218,6,false).action==Action::PokemonEdit);
     assert(hitTest(Page::Pokemon,250,218,6,false).action==Action::PokemonMoves);
+    assert(hitTest(Page::Pokemon,180,218,6,false).action==Action::PokemonAbility);
+    assert(hitTest(Page::Pokemon,180,218,6,true).action==Action::None);
     assert(hitTest(Page::Pokemon,140,218,6,true).action==Action::None);
     assert(hitTest(Page::Pokemon,250,218,6,true).action==Action::None);
     assert(hitTest(Page::Party,20,61,0,false).action==Action::None);
