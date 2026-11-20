@@ -44,5 +44,18 @@ int main(){
     s.fromPC=true;assert(!beginAbility(flow,s));
     s.fromPC=false;s.screen=phase19::Screen::Home;assert(!beginAbility(flow,s));
     assert(slotLabel(3)!=nullptr);
+    using phase20::gui::AbilityTapKind;
+    using phase20::gui::abilityTouchHit;
+    for(unsigned i=0;i<3;i++){
+        const auto tap=abilityTouchHit(AbilityPage::Select,25,66+i*46);
+        assert(tap.kind==AbilityTapKind::Slot && tap.index==i);
+    }
+    assert(abilityTouchHit(AbilityPage::Select,24,222).kind==AbilityTapKind::Back);
+    assert(abilityTouchHit(AbilityPage::Select,120,222).kind==AbilityTapKind::Review);
+    assert(abilityTouchHit(AbilityPage::Review,120,222).kind==AbilityTapKind::None);
+    assert(abilityTouchHit(AbilityPage::Locked,120,222).kind==AbilityTapKind::None);
+    assert(abilityTouchHit(AbilityPage::Review,24,222).kind==AbilityTapKind::Back);
+    assert(abilityTouchHit(AbilityPage::Select,320,66).kind==AbilityTapKind::None);
+    assert(abilityTouchHit(AbilityPage::Select,20,240).kind==AbilityTapKind::None);
     std::cout<<"PASS ability selection bounded 0..2, stale-source invalidation, egg/PC locked, no writing\n";
 }
