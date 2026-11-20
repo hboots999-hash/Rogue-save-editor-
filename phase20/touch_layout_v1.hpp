@@ -5,7 +5,7 @@
 #include <cstdint>
 namespace phase20 { namespace gui {
 enum class Page : uint8_t { Home, Party, Pokemon, Other };
-enum class Action : uint8_t { None, HomeItem, PartyItem, Back, PartyMoves, PokemonEdit, PokemonMoves, PokemonAbility };
+enum class Action : uint8_t { None, HomeItem, PartyItem, Back, PartyMoves, PokemonEdit, PokemonMoves, PokemonAbility, PokemonTab };
 struct Hit { Action action=Action::None; unsigned index=0; };
 inline bool within(unsigned x,unsigned y,unsigned left,unsigned top,unsigned width,unsigned height) {
     return x>=left && x<left+width && y>=top && y<top+height;
@@ -28,6 +28,10 @@ inline Hit hitTest(Page page,unsigned x,unsigned y,unsigned partyCount,bool from
         if(within(x,y,8,210,102,26))return {Action::Back,0};
         if(within(x,y,116,210,196,26))return {Action::PartyMoves,0};
     }else if(page==Page::Pokemon){
+        for(unsigned tab=0;tab<3;tab++){
+            if(within(x,y,8u+tab*103u,105u,98u,24u))
+                return {Action::PokemonTab,tab};
+        }
         if(within(x,y,8,204,74,32))return {Action::Back,0};
         if(!fromPC && within(x,y,86,204,68,32))return {Action::PokemonEdit,0};
         if(!fromPC && within(x,y,157,204,73,32))return {Action::PokemonAbility,0};
