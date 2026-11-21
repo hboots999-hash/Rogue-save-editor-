@@ -6,6 +6,8 @@
 // NOT YET native-compiled or validated against owner H168 ROM v2.1.2.
 #include "global.h"
 #include "battle.h"
+#include "data.h"
+#include "strings.h"
 #include "event_data.h"
 #include "pokemon.h"
 #include "script_menu.h"
@@ -18,14 +20,44 @@
 // accidentally becoming Cancel.
 #define NPC_CHOICE_BASE 0x1000
 #define NPC_MOVE_SLOT_BASE 0x2000
+#define NPC_SERVICE_MOVE (NPC_CHOICE_BASE + 1)
+#define NPC_SERVICE_ABILITY (NPC_CHOICE_BASE + 2)
 #define NPC_CANCEL 0x7f
 
 static u16 sChosenMove;
 static u16 sChosenSlot;
 static u16 sChosenAbility;
+static u16 sChosenService;
+static void NpcBeginList(u16 capacity);
 
 // More than 255 entries are supported by the existing dynamic SCROLLING menu
 // (u16 count); this avoids overflowing the normal move-relearner's 255 cap.
+void RogueNpc_ResetDraft(void)
+{
+    sChosenMove = MOVE_NONE;
+    sChosenSlot = 0u;
+    sChosenAbility = 0u;
+    sChosenService = 0u;
+}
+
+void RogueNpc_OpenServiceChoices(void)
+{
+    static const u8 sMove[] = _("CHANGE MOVE");
+    static const u8 sAbility[] = _("CHANGE ABILITY");
+    NpcBeginList(2);
+    ScriptMenu_ScrollingMultichoiceDynamicAppendOption(sMove,NPC_SERVICE_MOVE);
+    ScriptMenu_ScrollingMultichoiceDynamicAppendOption(sAbility,NPC_SERVICE_ABILITY);
+    ScriptMenu_ScrollingMultichoiceDynamicEnd();
+}
+
+void RogueNpc_RememberService(void)
+{
+    sChosenService = gSpecialVar_Result;
+    gSpecialVar_Result =
+        sChosenService == NPC_SERVICE_MOVE ? 1 :
+        sChosenService == NPC_SERVICE_ABILITY ? 2 : 0;
+}
+
 static void NpcBeginList(u16 capacity)
 {
     gSpecialVar_0x8005 = 1; // left
@@ -119,7 +151,11 @@ void RogueNpc_OpenReplaceSlotChoices(void)
 
 void RogueNpc_RememberReplaceSlot(void)
 {
-    sChosenSlot = gSpecialVar_Result;
+    const u16 choice=gSpecialVar_Result;
+    sChosenSlot=choice;
+    gSpecialVar_Result =
+        (choice>=NPC_MOVE_SLOT_BASE &&
+         choice<NPC_MOVE_SLOT_BASE+MAX_MON_MOVES) ? TRUE : FALSE;
 }
 
 void RogueNpc_ApplyMove(void)
@@ -156,10 +192,10 @@ void RogueNpc_OpenAbilityChoices(void)
         gSpecialVar_Result = NPC_CANCEL;
         return;
     }
-    NpcBeginList(ABILITIES_COUNT + 1u);
+    NpcBeginList(ABILITIES_COUNT_GEN9);
     ScriptMenu_ScrollingMultichoiceDynamicAppendOption(
         sSpeciesDefault, NPC_CHOICE_BASE);
-    for (i = 1; i < ABILITIES_COUNT; i++)
+    for (i = 1; i < ABILITIES_COUNT_GEN9; i++)
         ScriptMenu_ScrollingMultichoiceDynamicAppendOption(
             gAbilityNames[i], NPC_CHOICE_BASE + i);
     ScriptMenu_ScrollingMultichoiceDynamicEnd();
@@ -167,7 +203,11 @@ void RogueNpc_OpenAbilityChoices(void)
 
 void RogueNpc_RememberAbilityChoice(void)
 {
-    sChosenAbility = gSpecialVar_Result;
+    const u16 choice=gSpecialVar_Result;
+    sChosenAbility = choice;
+    gSpecialVar_Result =
+        (choice>=NPC_CHOICE_BASE &&
+         choice<NPC_CHOICE_BASE+ABILITIES_COUNT_GEN9) ? TRUE : FALSE;
 }
 
 void RogueNpc_ApplyAbility(void)
@@ -177,7 +217,7 @@ void RogueNpc_ApplyAbility(void)
     u16 encoded;
     gSpecialVar_Result = FALSE;
     if (!mon || sChosenAbility < NPC_CHOICE_BASE ||
-        sChosenAbility >= NPC_CHOICE_BASE + ABILITIES_COUNT)
+        sChosenAbility >= NPC_CHOICE_BASE + ABILITIES_COUNT_GEN9)
         return;
     ability = sChosenAbility - NPC_CHOICE_BASE;
     encoded = ability == ABILITY_NONE ? 0u : ability + 1u;
