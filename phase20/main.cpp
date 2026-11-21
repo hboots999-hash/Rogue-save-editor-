@@ -10,6 +10,13 @@
 #include "rosalina_input.hpp"
 #include "move_browser.hpp"
 #include "phase20/move_catalog_bridge_v1.hpp"
+#include "phase20/move_draft_v1.hpp"
+#include "phase20/graphic_panel_v1.hpp"
+#include "phase20/graphic_move_v1.hpp"
+#include "phase20/move_filter_v1.hpp"
+#include "phase20/ability_slot_v1.hpp"
+#include "phase20/graphic_ability_v1.hpp"
+#include "phase20/profile_view_v1.hpp"
 #include <string>
 #include <new>
 #include <exception>
@@ -200,7 +207,8 @@ void top(const State& s,const phase20::OfflineFlow& edit,
             else std::printf("%s Lv? (Species %u)\n",m.name,m.species);
             std::printf("Source: %s\n",s.fromPC?"PC demo":
                         s.demo.synthetic?"Party demo":"Copied SD import");
-            std::printf("Ability slot %u  Nature %u\n",m.ability,m.nature);
+            std::printf("Ability slot %u  Nature %s\n",
+                        m.ability+1u,phase20::profile::natureName(m.nature));
             std::puts("\nStat       IV     EV");
             for(unsigned i=0;i<6;i++)
                 std::printf("%-7s   %2u    %3u\n",names[i],m.iv[i],m.ev[i]);
@@ -209,7 +217,8 @@ void top(const State& s,const phase20::OfflineFlow& edit,
                 std::printf("%u:%u PP%u  %u:%u PP%u\n",
                     i+1u,m.moves[i],m.pp[i],i+2u,m.moves[i+1u],m.pp[i+1u]);
             std::puts(s.fromPC?"\n\nPC editing unsupported":!s.demo.synthetic?"\n\nA: OFFLINE IV / EV / PP":"\n\nA: explore party edit demo");
-            if(!s.fromPC)std::puts("Y: browse moves (READ ONLY)");
+            if(!s.fromPC)std::puts("Y: moves, X: ability (VIEW)");
+            std::puts("Left/Right: switch detail tabs");
             break;
         }
         case Screen::Edit: {
@@ -333,7 +342,39 @@ void top(const State& s,const phase20::OfflineFlow& edit,
 }
 // Move Browser uses fictional test metadata. Not a verified ROM database,
 // writer, move replacement API or part of any SD draft export.
-void moveTop(const State& s,const MoveBrowser& v) {
+void abilityTop(const State& s,const phase20::AbilityFlow& f) {
+    consoleClear();
+    std::puts("PKSM ROGUE - ABILITY RESEARCH");
+    std::puts("============================");
+    if(f.party<s.demo.partyCount) {
+        std::printf("Pokemon: %.18s / Species %u\n",
+                    s.demo.party[f.party].name,f.species);
+    }
+    std::printf("Original slot: %u (%s)\n",
+                f.originalSlot+1u,phase20::slotLabel(f.originalSlot));
+    std::printf("Selected slot: %u (%s)\n",
+                f.selectedSlot+1u,phase20::slotLabel(f.selectedSlot));
+    if(f.page==phase20::AbilityPage::Select) {
+        std::puts("\nUP/DOWN choose 1 of 3 slots");
+        std::puts("A review  B back");
+    } else if(f.page==phase20::AbilityPage::Review) {
+        std::puts("\nA: show why locked");
+        std::puts("B: return to selection");
+    } else {
+        std::puts("\nCHANGING ABILITY BLOCKED");
+        std::puts("A/B: return to selection");
+    }
+    std::puts("\nNo verified per-species");
+    std::puts("ability ID / ruleset mapping.");
+    std::puts("Third slot NOT always distinct.");
+    std::puts("No unrestricted ability ID");
+    std::puts("is stored in this selector.");
+    std::puts("\nNO INSTALLED GAME WRITES");
+    std::puts("Original SD import unchanged.");
+}
+void moveTop(const State& s,const MoveBrowser& v,
+             const phase20::MoveListFilter& filter,
+             const phase20::LocalMoveProvider& local) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
     std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"MOVE CATALOGUE UNAVAILABLE");
@@ -360,6 +401,11 @@ void moveTop(const State& s,const MoveBrowser& v) {
         std::puts("B: return; NO SAVE WRITES");
         return;
     }
+    if(v.slot>=4u) {
+        std::puts("INVALID MOVE SLOT - REOPEN THE BROWSER");
+        std::puts("NO GAME EDITS ALLOWED");
+        return;
+    }
     const auto& p=s.demo.party[v.partySlot];
     std::printf("Party %u: %.15s (#%u)\n",v.partySlot+1u,p.name,p.species);
     if(v.page==MovePage::Slots){
@@ -373,7 +419,7 @@ void moveTop(const State& s,const MoveBrowser& v) {
     }else if(v.page==MovePage::Catalog){
         std::printf("Slot %u old ID%u PP%u\n",v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
         std::printf("Search: %.18s\n",v.query[0]?v.query:"(all moves)");
-        std::printf("Matches %u  (alphabetical)\n",v.matchCount);
+        std::printf("%u results / %s\n",v.matchCount,phase20::filterLabel(filter.mode));
         const unsigned first=(v.selected/BrowserPageRows)*BrowserPageRows;
         const unsigned end=std::min(first+BrowserPageRows,v.matchCount);
         for(unsigned i=first;i<end;i++) {
@@ -385,18 +431,22 @@ void moveTop(const State& s,const MoveBrowser& v) {
             const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
             char shortName[16]{};
             formatMoveShortName(m.name,shortName);
-            char ppText[4]="--";
-            if(m.evidence==MoveEvidence::Candidate)
+            char ppText[10]="--";
+            const auto pp=phase20::ppVariants(&local,v,m.id);
+            if(pp.verified && pp.conflict)
+                std::snprintf(ppText,sizeof(ppText),"%u/%u",
+                     unsigned(pp.variantA),unsigned(pp.variantB));
+            else if(m.evidence==MoveEvidence::Candidate)
                 std::snprintf(ppText,sizeof(ppText),"%u",m.basePP);
-            std::printf("%c%c %-15s %5u %2s\n",
+            std::printf("%c%c %-15s %4u %5s\n",
                 v.selected==i?'>':' ',flag,shortName,m.id,ppText);
         }
         if(!v.matchCount)std::puts("No results. Y: edit search.");
         else std::printf("%u-%u / %u ! NOT VERIFIED\n",
              first+1u,end,v.matchCount);
         std::puts("R/Right: next page");
-        std::puts("X/Left: previous page");
-        std::puts("Y: search  A: review");
+        std::puts("Left: previous page  R: next");
+        std::puts("X: FILTER  Y: search  A: review");
         std::puts("B: return to slots");
     }else if(v.page==MovePage::Keyboard){
         std::puts("SEARCH MOVE NAME (max 18)");
@@ -434,12 +484,20 @@ void moveTop(const State& s,const MoveBrowser& v) {
                 std::printf("%.*s\n",int(n),row);
             });
             std::printf("New ID%u\n",m->id);
-            if(m->evidence==MoveEvidence::Candidate)
+            const auto pp=phase20::ppVariants(&local,v,m->id);
+            if(pp.verified && pp.conflict)
+                std::printf("Rule-dependent base PP: %u / %u\n",
+                    unsigned(pp.variantA),unsigned(pp.variantB));
+            else if(m->evidence==MoveEvidence::Candidate)
                 std::printf("Metadata base PP: %u\n",m->basePP);
             else std::puts("New PP: UNVERIFIED");
             wrappedNotice(evidenceLabel(m->evidence));
         }
-        std::puts("APPLY DISABLED - NO SD DRAFT");
+        std::puts("Apply to game DISABLED.");
+        if(phase20::isExperimentalDraftCandidate(v,s.demo))
+            std::puts("Y: request experimental SD-only draft");
+        else std::puts("SD draft LOCKED: not in verified 43-ID set");
+        std::puts("No game restore; PP mode is not guessed.");
         if(v.page==MovePage::ConfirmTwo)
             std::puts("Release keys; X: view BLOCK");
         else std::puts("Release keys; A: next review");
@@ -478,6 +536,46 @@ void moveTop(const State& s,const MoveBrowser& v) {
         }
     }
 }
+void moveDraftTop(const phase20::MoveDraftFlow& f) {
+    consoleClear();
+    std::puts("EXPERIMENTAL OFFLINE MOVE DRAFT");
+    std::puts("==============================");
+    std::puts("No installed save writes.");
+    if(f.stage==phase20::MoveDraftStage::ConfirmOne ||
+       f.stage==phase20::MoveDraftStage::ConfirmTwo) {
+        std::printf("Party %u / Slot %u\n",f.review.partySlot+1,
+                    f.review.moveSlot+1);
+        std::printf("Move ID %u -> %u\n",unsigned(f.review.previousId),
+                    unsigned(f.review.replacementId));
+        std::printf("PP %u -> %u (PP Ups reset)\n",
+                    unsigned(f.review.currentPP),
+                    unsigned(f.review.catalogBasePP));
+        std::puts("\nExperimental 128KiB SD DRAFT.");
+        std::puts("NOT verified in gameplay.");
+        std::puts("Move legality NOT proven.");
+        std::puts("Do NOT inject into your game.");
+        std::printf("\nConfirmation %u / 2\n",
+                    f.stage==phase20::MoveDraftStage::ConfirmOne?1u:2u);
+        std::puts("A: accept   B: CANCEL");
+    } else {
+        std::puts(f.succeeded?"OFFLINE DRAFT CREATED":"DRAFT REFUSED");
+        wrappedNotice(f.message);
+        std::puts("A/B: back to move browser.");
+        std::puts("No original game-save write.");
+    }
+}
+void moveDraftBottom() {
+    consoleClear();
+    std::puts("PKSM ROGUE - RESEARCH PREVIEW");
+    std::puts("Any non-egg party species.");
+    std::puts("43 reviewed move IDs only.");
+    std::puts("Only ONE move per draft.");
+    std::puts("Source and catalog reverified");
+    std::puts("at final confirmation.");
+    std::puts("Requires /drafts/ folder.");
+    std::puts("Never edits installed game.");
+    std::puts("L button not required.");
+}
 void moveBottom(const State& s,const MoveBrowser& v){
     consoleClear();
     std::puts("PKSM ROGUE - MOVE RESEARCH");
@@ -486,9 +584,9 @@ void moveBottom(const State& s,const MoveBrowser& v){
     std::puts("936-record API supported.");
     std::puts("40 PP conflicts must be");
     std::puts("flagged by a verified source.");
-    std::puts("NO MOVE REPLACEMENT ACTIVE");
+    std::puts("GAME APPLY/RESTORE DISABLED");
     std::puts("No installed game write.");
-    std::puts("No offline draft export.");
+    std::puts("Y on Review: SD draft (43 IDs)");
     std::puts("L button is NOT required.");
     std::puts("R/Right: forward (browser)");
     std::puts("X/Left: back (browser)");
@@ -563,6 +661,10 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    static phase20::MoveListFilter moveFilter{};
+    static phase20::MoveDraftFlow moveDraft{};
+    static phase20::AbilityFlow abilityFlow{};
+    static phase20::profile::View profileView{};
     MoveNavRepeat moveRepeat{};
     static phase20::LocalMoveProvider localMoves{};
     bool viewingMoves=false;
@@ -577,9 +679,48 @@ int main() {
     bool redraw=true;
     while(aptMainLoop()&&!state.exitRequested) {
         hidScanInput();
-        const u32 down=hidKeysDown();
+        u32 down=hidKeysDown();
         const u32 held=hidKeysHeld();
         const u32 up=hidKeysUp();
+        // Optional genuine touch navigation: only one clean touch press,
+        // only during idle read-only / SD-copy browsing. Reuse existing
+        // native A/B/X/Y handlers so NO edit confirmation is ever skipped.
+        if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u &&
+           !(held&(KEY_START|KEY_SELECT)) && !viewingMoves &&
+           moveDraft.stage==phase20::MoveDraftStage::Idle &&
+           editing.stage==phase20::EditStage::Idle &&
+           batch.stage==phase20::BatchStage::Browse &&
+           !batch.collecting) {
+            touchPosition pos{};
+            hidTouchRead(&pos);
+            const auto page=state.screen==Screen::Home?phase20::gui::Page::Home:
+                            state.screen==Screen::Party?phase20::gui::Page::Party:
+                            state.screen==Screen::Pokemon?phase20::gui::Page::Pokemon:
+                            phase20::gui::Page::Other;
+            const auto touch=phase20::gui::hitTest(page,pos.px,pos.py,
+                                                    count(state),state.fromPC);
+            switch(touch.action){
+                case phase20::gui::Action::HomeItem:
+                    state.homeRow=touch.index;down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::PartyItem:
+                    state.selected=touch.index;down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::Back:
+                    down|=KEY_B;redraw=true;break;
+                case phase20::gui::Action::PartyMoves:
+                    down|=KEY_X;redraw=true;break;
+                case phase20::gui::Action::PokemonEdit:
+                    down|=KEY_A;redraw=true;break;
+                case phase20::gui::Action::PokemonMoves:
+                    down|=KEY_Y;redraw=true;break;
+                case phase20::gui::Action::PokemonAbility:
+                    down|=KEY_X;redraw=true;break;
+                case phase20::gui::Action::PokemonTab:
+                    profileView.sync(state);
+                    profileView.tab=phase20::profile::fromIndex(touch.index);
+                    down&=~KEY_TOUCH;redraw=true;break;
+                case phase20::gui::Action::None:break;
+            }
+        }
         // Do not steal START+SELECT from Rosalina in either press order.
         // A standalone START exits only when released.
         if(startGate.tick((down&KEY_START)!=0,(up&KEY_START)!=0,
@@ -588,7 +729,67 @@ int main() {
             redraw=true;
         }
         Key k=Key::X;
-        if(viewingMoves) {
+        if(abilityFlow.page!=phase20::AbilityPage::Idle) {
+            // UI-only ability slot research. No writes/restore and no
+            // delegated ability ID request to the Phase18 engine.
+            if((held&(KEY_START|KEY_SELECT))==0u) {
+                using phase20::AbilityAction;
+                if(down&KEY_B)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::B);
+                else if(down&KEY_UP)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::Up);
+                else if(down&KEY_DOWN)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::Down);
+                else if(down&KEY_A)
+                    (void)phase20::abilityInput(abilityFlow,state,AbilityAction::A);
+                else if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u) {
+                    touchPosition pos{};
+                    hidTouchRead(&pos);
+                    const auto tap=phase20::gui::abilityTouchHit(
+                        abilityFlow.page,pos.px,pos.py);
+                    if(tap.kind==phase20::gui::AbilityTapKind::Back)
+                        (void)phase20::abilityInput(abilityFlow,state,AbilityAction::B);
+                    else if(tap.kind==phase20::gui::AbilityTapKind::Slot &&
+                            tap.index<3u && phase20::abilitySourceValid(abilityFlow,state))
+                        abilityFlow.selectedSlot=tap.index;
+                    else if(tap.kind==phase20::gui::AbilityTapKind::Review)
+                        (void)phase20::abilityInput(abilityFlow,state,AbilityAction::A);
+                }
+            }
+            redraw=true;
+        } else if((down&KEY_X) &&
+                  state.screen==Screen::Pokemon && !state.fromPC &&
+                  editing.stage==phase20::EditStage::Idle &&
+                  batch.stage==phase20::BatchStage::Browse &&
+                  !batch.collecting && !viewingMoves &&
+                  moveDraft.stage==phase20::MoveDraftStage::Idle &&
+                  (held&(KEY_START|KEY_SELECT))==0u) {
+            // On the detail page, X is a dedicated no-L ability shortcut.
+            // This only opens the display-only three-slot selector.
+            if(!phase20::beginAbility(abilityFlow,state))
+                openNotice(state,Screen::Pokemon,
+                           "Ability preview refused: invalid or egg Pokemon.");
+            redraw=true;
+        } else if((down&(KEY_LEFT|KEY_RIGHT|KEY_R)) &&
+                  state.screen==Screen::Pokemon &&
+                  editing.stage==phase20::EditStage::Idle &&
+                  batch.stage==phase20::BatchStage::Browse &&
+                  !batch.collecting && !viewingMoves &&
+                  moveDraft.stage==phase20::MoveDraftStage::Idle &&
+                  (held&(KEY_START|KEY_SELECT))==0u &&
+                  selectedPokemonValid(state)) {
+            // X opens the ability selector, Y the move browser, and
+            // D-pad left/right (or R) switches detail tabs without writing.
+            profileView.sync(state);
+            profileView.tab=phase20::profile::cycle(
+                 profileView.tab,(down&(KEY_RIGHT|KEY_R))!=0u);
+            redraw=true;
+        } else if(moveDraft.stage!=phase20::MoveDraftStage::Idle) {
+            if((held&(KEY_START|KEY_SELECT))==0u)
+                phase20::moveDraftInput(moveDraft,(down&KEY_A)!=0u,
+                    (down&KEY_B)!=0u,state.demo,observation,localMoves);
+            redraw=true;
+        } else if(viewingMoves) {
             if(moveView.page!=MovePage::Party &&
                !moveView.activeParty(state.demo)) {
                 viewingMoves=false;moveRepeat.reset();redraw=true;
@@ -599,10 +800,21 @@ int main() {
             }else{
                 MoveKey mk=MoveKey::B;
                 bool moveKey=false;
-                if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
-                else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
-                else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
-                else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                // Touch is permitted ONLY during ordinary move browsing.
+                // It selects a visible row or forwards an existing button,
+                // but cannot accept either confirmation stage.
+                if((down&KEY_TOUCH) && (down&~KEY_TOUCH)==0u) {
+                    touchPosition pos{};
+                    hidTouchRead(&pos);
+                    moveKey=phase20::gui::moveTapKey(
+                        state,moveView,pos.px,pos.py,mk);
+                }
+                if(!moveKey) {
+                    if(down&KEY_B){mk=MoveKey::B;moveKey=true;}
+                    else if(down&KEY_A){mk=MoveKey::A;moveKey=true;}
+                    else if(down&KEY_X){mk=MoveKey::X;moveKey=true;}
+                    else if(down&KEY_Y){mk=MoveKey::Y;moveKey=true;}
+                }
                 if(moveKey)moveRepeat.reset();
                 else if((held&(KEY_A|KEY_B|KEY_X|KEY_Y))==0u) {
                     bool nav=true;
@@ -616,13 +828,29 @@ int main() {
                 } else moveRepeat.reset();
                 if(!moveKey && (held&(KEY_A|KEY_X))==0u)
                     moveView.releaseApproval();
-                if(moveKey){
+                if(moveKey && mk==MoveKey::X &&
+                   moveView.page==MovePage::Catalog) {
+                    (void)moveFilter.next(moveView);
+                    redraw=true;
+                } else if(moveKey && mk==MoveKey::Y &&
+                   moveView.page==MovePage::Review) {
+                    (void)phase20::beginExperimentalMoveDraft(moveDraft,
+                        moveView,state.demo,observation,localMoves);
+                    redraw=true;
+                }else if(moveKey){
                     if(moveView.page==MovePage::Party && mk==MoveKey::B) {
                         viewingMoves=false;moveRepeat.reset();
                     }else if(moveView.page==MovePage::Slots &&
                              mk==MoveKey::B && !moveView.fromPartyPicker){
                         viewingMoves=false;moveRepeat.reset();
-                    }else moveView.browse(state.demo,mk);
+                    }else {
+                        const auto previous=moveView.page;
+                        moveView.browse(state.demo,mk);
+                        if(moveView.page==MovePage::Catalog &&
+                           (previous==MovePage::Slots ||
+                            previous==MovePage::Keyboard))
+                            (void)moveFilter.apply(moveView);
+                    }
                     redraw=true;
                 }
             }
@@ -643,6 +871,7 @@ int main() {
                 openNotice(state,Screen::Party,
                   "Missing exact-ROM metadata. Copy the reviewed catalogue "
                   "into /3ds/PKSM-Rogue/catalogs/. Apply stays disabled.");
+            moveFilter.reset();
             moveRepeat.reset();
             redraw=true;
         } else if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
@@ -668,6 +897,7 @@ int main() {
                         "/3ds/PKSM-Rogue/catalogs/ then retry Y. "
                         "No moves can be applied.");
             }else (void)phase20::batchShortcut(state,observation,batch);
+            moveFilter.reset();
             moveRepeat.reset();
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
@@ -682,6 +912,13 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    // Files may have been changed on SD between imports.
+                    // Clear sprite cache tags, not installed-game save data.
+                    phase20::gui::reloadSpriteCache();
+                    moveFilter.reset();
+                    // Metadata loading is optional and READ-ONLY. A missing or
+                    // corrupt exact-ROM catalogue never creates guessed names.
+                    (void)localMoves.read();
                     viewingMoves=false;
                     moveRepeat.reset();
                     editing=phase20::OfflineFlow{};
@@ -693,6 +930,7 @@ int main() {
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
+                phase20::gui::reloadSpriteCache();
                 viewingMoves=false;
                 moveRepeat.reset();
                 observation=phase20::CopyObservation{};
@@ -707,12 +945,33 @@ int main() {
             redraw=true;
         }
         if(redraw) {
+            profileView.sync(state);
             consoleSelect(&upper);
-            if(viewingMoves)moveTop(state,moveView);
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                abilityTop(state,abilityFlow);
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                moveDraftTop(moveDraft);
+            else if(viewingMoves)moveTop(state,moveView,moveFilter,localMoves);
             else top(state,editing,batch);
             consoleSelect(&lower);
-            if(viewingMoves)moveBottom(state,moveView);
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                consoleClear();
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                moveDraftBottom();
+            else if(viewingMoves)moveBottom(state,moveView);
             else bottom(state,editing,batch);
+            if(abilityFlow.page!=phase20::AbilityPage::Idle)
+                (void)phase20::gui::drawAbility(state,abilityFlow);
+            else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
+                (void)phase20::gui::drawMoveDraft(state,moveDraft);
+            else if(viewingMoves)
+                (void)phase20::gui::drawMoveBrowser(state,moveView,moveFilter,&localMoves);
+            else if(editing.stage==phase20::EditStage::Idle &&
+                    batch.stage==phase20::BatchStage::Browse && !batch.collecting)
+                (void)phase20::gui::draw(
+                    state,profileView.tab,
+                    state.demo.synthetic?&syntheticMoveCatalog():
+                                         localMoves.verifiedMetadata());
             redraw=false;
         }
         gspWaitForVBlank();
