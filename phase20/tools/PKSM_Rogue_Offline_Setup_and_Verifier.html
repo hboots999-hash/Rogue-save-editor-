@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PKSM Rogue — Private SD setup and draft verifier</title>
+<style>
+:root{color-scheme:light dark;--a:#157a63;--b:#161f2d;--mut:#617186;--line:#d1dbe4;--bg:#f7f9fb;--card:#fff}
+@media(prefers-color-scheme:dark){:root{--a:#56d7b0;--b:#e7edf5;--mut:#a9b4c3;--line:#3a4556;--bg:#0f1520;--card:#1c2533}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--b);font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}.wrap{max-width:760px;margin:auto;padding:20px 15px 50px}h1{font-size:26px;line-height:1.2;margin:12px 0 4px}h2{font-size:19px;margin:0 0 12px}p{margin:8px 0}small,.mut{color:var(--mut)}.pill{display:inline-flex;border:1px solid var(--line);padding:3px 10px;border-radius:20px;color:var(--mut);font-size:12px}.card{background:var(--card);border:1px solid var(--line);padding:18px;border-radius:13px;margin-top:15px}label{font-weight:600;display:block;margin:13px 0 5px}input[type=file]{max-width:100%;font:inherit;width:100%;background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:8px}button{margin:14px 0 4px;padding:10px 16px;background:var(--a);color:#fff;border:0;border-radius:8px;font-weight:700;font-size:15px;cursor:pointer}button:disabled{opacity:.5;cursor:wait}@media(prefers-color-scheme:dark){button{color:#081714}}code{background:var(--bg);padding:1px 4px;border-radius:4px;word-break:break-all}pre{white-space:pre-wrap;word-break:break-word;background:var(--bg);padding:12px;border:1px solid var(--line);border-radius:8px;font-size:12px;min-height:45px}ol{padding-left:20px}li{margin:5px 0}.warning{border-left:3px solid #bc7b22;padding:0 0 0 12px}.good{color:var(--a)}.bad{color:#b13b3b}
+</style>
+</head>
+<body><main class="wrap">
+<span class="pill">LOCAL-ONLY · NO INTERNET UPLOADS</span>
+<h1>PKSM Rogue Edition</h1>
+<p class="mut">Prepare move metadata on your Android phone and independently check an experimental move-edited save.</p>
+<section class="card"><h2>1. Create your exact-ROM move catalogue</h2>
+<p>Select your <strong>own Pokémon Emerald Rogue 2.1.2 GBA VC CIA</strong>, or the extracted 32 MiB <code>.gba</code> ROM. The tool checks the exact approved ROM SHA-256 before producing anything. Files stay on your device.</p>
+<label for="rom">Your game CIA or GBA ROM</label><input type="file" id="rom" accept=".cia,.gba,application/octet-stream">
+<button id="extract">Verify and create catalogue</button><pre id="catalogResult" aria-live="polite">No ROM checked yet.</pre>
+<p><strong>Copy the downloaded file</strong> onto your 3DS SD card here:</p>
+<pre>SD:/3ds/PKSM-Rogue/catalogs/exact_rom_move_metadata.bin</pre>
+<p class="mut">Exactly 14,040 bytes. No ROM or CIA contents are included in the download; it contains only move names and base PP metadata from the authenticated game.</p>
+</section>
+<section class="card"><h2>2. Verify a move-edited draft</h2>
+<p>This independently compares the untouched 128 KiB import against a new <code>move_trial_NNN_draft.sav</code> and checks save-sector checksums, Pokémon encryption, exact allowed byte changes, the move ID, PP, and PP-Up reset. The catalogue is required to validate PP.</p>
+<label for="saveOld">Original imported 00000001.sav (128 KiB)</label><input type="file" id="saveOld" accept=".sav,application/octet-stream">
+<label for="saveNew">Experimental move_trial_NNN_draft.sav</label><input type="file" id="saveNew" accept=".sav,application/octet-stream">
+<label for="catalogIn">The exact_rom_move_metadata.bin created above</label><input type="file" id="catalogIn" accept=".bin,application/octet-stream">
+<button id="check">Check both save files</button><pre id="saveResult" aria-live="polite">No drafts checked yet.</pre>
+</section>
+<section class="card"><h2>3. Using the CIA safely</h2>
+<ol>
+<li>Copy a separate, untouched 128 KiB game-save copy to <code>SD:/3ds/PKSM-Rogue/imports/00000001.sav</code>.</li>
+<li>Create the empty folders <code>SD:/3ds/PKSM-Rogue/backups/</code> and <code>SD:/3ds/PKSM-Rogue/drafts/</code>. Put the catalogue from step 1 in <code>catalogs/</code>.</li>
+<li>In the experimental CIA, select <strong>Inspect SD copy</strong>. Open Party, select your Pokémon, open its move browser, choose one existing move and a permitted replacement.</li>
+<li>On the replacement Review screen press <strong>Y</strong>, then review both confirmations. <strong>B</strong> cancels. The editor only creates a separate SD draft and backup.</li>
+<li>Check the backup and draft with step 2 here before any isolated emulator experimentation. Never replace the installed game's save with an unproven draft.</li>
+</ol>
+<p class="warning"><strong>Important:</strong> Structural validation is not proof that Emerald Rogue accepts, retains or uses the move in gameplay. This tool never injects game saves or repairs the GBA VC CMAC. Preserve your independent GodMode9/Checkpoint backup. The CIA has not been cleared for live restore.</p>
+<p class="mut">Build scope: exact ROM fingerprint <code>111b0008…8778ca3</code>; 43 experimental move IDs, any non-egg party Pokémon, existing occupied move slot; game-playability unverified. L button is not needed for essential navigation.</p>
+</section>
+</main>
+<script>
+"use strict";
+const ROM_SIZE=32*1024*1024,SAVE_SIZE=131072,NAMES=0x004c283c,COUNT=936;
+const TABLES=[0x00bd27d0,0x00bd8e30], ROM_SHA="111b0008bcec519c59a02de57895a924fee5d3633c8b8fbb394a497153778ca3", CAT_SHA="3d2d63e5fd77371a76540d07a6c5a4d20a9ddae7acea9f03035d86936ee34fa4";
+const ALLOWED=new Set([7,8,9,14,33,53,56,57,73,85,89,94,126,127,157,182,183,188,202,229,242,245,247,337,347,349,369,370,396,403,405,406,412,417,418,434,442,444,483,521,542,583,585]);
+const PERMS=["GAEM","GAME","GEAM","GEMA","GMAE","GMEA","AGEM","AGME","AEGM","AEMG","AMGE","AMEG","EGAM","EGMA","EAGM","EAMG","EMGA","EMAG","MGAE","MGEA","MAGE","MAEG","MEGA","MEAG"];
+let lastCatalog=null;
+const byId=id=>document.getElementById(id);
+function fail(message){throw new Error(message)}
+function hex(bytes){return Array.from(bytes,b=>b.toString(16).padStart(2,"0")).join("")}
+async function digest(data){if(!crypto?.subtle)fail("Browser does not support local SHA-256. Open this file with current Chrome on Android or another modern browser.");return hex(new Uint8Array(await crypto.subtle.digest("SHA-256",data)))}
+function eqText(buf,at,s){for(let i=0;i<s.length;i++)if(buf[at+i]!==s.charCodeAt(i))return false;return true}
+function u16(b,p){return b[p]|(b[p+1]<<8)}
+function u32(b,p){return (b[p]|(b[p+1]<<8)|(b[p+2]<<16)|(b[p+3]<<24))>>>0}
+function align64(n){return (n+63)&~63}
+function ciaRom(data){
+ if(data.length===ROM_SIZE)return data;
+ if(data.length<0x5000||u32(data,0)!==0x2020)fail("Not a supported GBA VC CIA or 32 MiB raw GBA ROM.");
+ const cert=u32(data,8),ticket=u32(data,12),tmd=u32(data,16);
+ const content=align64(align64(align64(0x2020+cert)+ticket)+tmd);
+ const ciSize=Number((BigInt(u32(data,28))<<32n)|BigInt(u32(data,24)));
+ if(!Number.isSafeInteger(ciSize)||ciSize<ROM_SIZE||content+ciSize>data.length||!eqText(data,content+256,"NCCH"))fail("CIA has invalid or unsupported NCCH content.");
+ const exefs=content+512*u32(data,content+0x1a0);
+ if(exefs+528>data.length||!eqText(data,exefs,".code"))fail("GBA VC ExeFS .code was not found. This format may be encrypted or unsupported.");
+ const off=u32(data,exefs+8),len=u32(data,exefs+12),start=exefs+512+off;
+ if(len<ROM_SIZE||start+ROM_SIZE>data.length)fail("Truncated embedded GBA ROM.");
+ return data.subarray(start,start+ROM_SIZE)
+}
+function gbaName(data,at){const out=[];for(let i=0;i<13;i++){let c=data[at+i];if(c===255)break;if(c===0)out.push(" ");else if(c>=0xbb&&c<=0xd4)out.push(String.fromCharCode(65+c-0xbb));else if(c>=0xd5&&c<=0xee)out.push(String.fromCharCode(97+c-0xd5));else if(c===0xae)out.push("-");else if(c===0xb4)out.push("'");else if(c===0xa3)out.push("2");else out.push("?")}return out.join("").trim()}
+async function buildCatalogFromRom(data){
+ const rom=ciaRom(data);
+ if(!eqText(rom,0xa0,"POKEMON EMER")||!eqText(rom,0xac,"BPEE"))fail("GBA header is not POKEMON EMER / BPEE.");
+ let sum=0;for(let i=0xa0;i<0xbd;i++)sum+=rom[i];if(((-sum-0x19)&255)!==rom[0xbd])fail("Invalid GBA header checksum.");
+ const rs=await digest(rom);if(rs!==ROM_SHA)fail("Exact game ROM SHA-256 does not match this editor's approved version. Detected "+rs+". No catalogue produced.");
+ if(gbaName(rom,NAMES+13)!=="Pound"||gbaName(rom,NAMES+33*13)!=="Tackle")fail("ROM move table alignment failed.");
+ for(const p of TABLES)if(rom[p+30]!==40||rom[p+31]!==0||rom[p+32]!==100||rom[p+33]!==35)fail("ROM PP table geometry failed.");
+ const cat=new Uint8Array(COUNT*15);
+ let conflicts=0,ordinary=0;
+ for(let i=0;i<COUNT;i++){
+  cat.set(rom.subarray(NAMES+i*13,NAMES+(i+1)*13),i*15);
+  cat[i*15+13]=rom[TABLES[0]+i*28+5];cat[i*15+14]=rom[TABLES[1]+i*28+5];
+  const name=gbaName(rom,NAMES+i*13),p=cat[i*15+13],q=cat[i*15+14];
+  if(i>0&&i<=848&&i!==165&&p!==q)conflicts++;
+  if(i>0&&i<=848&&i!==165&&name&&!name.includes("?")&&p===q&&p>0&&p<=64)ordinary++;
+ }
+ if(await digest(cat)!==CAT_SHA)fail("Authenticated move catalogue digest failed. No output written.");
+ return {cat,romSha:rs,catalogSha:CAT_SHA,ordinary,conflicts}
+}
+function download(data,name){const blob=new Blob([data],{type:"application/octet-stream"}),url=URL.createObjectURL(blob);const a=document.createElement("a");a.href=url;a.download=name;document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),1000)}
+byId("extract").onclick=async()=>{const b=byId("extract"),out=byId("catalogResult");b.disabled=true;out.textContent="Verifying ROM and both move tables locally…";try{const f=byId("rom").files[0];if(!f)fail("Choose your own game CIA or GBA ROM first.");const src=new Uint8Array(await f.arrayBuffer());const found=await buildCatalogFromRom(src);lastCatalog=found.cat;download(found.cat,"exact_rom_move_metadata.bin");out.textContent="PASS — exact ROM and catalogue verified.\nROM SHA-256: "+found.romSha+"\nCatalogue SHA-256: "+found.catalogSha+"\nCatalogue: "+found.cat.length+" bytes\nOrdinary matching-PP catalogue entries: "+found.ordinary+"\nPP conflicts: "+found.conflicts+"\nCIA experimental replacement subset: "+ALLOWED.size+" IDs\n\nThe .bin file has been downloaded. Copy it to the catalogues SD folder."}catch(e){out.textContent="STOP — "+e.message}finally{b.disabled=false}};
+function sectorChecksum(b,start){let sum=0;for(let o=0;o<0xff4;o+=4)sum=(sum+u32(b,start+o))>>>0;return ((sum>>>16)+sum)&65535}
+function saveInfo(bytes){
+ if(bytes.length!==SAVE_SIZE)fail("Save must be exactly 131,072 bytes; received "+bytes.length+".");
+ const banks=[];
+ for(let bank=0;bank<2;bank++){
+  let sections=new Array(14),counter=null;
+  for(let physical=0;physical<14;physical++){
+   const start=(bank*14+physical)*4096,id=u16(bytes,start+0xff4),sign=u32(bytes,start+0xff8),ctr=u32(bytes,start+0xffc);
+   if(id>=14||sections[id]!==undefined||sign!==0x08012025||sectorChecksum(bytes,start)!==u16(bytes,start+0xff6)||counter!==null&&ctr!==counter)fail("Save bank "+bank+" contains a missing, duplicate or corrupted sector "+physical+".");
+   sections[id]=start;counter=ctr
+  }
+  if(sections.some(x=>x===undefined))fail("Save bank "+bank+" has missing logical sectors.");
+  banks.push({sections,counter});
+ }
+ const a=banks[0].counter,c=banks[1].counter,active=((a+1)>>>0)===c?1:((c+1)>>>0)===a?0:-1;
+ if(active<0)fail("Save counters are not adjacent; refusing to guess which copy is newest.");
+ const s1=banks[active].sections[1],count=u32(bytes,s1+0x234);if(count>6)fail("Invalid party count.");
+ return {banks,active,sector:s1,count}
+}
+function plainPokemon(b,at){
+ const pid=u32(b,at),ot=u32(b,at+4),key=pid^ot,permutation=PERMS[pid%24];
+ const p=new Uint8Array(48);for(let s=0;s<4;s++){
+  const canonical={G:0,A:12,E:24,M:36}[permutation[s]];
+  for(let i=0;i<12;i+=4){const w=u32(b,at+32+s*12+i)^key;
+   p[canonical+i]=w&255;p[canonical+i+1]=(w>>>8)&255;p[canonical+i+2]=(w>>>16)&255;p[canonical+i+3]=(w>>>24)&255}
+ }
+ let sum=0;for(let i=0;i<48;i+=2)sum=(sum+u16(p,i))&65535;
+ if(sum!==u16(b,at+28))fail("Pokémon checksum failed at offset 0x"+at.toString(16));
+ return {p,pid,ot,species:u16(p,0)&0x7ff,order:permutation};
+}
+function compareSaveDraft(oldB,newB,cat){
+ const old=saveInfo(oldB),now=saveInfo(newB);
+ if(old.active!==now.active||old.count!==now.count||old.banks.some((v,i)=>v.counter!==now.banks[i].counter))fail("Save bank identities, counters or party size changed.");
+ let differences=[];for(let i=0;i<SAVE_SIZE;i++)if(oldB[i]!==newB[i])differences.push(i);
+ if(!differences.length)fail("Draft is identical to the import: no move replacement detected.");
+ if(differences.length>8)fail("More than eight bytes changed ("+differences.length+"); not a single-move draft.");
+ if(!cat||cat.length!==COUNT*15)fail("A complete 14,040-byte authenticated catalogue is required.");
+ if(old.sector!==now.sector)fail("Logical party sector location changed.");
+ const s=old.sector;
+ for(let party=0;party<old.count;party++){
+  const at=s+0x238+party*104,first=plainPokemon(oldB,at),second=plainPokemon(newB,at);
+  if(first.pid!==second.pid||first.ot!==second.ot||first.species!==second.species||first.species===0)continue;
+  if(oldB[at+18]!==newB[at+18])continue;
+  for(let slot=0;slot<4;slot++){
+   const prior=u16(first.p,12+slot*2),newId=u16(second.p,12+slot*2),pp=second.p[20+slot];
+   if(!prior||newId===prior||!ALLOWED.has(newId))continue;
+   const oldUps=first.p[8],expectedUps=oldUps&~(3<<(2*slot));
+   if(second.p[8]!==expectedUps)continue;
+   const ppmA=cat[newId*15+13],ppmB=cat[newId*15+14];
+   if(!ppmA||ppmA!==ppmB||pp!==ppmA)continue;
+   const allowedPlain=new Set([8,12+slot*2,13+slot*2,20+slot]);
+   if(first.p.some((v,i)=>!allowedPlain.has(i)&&v!==second.p[i]))continue;
+   const a=at+32+first.order.indexOf("A")*12,g=at+32+first.order.indexOf("G")*12;
+   const allowed=new Set([a+2*slot,a+2*slot+1,a+8+slot,g+8,at+28,at+29,s+0xff6,s+0xff7]);
+   if(differences.some(idx=>!allowed.has(idx)))continue;
+   for(let other=0;other<4;other++)if(other!==slot&&u16(first.p,12+other*2)===newId)fail("Move already exists in another active slot.");
+   return {species:first.species,party:party+1,slot:slot+1,oldId:prior,newId,pp,changed: differences.length,counter:old.banks[old.active].counter}
+  }
+ }
+ fail("No approved single-move replacement matched the expected encrypted bytes, PP and checksum footprint.")
+}
+byId("check").onclick=async()=>{const button=byId("check"),out=byId("saveResult");button.disabled=true;out.textContent="Validating every save sector and Pokémon change…";try{
+ const a=byId("saveOld").files[0],b=byId("saveNew").files[0],c=byId("catalogIn").files[0];if(!a||!b||(!c&&!lastCatalog))fail("Choose both save files and the exact-ROM catalogue.");
+ const old=new Uint8Array(await a.arrayBuffer()),edited=new Uint8Array(await b.arrayBuffer()),cat=c?new Uint8Array(await c.arrayBuffer()):lastCatalog;
+ if(await digest(cat)!==CAT_SHA)fail("Catalogue SHA-256 mismatch; refusing verification.");
+ const result=compareSaveDraft(old,edited,cat);
+ const before=await digest(old),after=await digest(edited);
+ out.textContent="STRUCTURAL CHECK PASS — NOT GAMEPLAY-CERTIFIED\n"+
+ "Party Pokémon #"+result.party+"; numeric species ID "+result.species+"; move slot "+result.slot+"\n"+
+ "Move ID "+result.oldId+" → "+result.newId+"; new PP "+result.pp+"\n"+
+ "Changed bytes: "+result.changed+" (all in allowed locations)\n"+
+ "Active save counter: "+result.counter+"\n"+
+ "Original SHA-256: "+before+"\nDraft SHA-256: "+after+"\n\nNeither file was modified. This does not prove the game will load or retain the move.";
+ }catch(e){out.textContent="STOP — "+e.message}finally{button.disabled=false}};
+</script></body></html>

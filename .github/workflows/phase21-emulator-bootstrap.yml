@@ -1,0 +1,35 @@
+name: Phase21 bootstrap official mGBA emulator (public binary only)
+on:
+  push:
+    branches: [feature/phase20-experimental-move-draft]
+    paths:
+      - .github/workflows/phase21-emulator-bootstrap.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  public-mgba-toolchain:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Fetch an official public mGBA AppImage, no proprietary game content
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p emulator
+          curl --fail --location --silent --show-error --retry 3 \
+            -o emulator/mGBA-0.10.5-appimage-x64.appimage \
+            https://github.com/mgba-emu/mgba/releases/download/0.10.5/mGBA-0.10.5-appimage-x64.appimage
+          test "$(stat -c %s emulator/mGBA-0.10.5-appimage-x64.appimage)" -eq 25208000
+          file emulator/mGBA-0.10.5-appimage-x64.appimage | tee emulator/FILE.txt
+          sha256sum emulator/mGBA-0.10.5-appimage-x64.appimage | tee emulator/SHA256SUMS.txt
+          printf '%s\n' \
+            'Official public mGBA 0.10.5 x64 binary, obtained for local private GBA ROM/save compatibility testing.' \
+            'NO Pokemon ROM, modified GBA game, personal user save, or private catalogue is included.' \
+            'Use only for testing copied saves in an isolated sandbox; not an installed 3DS restore.' \
+            > emulator/README.txt
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-mgba-0-10-5-x64-appimage-only
+          path: emulator/
+          retention-days: 2
