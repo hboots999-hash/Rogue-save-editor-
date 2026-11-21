@@ -1,0 +1,99 @@
+name: Single Hub NPC source overlay and experimental GBA compile
+on:
+  push:
+    branches: [feature/emerald-rogue-hub-move-ability-npcs]
+    paths:
+      - "rogue_npc_mod/**"
+      - ".github/workflows/hub-npc-mod.yml"
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  source-patch:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mod
+      - uses: actions/checkout@v4
+        with:
+          repository: Pokabbie/pokeemerald-rogue
+          ref: EX-v2.1
+          path: game
+          submodules: recursive
+          fetch-depth: 1
+      - name: Syntax and single-NPC integration checks
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -m py_compile mod/rogue_npc_mod/apply_source_overlay.py mod/rogue_npc_mod/test_overlay.py
+          python3 mod/rogue_npc_mod/apply_source_overlay.py game
+          python3 mod/rogue_npc_mod/test_overlay.py game
+          git -C game diff --check
+          git -C game status --short
+      - name: Record metadata (source only, no ROM/save)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p evidence
+          git -C game rev-parse HEAD > evidence/exact-upstream-source-commit.txt
+          git -C mod rev-parse HEAD > evidence/mod-overlay-commit.txt
+          cat > evidence/IMPORTANT.txt <<'EOF'
+          Single NPC in Emerald Rogue OUTDOOR hub: move and ability.
+          Static source overlay tests do not prove the game compiles, boots,
+          displays or persists edited abilities on a physical 3DS.
+          Do not inject or overwrite user's GBA VC title/save.
+          EX-v2.1 source tag is not verified byte-for-byte to user's H168 2.1.2 ROM.
+          EOF
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hub-npc-source-preflight
+          path: evidence/
+          retention-days: 7
+
+  experimental-gba-compile:
+    runs-on: ubuntu-24.04
+    container:
+      image: devkitpro/devkitarm:latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          path: mod
+      - uses: actions/checkout@v4
+        with:
+          repository: Pokabbie/pokeemerald-rogue
+          ref: EX-v2.1
+          path: game
+          submodules: recursive
+          fetch-depth: 1
+      - name: Apply source overlay and source test
+        run: |
+          set -eu
+          python3 mod/rogue_npc_mod/apply_source_overlay.py game
+          python3 mod/rogue_npc_mod/test_overlay.py game
+      - name: Try native ARM7TDMI GBA ROM build (never a 3DS installable CIA)
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p evidence
+          env | grep -E '^DEVKITARM=|^DEVKITPRO=' > evidence/toolchain.txt || true
+          make -C game -j2 MODERN=1 RELEASE=1 > evidence/gba-compiler.log 2>&1
+          result=$?
+          tail -100 evidence/gba-compiler.log
+          if [ "$result" -ne 0 ]; then
+            echo "NATIVE GBA BUILD FAILED" > evidence/build-status.txt
+            exit "$result"
+          fi
+          rom=game/pokeemerald.gba
+          test -s "$rom" || exit 2
+          sha256sum "$rom" > evidence/experimental-gba-rom-sha256.txt
+          echo "NATIVE GBA BUILD SUCCESS — NOT MATCHED TO USER ROM AND NOT A CIA" > evidence/build-status.txt
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: hub-npc-gba-build-logs-no-rom
+          path: evidence/
+          retention-days: 7
