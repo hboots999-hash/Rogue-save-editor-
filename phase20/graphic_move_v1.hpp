@@ -5,6 +5,7 @@
 #include "phase20/graphic_panel_v1.hpp"
 #include "phase20/move_touch_v1.hpp"
 #include "phase20/move_draft_v1.hpp"
+#include "phase20/move_filter_v1.hpp"
 #include "move_browser.hpp"
 #include <algorithm>
 #include <cstdio>
@@ -18,16 +19,18 @@ inline void moveLine(const Canvas& c,int y,const char* heading,const char* detai
                      bool selected,bool candidate){
     c.rect(8,y,304,23,selected?GOLD:LINE);
     c.rect(10,y+2,300,19,selected?PANEL_HI:PANEL);
-    lettering(c,16,y+7,heading,candidate?WHITE:MUTED,1,34);
-    lettering(c,227,y+7,detail,candidate?GREEN:GOLD,1,14);
+    lettering(c,16,y+7,heading,candidate?WHITE:MUTED,1,29);
+    lettering(c,217,y+7,detail,candidate?GREEN:GOLD,1,16);
 }
 inline void moveNav(const Canvas& c,const char* primary="BACK",bool left=false,
                     bool right=false,bool search=false) {
     pill(c,8,208,search?68:102,primary,WHITE,PANEL);
     if(search){
-        pill(c,81,208,52,"PREV",WHITE,PANEL);
-        pill(c,139,208,54,"NEXT",WHITE,PANEL);
-        pill(c,199,208,113,"SEARCH",GREEN,PANEL_HI);
+        pill(c,8,208,54,"BACK",WHITE,PANEL);
+        pill(c,67,208,49,"PREV",WHITE,PANEL);
+        pill(c,121,208,49,"NEXT",WHITE,PANEL);
+        pill(c,175,208,68,"FILTER",GREEN,PANEL_HI);
+        pill(c,248,208,64,"FIND",GREEN,PANEL_HI);
     }else if(left || right){
         pill(c,116,208,196,left?"SEARCH":"SD DRAFT",GREEN,PANEL_HI);
     }
@@ -56,6 +59,7 @@ inline bool moveTapKey(const phase19::State& s,phase19::MoveBrowser& v,
             v.keyboardIndex=hit.index;key=phase19::MoveKey::A;return true;
         case MoveTapAction::Back:key=phase19::MoveKey::B;return true;
         case MoveTapAction::Previous:key=phase19::MoveKey::Left;return true;
+        case MoveTapAction::Filter:key=phase19::MoveKey::X;return true;
         case MoveTapAction::Next:key=phase19::MoveKey::Right;return true;
         case MoveTapAction::Search:
         case MoveTapAction::ApplySearch:
@@ -64,7 +68,9 @@ inline bool moveTapKey(const phase19::State& s,phase19::MoveBrowser& v,
     }
     return false;
 }
-inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& v) {
+inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& v,
+                            const phase20::MoveListFilter& filter,
+                            const phase20::LocalMoveProvider* metadata=nullptr) {
     u16 width=0,height=0;
     uint8_t* buffer=gfxGetFramebuffer(GFX_BOTTOM,GFX_LEFT,&width,&height);
     if(!buffer || width!=240 || height!=320 ||
@@ -103,15 +109,19 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
             c.rect(8,y,304,33,i==v.slot?GOLD:LINE);
             c.rect(10,y+2,300,29,i==v.slot?PANEL_HI:PANEL);
             char info[48]{};
-            std::snprintf(info,sizeof(info),"SLOT %u   MOVE ID %u",i+1,mon.moves[i]);
-            lettering(c,18,y+11,info,mon.moves[i]?WHITE:MUTED,1,29);
+            const auto* old=v.existingMove(s.demo,i);
+            if(old)std::snprintf(info,sizeof(info),"%u  %.24s",i+1,old->name);
+            else std::snprintf(info,sizeof(info),"SLOT %u   MOVE ID %u",i+1,mon.moves[i]);
+            lettering(c,18,y+11,info,mon.moves[i]?WHITE:MUTED,1,35);
             std::snprintf(info,sizeof(info),"PP %u",mon.pp[i]);
             lettering(c,265,y+11,info,mon.moves[i]?GREEN:GOLD,1,9);
         }
         lettering(c,10,193,"SELECT AN OCCUPIED SLOT",MUTED);
         moveNav(c);
     } else if(v.page==MovePage::Catalog) {
-        lettering(c,10,35,"MOVE CATALOGUE",MUTED);
+        char filterLine[52]{};
+        std::snprintf(filterLine,sizeof(filterLine),"MOVES / %s",phase20::filterLabel(filter.mode));
+        lettering(c,10,35,filterLine,GREEN,1,49);
         const unsigned first=(v.selected/phase19::BrowserPageRows)*
             phase19::BrowserPageRows;
         for(unsigned row=0;row<phase19::BrowserPageRows;row++){
@@ -120,10 +130,16 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
             unsigned index=0;
             if(!v.matchAt(ordinal,index))continue;
             const auto& entry=v.catalog->records[index];
-            char name[26]{},right[16]{};
-            std::snprintf(name,sizeof(name),"%.23s",entry.name);
-            std::snprintf(right,sizeof(right),"%u PP%u",
-                          unsigned(entry.id),unsigned(entry.basePP));
+            char name[32]{},right[22]{};
+            std::snprintf(name,sizeof(name),"%.28s",entry.name);
+            const auto pp=phase20::ppVariants(metadata,v,entry.id);
+            if(pp.verified && pp.conflict)
+                std::snprintf(right,sizeof(right),"%u PP%u/%u",
+                    unsigned(entry.id),unsigned(pp.mainline),unsigned(pp.revised));
+            else if(entry.evidence==MoveEvidence::Candidate)
+                std::snprintf(right,sizeof(right),"%u PP%u",
+                    unsigned(entry.id),unsigned(entry.basePP));
+            else std::snprintf(right,sizeof(right),"%u PP?",unsigned(entry.id));
             moveLine(c,40+int(row*26),name,right,
                      ordinal==v.selected,entry.evidence==MoveEvidence::Candidate);
         }
@@ -169,14 +185,23 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
         lettering(c,17,144,proposed?proposed->name:"UNAVAILABLE",
                   proposed?WHITE:RED,2,20);
         if(proposed){
-            std::snprintf(info,sizeof(info),"ID %u / PP %u",
-                          unsigned(proposed->id),unsigned(proposed->basePP));
-            lettering(c,184,128,info,GREEN,1,17);
+            const auto pp=phase20::ppVariants(metadata,v,proposed->id);
+            if(pp.verified && pp.conflict)
+                std::snprintf(info,sizeof(info),"PP %u/%u",
+                    unsigned(pp.mainline),unsigned(pp.revised));
+            else if(proposed->evidence==MoveEvidence::Candidate)
+                std::snprintf(info,sizeof(info),"PP %u",unsigned(proposed->basePP));
+            else std::snprintf(info,sizeof(info),"PP UNVERIFIED");
+            lettering(c,206,130,info,
+                pp.conflict?GOLD:GREEN,1,17);
         }
-        lettering(c,10,186,"GAME APPLY DISABLED",RED);
+        const bool research=phase20::isExperimentalDraftCandidate(v,s.demo);
+        lettering(c,10,184,research?"43-ID SD DRAFT CANDIDATE":
+                    "SD DRAFT NOT VERIFIED",research?GREEN:GOLD,1,48);
         if(v.page==MovePage::Review){
             pill(c,8,208,102,"BACK");
-            pill(c,116,208,196,"TRY SD DRAFT",GREEN,PANEL_HI);
+            pill(c,116,208,196,research?"CHECK SD DRAFT":"DRAFT LOCKED",
+                 research?GREEN:MUTED,research?PANEL_HI:PANEL);
         }else{
             pill(c,8,208,102,"BACK");
             lettering(c,122,217,"USE A ON 3DS",GOLD);
