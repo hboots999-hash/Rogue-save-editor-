@@ -450,6 +450,14 @@ jobs:
           echo 'af037f8b775198f636b14bcfe63fb401b02246ebfefe1025bb905ce042556960  azahar.AppImage' | sha256sum -c -
           chmod +x azahar.AppImage
           mkdir -p evidence demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue
+          # Synthetic abstract icon files; no copyrighted Pokémon graphics.
+          python3 phase20/tools/generate_demo_sprite_badges.py \
+            --out demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/sprites/
+          find demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/sprites \
+            -name '*.bmp' -type f -size 6966c | sort > evidence/demo-bmp-paths.txt
+          test "$(wc -l < evidence/demo-bmp-paths.txt)" -eq 3
+          sha256sum demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/sprites/*.bmp \
+            > evidence/demo-bmps-before.txt
           printf 'DO-NOT-TOUCH-PHASE20-CANARY\n' > demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/canary.txt
           sha256sum demo-data/azahar-emu/sdmc/3ds/PKSM-Rogue/canary.txt > evidence/canary-before.txt
           export XDG_DATA_HOME="$PWD/demo-data" XDG_CONFIG_HOME="$PWD/demo-config"
@@ -636,6 +644,7 @@ jobs:
           test -s evidence/3dsx-home.png
           test -s evidence/3dsx-party.png
           test -s evidence/3dsx-home-return.png
+          test -s evidence/demo-bmp-paths.txt
           test -s evidence/3dsx-pokemon-overview.png
           test -s evidence/3dsx-pokemon-training.png
           test -s evidence/3dsx-pokemon-moves.png
@@ -662,6 +671,7 @@ jobs:
           test -s evidence/3dsx-draft-export-result.png
           test -s evidence/3dsx-batch-review.png
           test -s evidence/3dsx-batch-export-result.png
+          sha256sum -c evidence/demo-bmps-before.txt
           sha256sum -c evidence/canary-before.txt
           sha256sum -c evidence/import-before.txt
           # An independent host compile of Phase18 v2 verifies the WHOLE
