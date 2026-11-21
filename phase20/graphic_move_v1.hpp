@@ -24,15 +24,16 @@ inline void moveLine(const Canvas& c,int y,const char* heading,const char* detai
 }
 inline void moveNav(const Canvas& c,const char* primary="BACK",bool left=false,
                     bool right=false,bool search=false) {
-    pill(c,8,208,search?68:102,primary,WHITE,PANEL);
     if(search){
         pill(c,8,208,54,"BACK",WHITE,PANEL);
         pill(c,67,208,49,"PREV",WHITE,PANEL);
         pill(c,121,208,49,"NEXT",WHITE,PANEL);
         pill(c,175,208,68,"FILTER",GREEN,PANEL_HI);
         pill(c,248,208,64,"FIND",GREEN,PANEL_HI);
-    }else if(left || right){
-        pill(c,116,208,196,left?"SEARCH":"SD DRAFT",GREEN,PANEL_HI);
+    }else {
+        pill(c,8,208,102,primary,WHITE,PANEL);
+        if(left || right)
+            pill(c,116,208,196,left?"SEARCH":"SD DRAFT",GREEN,PANEL_HI);
     }
 }
 // Translate only the geometric, read-only tap selection to a normal
