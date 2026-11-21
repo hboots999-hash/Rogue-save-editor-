@@ -24,6 +24,20 @@ int main(){
     for(unsigned len=0;len<54;len++){
         assert(!validateSpriteBmp(h.data(),len,info));
     }
+    for(unsigned p:{2u,6u,10u,46u,50u}){
+        auto copy=h;copy[p]=255;
+        assert(!validateSpriteBmp(copy.data(),copy.size(),info));
+    }
+    {
+        auto topDown=h;wr32(topDown.data(),22,0xffffffd0u);
+        assert(!validateSpriteBmp(topDown.data(),topDown.size(),info));
+        auto undersized=h;wr32(undersized.data(),2,54+48*48*3-1u);
+        assert(!validateSpriteBmp(undersized.data(),undersized.size(),info));
+        auto oversized=h;wr32(oversized.data(),2,54+48*48*3+1u);
+        assert(!validateSpriteBmp(oversized.data(),oversized.size(),info));
+        auto extraPalette=h;wr32(extraPalette.data(),46,16);
+        assert(!validateSpriteBmp(extraPalette.data(),extraPalette.size(),info));
+    }
     h[0]='X';assert(!validateSpriteBmp(h.data(),h.size(),info));
     std::cout<<"PASS: sprite BMP pinned dimensions, BGR24, bounded offset and malformed input\n";
 }
