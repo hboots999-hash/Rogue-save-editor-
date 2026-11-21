@@ -80,6 +80,13 @@ jobs:
           set -uo pipefail
           mkdir -p evidence
           env | grep -E '^DEVKITARM=|^DEVKITPRO=' > evidence/toolchain.txt || true
+          make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
+          tools_result=$?
+          if [ "$tools_result" -ne 0 ]; then
+            tail -90 evidence/gba-toolchain.log
+            echo "NATIVE BUILD TOOLS FAILED" > evidence/build-status.txt
+            exit "$tools_result"
+          fi
           make -C game -j2 MODERN=1 RELEASE=1 > evidence/gba-compiler.log 2>&1
           result=$?
           tail -100 evidence/gba-compiler.log
