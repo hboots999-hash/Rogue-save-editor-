@@ -401,6 +401,11 @@ void moveTop(const State& s,const MoveBrowser& v,
         std::puts("B: return; NO SAVE WRITES");
         return;
     }
+    if(v.slot>=4u) {
+        std::puts("INVALID MOVE SLOT - REOPEN THE BROWSER");
+        std::puts("NO GAME EDITS ALLOWED");
+        return;
+    }
     const auto& p=s.demo.party[v.partySlot];
     std::printf("Party %u: %.15s (#%u)\n",v.partySlot+1u,p.name,p.species);
     if(v.page==MovePage::Slots){
