@@ -66,11 +66,12 @@ struct MoveListFilter {
         return apply(browser);
     }
 };
-// Only the EXACT authenticated original packed catalogue can resolve BOTH
-// mainline and revised PP for a move. Never select a ruleset by assumption.
+// Only the EXACT authenticated original packed catalogue can expose BOTH
+// compiled PP tables (A/B). Exact binary ruleset-to-table mapping remains
+// under review, so NEVER label A or B as an active game mode by assumption.
 struct MovePPVariants {
     bool verified=false;
-    uint8_t mainline=0,revised=0;
+    uint8_t variantA=0,variantB=0;
     bool conflict=false;
 };
 inline MovePPVariants ppVariants(const LocalMoveProvider* provider,
@@ -83,9 +84,9 @@ inline MovePPVariants ppVariants(const LocalMoveProvider* provider,
        id==0 || id>=rogue18::move_v2::RecordCount)return pp;
     const size_t at=size_t(id)*rogue18::move_v2::PackedRowBytes;
     pp.verified=true;
-    pp.mainline=provider->packed[at+13u];
-    pp.revised=provider->packed[at+14u];
-    pp.conflict=pp.mainline!=pp.revised;
+    pp.variantA=provider->packed[at+13u];
+    pp.variantB=provider->packed[at+14u];
+    pp.conflict=pp.variantA!=pp.variantB;
     return pp;
 }
 inline bool isExperimentalDraftCandidate(
