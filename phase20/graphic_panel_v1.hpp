@@ -10,6 +10,7 @@
 #include "ui.hpp"
 #include "phase20/touch_layout_v1.hpp"
 #include "phase20/sprite_bmp_v1.hpp"
+#include "phase20/sprite_cache_policy_v1.hpp"
 #include "phase20/profile_view_v1.hpp"
 namespace phase20 { namespace gui {
 struct Color { uint8_t r,g,b; };
@@ -130,26 +131,54 @@ inline void emblem(const Canvas& c,int cx,int cy,unsigned kind,Color tint) {
         c.rect(cx-3,cy+3,6,3,WHITE);
     }
 }
-// Optional locally supplied species portrait. Assets are read ONLY from SDMC;
-// no official Pokémon sprites are bundled, and no executable, save or title
-// archive is ever read/written for artwork. 8 cache slots ~54 KiB static BSS.
+// SD-only personal artwork, never opened from a game archive or cartridge.
+// Ten 48x48 BGR24 sprites use 69,120 static pixel bytes. Cache tags remain
+// separate so species IDs with the same modulo cannot corrupt portraits.
 struct CachedSprite {
-    unsigned species=0;
-    bool attempted=false,valid=false;
     uint8_t bgr[48*48*3]{};
 };
+struct SpriteStore {
+    SpriteCachePolicy policy{};
+    std::array<CachedSprite,SpriteCacheSlots> image{};
+};
+inline SpriteStore& spriteStore(){
+    static SpriteStore store{};
+    return store;
+}
+inline void reloadSpriteCache(){
+    spriteStore().policy.reset(); // retaining pixel storage is safe: tags clear
+}
+inline const char* spriteResultLabel(SpriteState result){
+    switch(result){
+        case SpriteState::Present:return "LOCAL ART";
+        case SpriteState::Missing:return "NO SPRITE FILE";
+        case SpriteState::Invalid:return "INVALID SPRITE BMP";
+        case SpriteState::Unknown:return "NOT INSPECTED";
+    }
+    return "NOT INSPECTED";
+}
 inline const CachedSprite* spriteFor(unsigned species){
-    if(!species || species>9999u)return nullptr;
-    static CachedSprite cache[8]{};
-    CachedSprite& item=cache[species%8];
-    if(item.attempted && item.species==species)return item.valid?&item:nullptr;
-    item.species=species;item.attempted=true;item.valid=false;
+    auto& store=spriteStore();
+    bool cached=false;
+    const unsigned index=store.policy.locate(species,cached);
+    if(index==SpriteCacheSlots)return nullptr;
+    if(cached){
+        return store.policy.index[index].state==SpriteState::Present?
+            &store.image[index]:nullptr;
+    }
+    auto& tag=store.policy.index[index];
+    tag.state=SpriteState::Missing;
     char path[96]{};
     const int n=std::snprintf(path,sizeof(path),
         "sdmc:/3ds/PKSM-Rogue/sprites/%04u.bmp",species);
-    if(n<=0 || static_cast<size_t>(n)>=sizeof(path))return nullptr;
+    if(n<=0 || static_cast<size_t>(n)>=sizeof(path)){
+        tag.state=SpriteState::Invalid;return nullptr;
+    }
+    // Open only a fixed exact filename under the owner's sprite directory.
+    // Read-only access cannot alter the imported save, title or SD draft.
     std::FILE* file=std::fopen(path,"rb");
     if(!file)return nullptr;
+    tag.state=SpriteState::Invalid;
     uint8_t header[54]{};
     SpriteBmpInfo info{};
     const bool ok=std::fread(header,1,sizeof(header),file)==sizeof(header) &&
@@ -157,12 +186,21 @@ inline const CachedSprite* spriteFor(unsigned species){
         std::fseek(file,0,SEEK_END)==0;
     const long length=ok?std::ftell(file):-1;
     if(ok && length==long(bmp32(header,2)) &&
-       length>=long(info.pixelOffset+sizeof(item.bgr)) &&
+       length==long(info.pixelOffset+sizeof(store.image[index].bgr)) &&
        std::fseek(file,long(info.pixelOffset),SEEK_SET)==0 &&
-       std::fread(item.bgr,1,sizeof(item.bgr),file)==sizeof(item.bgr))
-        item.valid=true;
+       std::fread(store.image[index].bgr,1,
+                  sizeof(store.image[index].bgr),file)==
+                  sizeof(store.image[index].bgr) &&
+       std::fgetc(file)==EOF && !std::ferror(file))
+        tag.state=SpriteState::Present;
     std::fclose(file);
-    return item.valid?&item:nullptr;
+    return tag.state==SpriteState::Present?&store.image[index]:nullptr;
+}
+inline SpriteState spriteStatus(unsigned species){
+    (void)spriteFor(species);
+    const auto& p=spriteStore().policy;
+    for(const auto& e:p.index)if(e.species==species)return e.state;
+    return SpriteState::Unknown;
 }
 inline void drawCreaturePlaceholder(const Canvas& c,int x,int y,int size,
                                    unsigned species){
@@ -175,6 +213,9 @@ inline void drawCreaturePlaceholder(const Canvas& c,int x,int y,int size,
     c.rect(x+size/3,y+size/2,size/12,size/12,DARK);
     c.rect(x+size*3/5,y+size/2,size/12,size/12,DARK);
     c.rect(x+size*2/5,y+size*3/4,size/5,size/18,DARK);
+    // The centre marker makes the procedural avatar unmistakably a
+    // placeholder rather than a species-accurate Pokémon sprite.
+    if(size>=40)lettering(c,x+size/2-3,y+size/2-12,"?",WHITE,1,1);
 }
 inline void drawSpeciesPortrait(const Canvas& c,int x,int y,unsigned species,
                                int size){
@@ -258,6 +299,8 @@ inline bool draw(const phase19::State& s,
         } else {
             const auto& mon=phase19::pokemon(s);
             drawSpeciesPortrait(c,10,40,mon.species,54);
+            if(spriteStatus(mon.species)!=SpriteState::Present)
+                lettering(c,12,95,"NO ART",MUTED,1,10);
             lettering(c,74,42,mon.name,WHITE,2,19);
             char info[72]{};
             std::snprintf(info,sizeof(info),"LV %u  SPECIES %u",
