@@ -13,6 +13,7 @@
 #include "phase20/move_draft_v1.hpp"
 #include "phase20/graphic_panel_v1.hpp"
 #include "phase20/graphic_move_v1.hpp"
+#include "phase20/move_filter_v1.hpp"
 #include "phase20/ability_slot_v1.hpp"
 #include "phase20/graphic_ability_v1.hpp"
 #include "phase20/profile_view_v1.hpp"
@@ -371,7 +372,9 @@ void abilityTop(const State& s,const phase20::AbilityFlow& f) {
     std::puts("\nNO INSTALLED GAME WRITES");
     std::puts("Original SD import unchanged.");
 }
-void moveTop(const State& s,const MoveBrowser& v) {
+void moveTop(const State& s,const MoveBrowser& v,
+             const phase20::MoveListFilter& filter,
+             const phase20::LocalMoveProvider& local) {
     consoleClear();
     std::puts("MOVE BROWSER - READ ONLY");
     std::puts(v.catalog?moveCatalogSourceLabel(v.catalog->origin):"MOVE CATALOGUE UNAVAILABLE");
@@ -411,7 +414,7 @@ void moveTop(const State& s,const MoveBrowser& v) {
     }else if(v.page==MovePage::Catalog){
         std::printf("Slot %u old ID%u PP%u\n",v.slot+1u,p.moves[v.slot],p.pp[v.slot]);
         std::printf("Search: %.18s\n",v.query[0]?v.query:"(all moves)");
-        std::printf("Matches %u  (alphabetical)\n",v.matchCount);
+        std::printf("%u results / %s\n",v.matchCount,phase20::filterLabel(filter.mode));
         const unsigned first=(v.selected/BrowserPageRows)*BrowserPageRows;
         const unsigned end=std::min(first+BrowserPageRows,v.matchCount);
         for(unsigned i=first;i<end;i++) {
@@ -423,18 +426,22 @@ void moveTop(const State& s,const MoveBrowser& v) {
             const char flag=m.evidence==MoveEvidence::Candidate?' ':'!';
             char shortName[16]{};
             formatMoveShortName(m.name,shortName);
-            char ppText[4]="--";
-            if(m.evidence==MoveEvidence::Candidate)
+            char ppText[10]="--";
+            const auto pp=phase20::ppVariants(&local,v,m.id);
+            if(pp.verified && pp.conflict)
+                std::snprintf(ppText,sizeof(ppText),"%u/%u",
+                     unsigned(pp.mainline),unsigned(pp.revised));
+            else if(m.evidence==MoveEvidence::Candidate)
                 std::snprintf(ppText,sizeof(ppText),"%u",m.basePP);
-            std::printf("%c%c %-15s %5u %2s\n",
+            std::printf("%c%c %-15s %4u %5s\n",
                 v.selected==i?'>':' ',flag,shortName,m.id,ppText);
         }
         if(!v.matchCount)std::puts("No results. Y: edit search.");
         else std::printf("%u-%u / %u ! NOT VERIFIED\n",
              first+1u,end,v.matchCount);
         std::puts("R/Right: next page");
-        std::puts("X/Left: previous page");
-        std::puts("Y: search  A: review");
+        std::puts("Left: previous page  R: next");
+        std::puts("X: FILTER  Y: search  A: review");
         std::puts("B: return to slots");
     }else if(v.page==MovePage::Keyboard){
         std::puts("SEARCH MOVE NAME (max 18)");
@@ -472,14 +479,20 @@ void moveTop(const State& s,const MoveBrowser& v) {
                 std::printf("%.*s\n",int(n),row);
             });
             std::printf("New ID%u\n",m->id);
-            if(m->evidence==MoveEvidence::Candidate)
+            const auto pp=phase20::ppVariants(&local,v,m->id);
+            if(pp.verified && pp.conflict)
+                std::printf("Rule-dependent base PP: %u / %u\n",
+                    unsigned(pp.mainline),unsigned(pp.revised));
+            else if(m->evidence==MoveEvidence::Candidate)
                 std::printf("Metadata base PP: %u\n",m->basePP);
             else std::puts("New PP: UNVERIFIED");
             wrappedNotice(evidenceLabel(m->evidence));
         }
         std::puts("Apply to game DISABLED.");
-        std::puts("Y: experimental SD-only draft");
-        std::puts("(only 43 reviewed move IDs).");
+        if(phase20::isExperimentalDraftCandidate(v,s.demo))
+            std::puts("Y: request experimental SD-only draft");
+        else std::puts("SD draft LOCKED: not in verified 43-ID set");
+        std::puts("No game restore; PP mode is not guessed.");
         if(v.page==MovePage::ConfirmTwo)
             std::puts("Release keys; X: view BLOCK");
         else std::puts("Release keys; A: next review");
@@ -643,6 +656,7 @@ int main() {
     static char importStatus[200]{};
     static phase20::OfflineFlow editing{};
     static MoveBrowser moveView{};
+    static phase20::MoveListFilter moveFilter{};
     static phase20::MoveDraftFlow moveDraft{};
     static phase20::AbilityFlow abilityFlow{};
     static phase20::profile::View profileView{};
@@ -809,7 +823,11 @@ int main() {
                 } else moveRepeat.reset();
                 if(!moveKey && (held&(KEY_A|KEY_X))==0u)
                     moveView.releaseApproval();
-                if(moveKey && mk==MoveKey::Y &&
+                if(moveKey && mk==MoveKey::X &&
+                   moveView.page==MovePage::Catalog) {
+                    (void)moveFilter.next(moveView);
+                    redraw=true;
+                } else if(moveKey && mk==MoveKey::Y &&
                    moveView.page==MovePage::Review) {
                     (void)phase20::beginExperimentalMoveDraft(moveDraft,
                         moveView,state.demo,observation,localMoves);
@@ -820,7 +838,14 @@ int main() {
                     }else if(moveView.page==MovePage::Slots &&
                              mk==MoveKey::B && !moveView.fromPartyPicker){
                         viewingMoves=false;moveRepeat.reset();
-                    }else moveView.browse(state.demo,mk);
+                    }else {
+                        const auto previous=moveView.page;
+                        moveView.browse(state.demo,mk);
+                        if(moveView.page==MovePage::Catalog &&
+                           (previous==MovePage::Slots ||
+                            previous==MovePage::Keyboard))
+                            (void)moveFilter.apply(moveView);
+                    }
                     redraw=true;
                 }
             }
@@ -841,6 +866,7 @@ int main() {
                 openNotice(state,Screen::Party,
                   "Missing exact-ROM metadata. Copy the reviewed catalogue "
                   "into /3ds/PKSM-Rogue/catalogs/. Apply stays disabled.");
+            moveFilter.reset();
             moveRepeat.reset();
             redraw=true;
         } else if((down&KEY_Y) && editing.stage==phase20::EditStage::Idle &&
@@ -866,6 +892,7 @@ int main() {
                         "/3ds/PKSM-Rogue/catalogs/ then retry Y. "
                         "No moves can be applied.");
             }else (void)phase20::batchShortcut(state,observation,batch);
+            moveFilter.reset();
             moveRepeat.reset();
             redraw=true;
         } else if(toKey(down & ~(KEY_START|KEY_SELECT|KEY_Y),k)) {
@@ -880,6 +907,7 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    moveFilter.reset();
                     // Metadata loading is optional and READ-ONLY. A missing or
                     // corrupt exact-ROM catalogue never creates guessed names.
                     (void)localMoves.read();
@@ -914,7 +942,7 @@ int main() {
                 abilityTop(state,abilityFlow);
             else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
                 moveDraftTop(moveDraft);
-            else if(viewingMoves)moveTop(state,moveView);
+            else if(viewingMoves)moveTop(state,moveView,moveFilter,localMoves);
             else top(state,editing,batch);
             consoleSelect(&lower);
             if(abilityFlow.page!=phase20::AbilityPage::Idle)
@@ -928,7 +956,7 @@ int main() {
             else if(moveDraft.stage!=phase20::MoveDraftStage::Idle)
                 (void)phase20::gui::drawMoveDraft(state,moveDraft);
             else if(viewingMoves)
-                (void)phase20::gui::drawMoveBrowser(state,moveView);
+                (void)phase20::gui::drawMoveBrowser(state,moveView,moveFilter,&localMoves);
             else if(editing.stage==phase20::EditStage::Idle &&
                     batch.stage==phase20::BatchStage::Browse && !batch.collecting)
                 (void)phase20::gui::draw(
