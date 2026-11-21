@@ -107,6 +107,15 @@ jobs:
           test -n "$pory"
           cp "$pory" game/tools/poryscript/poryscript-linux/poryscript
           chmod +x game/tools/poryscript/poryscript-linux/poryscript
+          cfg="$(find /tmp/poryscript-extract -type f -name command_config.json -print -quit)"
+          if [ -n "$cfg" ]; then
+            cp "$cfg" game/command_config.json
+          else
+            curl --fail --location --silent --show-error \
+              -o game/command_config.json \
+              https://raw.githubusercontent.com/huderlem/poryscript/3.6.1/command_config.json
+          fi
+          test -s game/command_config.json
           make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
           tools_result=$?
           if [ "$tools_result" -ne 0 ]; then
