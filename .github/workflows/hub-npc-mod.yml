@@ -87,6 +87,13 @@ jobs:
           set -uo pipefail
           mkdir -p evidence
           env | grep -E '^DEVKITARM=|^DEVKITPRO=' > evidence/toolchain.txt || true
+          # Public EX-v2.1 contains src/new_game.c '#include "string.h"'
+          # but no checked-in src/string.h. Its scaninc dependency pass
+          # incorrectly treats this as a local prerequisite. Supply a
+          # disposable forwarding shim during this isolated CI build.
+          if [ ! -e game/src/string.h ]; then
+            printf '#include <string.h>\\n' > game/src/string.h
+          fi
           make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
           tools_result=$?
           if [ "$tools_result" -ne 0 ]; then
