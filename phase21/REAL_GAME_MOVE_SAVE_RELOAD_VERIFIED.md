@@ -16,6 +16,27 @@ For the first time, a modified **actual Emerald Rogue 2.1.2 (GBA-P-H168)** 128 K
 
 No proprietary ROM, owner save, game-specific player information, or game screenshots were committed to GitHub. All test assets remain private to the owner and are packaged in a user-only local verification ZIP.
 
+## Independent emulator rollback verified
+
+**PASS (21 November 2026):** Launched a third fresh mGBA process
+with a separate copy of the **unmodified original owner's 131072-byte save**
+and matching exact ROM. Navigated the game-owned Pokémon → Annihilape →
+Summary → Battle Moves screen. It displayed exactly the original:
+
+- Rage Fist 10/10 PP
+- **Covet 25/25 PP** (original move reinstated)
+- Encore 5/5 PP
+- Low Kick 20/20 PP
+
+After closing mGBA, the rollback save remained **byte-for-byte identical**
+to the owner original. Independently checked SHA-256 both before and after
+the game read, equal to
+`cfafa07b103c41fa608caca24786fca670f267651c3e8b1d6969ab2138d83051`.
+
+**This proves clean backup loading and move restoration inside isolated mGBA.**
+It does **not** prove authenticated AGBSAVE/CMAC restoration to physical 3DS,
+which remains blocked.
+
 ## What this changes
 
 **Pass:** one real H168 species/move/PP mutation successfully passes *offline edit → actual GBA game reads move → normal in-game Save → fresh emulator restart → move remains*.
