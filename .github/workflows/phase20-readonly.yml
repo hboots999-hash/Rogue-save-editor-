@@ -333,7 +333,7 @@ jobs:
           grep -Fq 'moveView.initialize(syntheticMoveCatalog()' phase20/main.cpp
           grep -Fq 'localMoves.verifiedMetadata()' phase20/main.cpp
           grep -Fq 'static_assert(!rogue18::move_v2::ApplyApproved' phase20/move_catalog_bridge_v1.hpp
-          grep -Fq 'viewingMoves)moveTop(state,moveView)' phase20/main.cpp
+          grep -Fq 'viewingMoves)moveTop(state,moveView,moveFilter,localMoves)' phase20/main.cpp
           sha256sum phase20-build/PKSMRoguePhase20.{3dsx,elf} > phase20-build/SHA256SUMS.txt
       - uses: actions/upload-artifact@v4
         with:
