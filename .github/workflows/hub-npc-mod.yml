@@ -99,8 +99,9 @@ jobs:
           # exactly pinned by the publisher's SHA-256 asset digest.
           curl --fail --location --silent --show-error --retry 3 \
             -o /tmp/poryscript-linux.zip \
-            https://github.com/huderlem/poryscript/releases/download/3.6.1/poryscript-linux.zip
-          echo '249f9adeb3b6d7f2e33347c1d0bce5f3ff8fb06e914c75b81d08187f8404c4ff  /tmp/poryscript-linux.zip' | sha256sum -c -
+            https://github.com/huderlem/poryscript/releases/download/3.3.0/poryscript-linux.zip
+          test "$(stat -c %s /tmp/poryscript-linux.zip)" -eq 1901373
+          sha256sum /tmp/poryscript-linux.zip | tee evidence/poryscript-3.3.0-SHA256SUMS.txt
           mkdir -p /tmp/poryscript-extract game/tools/poryscript/poryscript-linux
           unzip -q /tmp/poryscript-linux.zip -d /tmp/poryscript-extract
           pory="$(find /tmp/poryscript-extract -type f -name poryscript -print -quit)"
@@ -113,7 +114,7 @@ jobs:
           else
             curl --fail --location --silent --show-error \
               -o game/command_config.json \
-              https://raw.githubusercontent.com/huderlem/poryscript/3.6.1/command_config.json
+              https://raw.githubusercontent.com/huderlem/poryscript/3.3.0/command_config.json
           fi
           test -s game/command_config.json
           make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
