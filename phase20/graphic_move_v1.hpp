@@ -139,7 +139,7 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
             const auto pp=phase20::ppVariants(metadata,v,entry.id);
             if(pp.verified && pp.conflict)
                 std::snprintf(right,sizeof(right),"%u PP%u/%u",
-                    unsigned(entry.id),unsigned(pp.mainline),unsigned(pp.revised));
+                    unsigned(entry.id),unsigned(pp.variantA),unsigned(pp.variantB));
             else if(entry.evidence==MoveEvidence::Candidate)
                 std::snprintf(right,sizeof(right),"%u PP%u",
                     unsigned(entry.id),unsigned(entry.basePP));
@@ -192,7 +192,7 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
             const auto pp=phase20::ppVariants(metadata,v,proposed->id);
             if(pp.verified && pp.conflict)
                 std::snprintf(info,sizeof(info),"PP %u/%u",
-                    unsigned(pp.mainline),unsigned(pp.revised));
+                    unsigned(pp.variantA),unsigned(pp.variantB));
             else if(proposed->evidence==MoveEvidence::Candidate)
                 std::snprintf(info,sizeof(info),"PP %u",unsigned(proposed->basePP));
             else std::snprintf(info,sizeof(info),"PP UNVERIFIED");
