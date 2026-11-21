@@ -80,10 +80,7 @@ inline MovePPVariants ppVariants(const LocalMoveProvider* provider,
     if(!provider || !provider->loaded || !browser.catalog ||
        browser.catalog!=provider->verifiedMetadata() ||
        browser.catalog->origin!=phase19::CatalogOrigin::ExactRomReviewed ||
-       id==0 || id>=rogue18::move_v2::RecordCount ||
-       !rogue18::move_v2::authenticate({
-           provider->packed.data(),provider->packed.size(),
-           rogue18::move_v2::RomSha}))return pp;
+       id==0 || id>=rogue18::move_v2::RecordCount)return pp;
     const size_t at=size_t(id)*rogue18::move_v2::PackedRowBytes;
     pp.verified=true;
     pp.mainline=provider->packed[at+13u];
