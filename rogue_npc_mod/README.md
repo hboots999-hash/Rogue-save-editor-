@@ -30,6 +30,33 @@ All special hooks and entry code are in `src/rogue_npc_editors.c`; the
 installer patches `pokemon.c`, `pokemon.h`, `pokemon_summary_screen.c`,
 `data/specials.inc`, main outdoor hub map JSON and Pory script.
 
+## START-menu access (new overlay)
+
+The **START → EDIT MON** action is now available in the ordinary hub and
+during a Rogue run when the original nine-row GBA menu has capacity. No L
+shoulder button and no NPC visit are needed. It opens **CHANGE MOVE** and
+**CHANGE ABILITY** using the same party picker, dynamic lists, validation,
+encrypted per-mon ability override, and save path as the existing scientist.
+
+Apply both overlays to a *clean* upstream EX-v2.1 source checkout, in order:
+
+```sh
+python3 rogue_npc_mod/apply_source_overlay.py ./clean-rogue-ex-v2.1
+python3 rogue_npc_mod/add_start_menu_editor.py ./clean-rogue-ex-v2.1
+python3 rogue_npc_mod/test_overlay.py ./clean-rogue-ex-v2.1
+```
+
+The START option is hidden in catching contests and when the original menu
+already fills all nine rows; this prevents GBA window/tile overflow. Unlike
+the scientist's script, the START callback uses `lockall` and does not
+assume an NPC is facing the player.
+
+**This remains source code, not a verified 2.1.2 CIA.** The uploaded
+Recruiter/Tutors CIA has a different ROM fingerprint. Do not claim that
+successful EX-v2.1 compilation patches that exact installed title or
+automatically preserves its existing NPCs and save without further matching
+and hardware/emulator tests.
+
 ## Reproduce the patch against an upstream tree
 
 Use an independent **clean copy** of the public
