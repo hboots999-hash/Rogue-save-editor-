@@ -80,7 +80,7 @@ jobs:
           set -eu
           apt-get update -qq
           DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
-            libpng-dev zlib1g-dev pkg-config libjson-c-dev
+            libpng-dev zlib1g-dev pkg-config libjson-c-dev unzip curl
       - name: Try native ARM7TDMI GBA ROM build (never a 3DS installable CIA)
         shell: bash
         run: |
@@ -94,6 +94,19 @@ jobs:
           if [ ! -e game/src/string.h ]; then
             printf '#include <string.h>\\n' > game/src/string.h
           fi
+          # The EX-v2.1 public tag does not vendor the required
+          # Poryscript binary. Fetch the maintained public release,
+          # exactly pinned by the publisher's SHA-256 asset digest.
+          curl --fail --location --silent --show-error --retry 3 \
+            -o /tmp/poryscript-linux.zip \
+            https://github.com/huderlem/poryscript/releases/download/3.6.1/poryscript-linux.zip
+          echo '249f9adeb3b6d7f2e33347c1d0bce5f3ff8fb06e914c75b81d08187f8404c4ff  /tmp/poryscript-linux.zip' | sha256sum -c -
+          mkdir -p /tmp/poryscript-extract game/tools/poryscript/poryscript-linux
+          unzip -q /tmp/poryscript-linux.zip -d /tmp/poryscript-extract
+          pory="$(find /tmp/poryscript-extract -type f -name poryscript -print -quit)"
+          test -n "$pory"
+          cp "$pory" game/tools/poryscript/poryscript-linux/poryscript
+          chmod +x game/tools/poryscript/poryscript-linux/poryscript
           make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
           tools_result=$?
           if [ "$tools_result" -ne 0 ]; then
