@@ -70,34 +70,43 @@ void RogueNpc_OpenMoveChoices(void)
     ScriptMenu_ScrollingMultichoiceDynamicEnd();
 }
 
-void RogueNpc_OpenReplaceSlotChoices(void)
+void RogueNpc_RememberMoveChoice(void)
 {
     struct Pokemon *mon = NpcSelectedPokemon();
     u16 move;
     u8 i;
-    if (mon == NULL ||
-        gSpecialVar_Result <= NPC_CHOICE_BASE ||
+    sChosenMove = MOVE_NONE;
+    if (!mon || gSpecialVar_Result <= NPC_CHOICE_BASE ||
         gSpecialVar_Result >= NPC_CHOICE_BASE + MOVES_COUNT)
     {
-        gSpecialVar_Result = NPC_CANCEL;
+        gSpecialVar_Result = FALSE;
         return;
     }
     move = gSpecialVar_Result - NPC_CHOICE_BASE;
     if (gBattleMoves[move].pp == 0)
     {
-        gSpecialVar_Result = NPC_CANCEL;
+        gSpecialVar_Result = FALSE;
         return;
     }
     for (i = 0; i < MAX_MON_MOVES; i++)
-    {
         if (GetMonData(mon, MON_DATA_MOVE1 + i, NULL) == move)
         {
-            gSpecialVar_Result = NPC_CANCEL;
-            return; // no duplicate move
+            gSpecialVar_Result = FALSE;
+            return; // refuse duplicates
         }
-    }
-
     sChosenMove = move;
+    gSpecialVar_Result = TRUE;
+}
+
+void RogueNpc_OpenReplaceSlotChoices(void)
+{
+    struct Pokemon *mon = NpcSelectedPokemon();
+    u8 i;
+    if (!mon || sChosenMove == MOVE_NONE)
+    {
+        gSpecialVar_Result = NPC_CANCEL;
+        return;
+    }
     NpcBeginList(MAX_MON_MOVES);
     for (i = 0; i < MAX_MON_MOVES; i++)
     {
