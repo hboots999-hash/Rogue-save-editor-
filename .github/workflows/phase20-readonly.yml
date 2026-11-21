@@ -164,6 +164,10 @@ jobs:
               -I. phase20/test_sprite_bmp_v1.cpp \
               -o /tmp/phase20/sprite-bmp-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/sprite-bmp-$mode
+            g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
+              -I. phase20/test_sprite_cache_policy_v1.cpp \
+              -o /tmp/phase20/sprite-cache-$mode
+            ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/sprite-cache-$mode
           done
       - name: Check ability selector geometry and encrypted synthetic mutation footprints
         shell: bash
@@ -291,7 +295,7 @@ jobs:
           cp phase20/main.cpp phase20-build/source/main.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.cpp phase20-build/source/readonly_status_v1.cpp
           cp dependencies/phase17/phase17/readonly_status_v1.h phase20-build/include/
-          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp,move_draft_v1.hpp,graphic_panel_v1.hpp,touch_layout_v1.hpp,graphic_move_v1.hpp,move_touch_v1.hpp,sprite_bmp_v1.hpp,ability_slot_v1.hpp,graphic_ability_v1.hpp,profile_view_v1.hpp,move_filter_v1.hpp} phase20-build/include/phase20/
+          cp phase20/{read_only_v1.hpp,compat_phase19_v1.hpp,offline_edit_v1.hpp,move_catalog_bridge_v1.hpp,move_draft_v1.hpp,graphic_panel_v1.hpp,touch_layout_v1.hpp,graphic_move_v1.hpp,move_touch_v1.hpp,sprite_bmp_v1.hpp,sprite_cache_policy_v1.hpp,ability_slot_v1.hpp,graphic_ability_v1.hpp,profile_view_v1.hpp,move_filter_v1.hpp} phase20-build/include/phase20/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/phase19/
           cp dependencies/phase19/phase19/{adapter.hpp,ui.hpp,screen_text.hpp,rosalina_input.hpp,read_only_import.hpp,move_browser.hpp} phase20-build/include/
           cp dependencies/phase18/phase18/{offline_engine.hpp,bag_rules.hpp,layout_geometry.hpp,source_digest.hpp,raw_v1.hpp,raw_v1_sd.hpp,pc_readonly.hpp,editor_model.hpp,integration_v2.hpp,offline_export.hpp,multi_edit_v3.hpp,multi_export_v3.hpp} phase20-build/include/phase18/
