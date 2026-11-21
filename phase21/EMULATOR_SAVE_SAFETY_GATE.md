@@ -1,4 +1,13 @@
 # Phase 21 — Real Emerald Rogue save-to-game safety validation
+
+> **21 Nov milestone added:** The *separate Annihilape Covet → Shadow Ball*
+> move experiment has now **PASSED** real mGBA gameplay, in-game
+> Save/overwrite, independent post-save validation of both banks, and fresh
+> emulator relaunch with Shadow Ball PP15 shown in the game's own Battle Moves
+> screen. See [REAL_GAME_MOVE_SAVE_RELOAD_VERIFIED.md](REAL_GAME_MOVE_SAVE_RELOAD_VERIFIED.md).
+> The original **money +1** case's on-screen and save/reload proof remains
+> unverified. Physical 3DS restore/write and rollback still **BLOCKED**.
+
 Updated: 21 November 2026
 
 ## Goal
