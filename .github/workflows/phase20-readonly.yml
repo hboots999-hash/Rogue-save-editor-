@@ -214,7 +214,7 @@ jobs:
             fi
             g++ -std=c++17 $FLAGS -Wall -Wextra -Wpedantic -Werror \
               -I. -Idependencies/phase19/phase19 \
-              -Idependencies/phase18/phase18 -Idependencies/moves/phase18 \
+              -Idependencies/phase18/phase18 -Idependencies/moves -Idependencies/moves/phase18 \
               phase20/test_move_filter_v1.cpp \
               -o /tmp/phase20/move-filter-$mode
             ASAN_OPTIONS=detect_leaks=1 /tmp/phase20/move-filter-$mode
