@@ -430,7 +430,7 @@ void moveTop(const State& s,const MoveBrowser& v,
             const auto pp=phase20::ppVariants(&local,v,m.id);
             if(pp.verified && pp.conflict)
                 std::snprintf(ppText,sizeof(ppText),"%u/%u",
-                     unsigned(pp.mainline),unsigned(pp.revised));
+                     unsigned(pp.variantA),unsigned(pp.variantB));
             else if(m.evidence==MoveEvidence::Candidate)
                 std::snprintf(ppText,sizeof(ppText),"%u",m.basePP);
             std::printf("%c%c %-15s %4u %5s\n",
@@ -482,7 +482,7 @@ void moveTop(const State& s,const MoveBrowser& v,
             const auto pp=phase20::ppVariants(&local,v,m->id);
             if(pp.verified && pp.conflict)
                 std::printf("Rule-dependent base PP: %u / %u\n",
-                    unsigned(pp.mainline),unsigned(pp.revised));
+                    unsigned(pp.variantA),unsigned(pp.variantB));
             else if(m->evidence==MoveEvidence::Candidate)
                 std::printf("Metadata base PP: %u\n",m->basePP);
             else std::puts("New PP: UNVERIFIED");
