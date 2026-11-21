@@ -7,7 +7,7 @@
 namespace phase20 { namespace gui {
 enum class MoveTapAction : uint8_t {
     None, PartyRow, SlotRow, CatalogRow, KeyboardRow,
-    Back, Previous, Next, Search, ApplySearch, StartDraft
+    Back, Previous, Next, Filter, Search, ApplySearch, StartDraft
 };
 struct MoveTap { MoveTapAction action=MoveTapAction::None; unsigned index=0; };
 inline MoveTap moveTouchHit(phase19::MovePage page,unsigned x,unsigned y,
@@ -35,10 +35,11 @@ inline MoveTap moveTouchHit(phase19::MovePage page,unsigned x,unsigned y,
                within(x,y,8,40+i*26,304,23))
                 return {MoveTapAction::CatalogRow,ordinal};
         }
-        if(within(x,y,8,208,68,28))return {MoveTapAction::Back,0};
-        if(within(x,y,81,208,52,28))return {MoveTapAction::Previous,0};
-        if(within(x,y,139,208,54,28))return {MoveTapAction::Next,0};
-        if(within(x,y,199,208,113,28))return {MoveTapAction::Search,0};
+        if(within(x,y,8,208,54,28))return {MoveTapAction::Back,0};
+        if(within(x,y,67,208,49,28))return {MoveTapAction::Previous,0};
+        if(within(x,y,121,208,49,28))return {MoveTapAction::Next,0};
+        if(within(x,y,175,208,68,28))return {MoveTapAction::Filter,0};
+        if(within(x,y,248,208,64,28))return {MoveTapAction::Search,0};
     }else if(page==MovePage::Keyboard){
         for(unsigned i=0;i<30;i++){
             const unsigned left=8+(i%6)*50,top=42+(i/6)*31;
