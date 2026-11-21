@@ -62,8 +62,11 @@ inline bool moveTapKey(const phase19::State& s,phase19::MoveBrowser& v,
         case MoveTapAction::Filter:key=phase19::MoveKey::X;return true;
         case MoveTapAction::Next:key=phase19::MoveKey::Right;return true;
         case MoveTapAction::Search:
-        case MoveTapAction::ApplySearch:
-        case MoveTapAction::StartDraft:key=phase19::MoveKey::Y;return true;
+        case MoveTapAction::ApplySearch:key=phase19::MoveKey::Y;return true;
+        case MoveTapAction::StartDraft:
+            if(v.page!=MovePage::Review ||
+               !phase20::isExperimentalDraftCandidate(v,s.demo))return false;
+            key=phase19::MoveKey::Y;return true;
         case MoveTapAction::None:return false;
     }
     return false;
