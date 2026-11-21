@@ -74,6 +74,13 @@ jobs:
           set -eu
           python3 mod/rogue_npc_mod/apply_source_overlay.py game
           python3 mod/rogue_npc_mod/test_overlay.py game
+      - name: Install decomp build-tool dependencies (source tools use libpng)
+        shell: bash
+        run: |
+          set -eu
+          apt-get update -qq
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq \
+            libpng-dev zlib1g-dev pkg-config libjson-c-dev
       - name: Try native ARM7TDMI GBA ROM build (never a 3DS installable CIA)
         shell: bash
         run: |
