@@ -101,8 +101,8 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
         }
         if(count==0)lettering(c,22,103,"NO PARTY POKEMON",GOLD,2);
         moveNav(c);
-    } else if(!v.activeParty(s.demo)){
-        lettering(c,14,72,"PARTY DATA CHANGED",RED,2);
+    } else if(!v.activeParty(s.demo) || v.slot>=4u){
+        lettering(c,14,72,"PARTY OR SLOT CHANGED",RED,2);
         lettering(c,14,108,"REOPEN PARTY LIST",MUTED);
         moveNav(c);
     } else if(v.page==MovePage::Slots){
