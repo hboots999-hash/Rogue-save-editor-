@@ -62,6 +62,5 @@ int main(){
     assert(!ppVariants(nullptr,browser,58).verified);
     assert(!ppVariants(nullptr,browser,936).verified);
     assert(std::strcmp(filterLabel(MoveListMode::PPConflict),"PP CONFLICT")==0);
-    std::cout<<"PASS read-only move filters; search retention, 43-ID provenance, invalid PP fallback\\n";
-}
+    std::cout<<"PASS read-only move filters; search retention, 43-ID provenance, invalid PP fallback\n";
 }
