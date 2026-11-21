@@ -912,6 +912,9 @@ int main() {
                     reason="Copied-save inspection failed safely; check the SD copy.";
                 }
                 if(inspected) {
+                    // Files may have been changed on SD between imports.
+                    // Clear sprite cache tags, not installed-game save data.
+                    phase20::gui::reloadSpriteCache();
                     moveFilter.reset();
                     // Metadata loading is optional and READ-ONLY. A missing or
                     // corrupt exact-ROM catalogue never creates guessed names.
@@ -927,6 +930,7 @@ int main() {
                 }
             } else if(state.screen==Screen::Import && k==Key::X) {
                 populateMock(active);
+                phase20::gui::reloadSpriteCache();
                 viewingMoves=false;
                 moveRepeat.reset();
                 observation=phase20::CopyObservation{};
