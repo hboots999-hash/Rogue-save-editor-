@@ -183,6 +183,13 @@ inline bool drawMoveBrowser(const phase19::State& s,const phase19::MoveBrowser& 
         std::snprintf(info,sizeof(info),"ID %u / PP %u",
                       mon.moves[v.slot],mon.pp[v.slot]);
         lettering(c,184,64,info,GOLD,1,17);
+        const auto oldPP=phase20::ppVariants(metadata,v,mon.moves[v.slot]);
+        if(oldPP.verified){
+            if(oldPP.conflict)std::snprintf(info,sizeof(info),"ROM PP A/B %u/%u",
+                           unsigned(oldPP.variantA),unsigned(oldPP.variantB));
+            else std::snprintf(info,sizeof(info),"ROM BASE PP %u",unsigned(oldPP.variantA));
+            lettering(c,17,99,info,oldPP.conflict?GOLD:MUTED,1,40);
+        }
         c.rect(8,118,304,59,PANEL_HI);
         lettering(c,17,123,"PROPOSED MOVE",GREEN);
         const auto* proposed=v.selectedMove();
