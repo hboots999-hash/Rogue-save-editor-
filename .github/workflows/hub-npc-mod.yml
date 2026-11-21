@@ -1,4 +1,4 @@
-name: Single Hub NPC source overlay and experimental GBA compile
+name: Hub NPC and START editor source overlay + experimental GBA compile
 on:
   push:
     branches: [feature/emerald-rogue-hub-move-ability-npcs]
@@ -27,9 +27,13 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          python3 -m py_compile mod/rogue_npc_mod/apply_source_overlay.py mod/rogue_npc_mod/test_overlay.py
+          python3 -m py_compile mod/rogue_npc_mod/apply_source_overlay.py mod/rogue_npc_mod/add_start_menu_editor.py mod/rogue_npc_mod/test_overlay.py
           python3 mod/rogue_npc_mod/apply_source_overlay.py game
+          python3 mod/rogue_npc_mod/add_start_menu_editor.py game
           python3 mod/rogue_npc_mod/test_overlay.py game
+          grep -q "MENU_ACTION_MON_EDITOR" game/src/start_menu.c
+          grep -q "script RogueHub_StartMenuEditor" game/data/maps/Rogue_Hub/scripts.pory
+          grep -q "ScriptContext_SetupScript(RogueHub_StartMenuEditor);" game/src/start_menu.c
           git -C game diff --check
           git -C game status --short
       - name: Record metadata (source only, no ROM/save)
@@ -73,7 +77,11 @@ jobs:
         run: |
           set -eu
           python3 mod/rogue_npc_mod/apply_source_overlay.py game
+          python3 mod/rogue_npc_mod/add_start_menu_editor.py game
           python3 mod/rogue_npc_mod/test_overlay.py game
+          grep -q "MENU_ACTION_MON_EDITOR" game/src/start_menu.c
+          grep -q "script RogueHub_StartMenuEditor" game/data/maps/Rogue_Hub/scripts.pory
+          grep -q "ScriptContext_SetupScript(RogueHub_StartMenuEditor);" game/src/start_menu.c
       - name: Install decomp build-tool dependencies (source tools use libpng)
         shell: bash
         run: |
