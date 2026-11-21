@@ -1,5 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Strict, read-only 48x48 BGR24 bitmap header parser for owner-local sprites.
+// Input is a 54-byte header (pixels are read separately), bottom-up, uncompressed.
+// Require exact trailing length and no BMP palette/profile/directory appendices.
 // No Pokémon artwork is bundled. Missing/malformed sprites fall back to
 // a neutral generated avatar and cannot affect save-editing code.
 #pragma once
@@ -22,8 +24,9 @@ inline bool validateSpriteBmp(const uint8_t* data,size_t n,SpriteBmpInfo& info){
     const unsigned offset=bmp32(data,10);
     constexpr unsigned rowBytes=144, pixelBytes=rowBytes*48;
     const unsigned fileBytes=bmp32(data,2);
-    if(offset<54 || offset>1024 || fileBytes<offset+pixelBytes ||
-       fileBytes>1024*1024u)return false;
+    if(offset<54 || offset>1024 || fileBytes!=offset+pixelBytes ||
+       fileBytes>16384u || bmp32(data,6)!=0 ||
+       bmp32(data,46)!=0 || bmp32(data,50)!=0)return false;
     const uint32_t declaredPixels=bmp32(data,34);
     if(declaredPixels!=0 && declaredPixels!=pixelBytes)return false;
     info.pixelOffset=offset;info.rowBytes=rowBytes;
