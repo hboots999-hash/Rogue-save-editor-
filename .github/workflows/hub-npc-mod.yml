@@ -101,6 +101,7 @@ jobs:
             -o /tmp/poryscript-linux.zip \
             https://github.com/huderlem/poryscript/releases/download/3.3.0/poryscript-linux.zip
           test "$(stat -c %s /tmp/poryscript-linux.zip)" -eq 1901373
+          echo '843db301b9d204c54bb393bee5a543838bf439a1b4206ca3e93e2af220df8c28  /tmp/poryscript-linux.zip' | sha256sum -c -
           sha256sum /tmp/poryscript-linux.zip | tee evidence/poryscript-3.3.0-SHA256SUMS.txt
           mkdir -p /tmp/poryscript-extract game/tools/poryscript/poryscript-linux
           unzip -q /tmp/poryscript-linux.zip -d /tmp/poryscript-extract
@@ -108,15 +109,13 @@ jobs:
           test -n "$pory"
           cp "$pory" game/tools/poryscript/poryscript-linux/poryscript
           chmod +x game/tools/poryscript/poryscript-linux/poryscript
+          # Poryscript v3.3.0 predates the external command_config.json.
+          # Use its bundled configuration; do not fetch a nonexistent file
+          # from its historic tag (HTTP 404).
           cfg="$(find /tmp/poryscript-extract -type f -name command_config.json -print -quit)"
           if [ -n "$cfg" ]; then
             cp "$cfg" game/command_config.json
-          else
-            curl --fail --location --silent --show-error \
-              -o game/command_config.json \
-              https://raw.githubusercontent.com/huderlem/poryscript/3.3.0/command_config.json
           fi
-          test -s game/command_config.json
           make -C game -f make_tools.mk -j2 > evidence/gba-toolchain.log 2>&1
           tools_result=$?
           if [ "$tools_result" -ne 0 ]; then
