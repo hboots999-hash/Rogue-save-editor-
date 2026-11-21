@@ -19,8 +19,10 @@ int main(){
         assert(r.action==MoveTapAction::CatalogRow && r.index==6+i);
     }
     assert(moveTouchHit(MovePage::Catalog,30,182,6,7,6,false).action==MoveTapAction::None);
-    assert(moveTouchHit(MovePage::Catalog,210,222,6,1,0,false).action==MoveTapAction::Search);
+    assert(moveTouchHit(MovePage::Catalog,260,222,6,1,0,false).action==MoveTapAction::Search);
+    assert(moveTouchHit(MovePage::Catalog,203,222,6,1,0,false).action==MoveTapAction::Filter);
     assert(moveTouchHit(MovePage::Catalog,100,222,6,1,0,false).action==MoveTapAction::Previous);
+    assert(moveTouchHit(MovePage::Catalog,140,222,6,1,0,false).action==MoveTapAction::Next);
     for(unsigned i=0;i<30;i++){
         auto r=moveTouchHit(MovePage::Keyboard,16+(i%6)*50,49+(i/6)*31,6,1,0,false);
         assert(r.action==MoveTapAction::KeyboardRow && r.index==i);
